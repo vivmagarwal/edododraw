@@ -21,9 +21,12 @@ Guidance for AI agents working in this repo.
 - Rendering: `src/engine/render/svgRenderer.ts` (+ `shapes.ts`, `edges.ts`).
 - Camera/timeline: `src/engine/camera/`, `src/engine/timeline/`.
 - Annotations (scripted + live): `src/engine/annotate/`.
-- Original design docs (more ambitious than what's built): `docs/design/`.
+- Historical design explorations (superseded, more ambitious than what shipped — NOT docs): `design-notes/`.
 
 ## Documentation Pointers
+
+**Single source of truth:** the guides in `docs/*.md`, published at https://vivmagarwal.github.io/edododraw/ (the site renders these files verbatim via `src/site/docs.ts`). Update `docs/*.md` in the same change as the code, then redeploy with `scripts/deploy-pages.sh`. README and this file only *point* here.
+
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system overview, pipeline, module table, key decisions.
 - [docs/DEVELOPMENT_STANDARDS.md](docs/DEVELOPMENT_STANDARDS.md) — setup, structure, how to add shapes/arrows/annotations/DSL.

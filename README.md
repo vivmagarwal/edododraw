@@ -64,7 +64,7 @@ Open the app, pick an example (Welcome · Flowchart · Architecture · Animated 
 
 ## Docs
 
-Start with **[docs/DSL_LANGUAGE_GUIDE.md](docs/DSL_LANGUAGE_GUIDE.md)**. Architecture and feature guides are in [`docs/`](docs/); AI-agent guidance is in [CLAUDE.md](CLAUDE.md).
+**The documentation lives in one place: https://vivmagarwal.github.io/edododraw/** — the language reference, camera/timeline, annotations, import/export, the embed guide, and the extend/plugins guide, alongside a live gallery and playground. The site renders the markdown in [`docs/`](docs/) verbatim, so those files are the single source of truth (edit them, then redeploy). AI-agent guidance is in [CLAUDE.md](CLAUDE.md); `design-notes/` holds historical design explorations that are **not** current documentation.
 
 ## License
 
