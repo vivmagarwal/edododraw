@@ -826,6 +826,19 @@ class Parser {
     // inline form: camera <op> [targets] [zoom N] [over D] [ease E] [pad N] [pan (x,y)]
     if (this.is(T.Ident)) {
       cam.op = this.advance().text;
+      // ops whose argument follows the op word directly: `camera zoom 1.3`,
+      // `camera pan (x,y)`, `camera pan to (x,y)`.
+      if (cam.op === "zoom" && this.is(T.Number)) {
+        cam.zoom = this.advance().num;
+      } else if (cam.op === "pan") {
+        if (this.isKw("to") || this.isKw("by")) this.advance();
+        if (this.is(T.LParen)) {
+          const v = this.parseValue();
+          if (v.t === "tuple" && v.v.length >= 2 && v.v[0].t === "num" && v.v[1].t === "num") {
+            cam.pan = [v.v[0].v, v.v[1].v];
+          }
+        }
+      }
     }
     // optional targets (ident / ref / list) unless the next word is a modifier
     if (this.canStartCameraTarget()) {

@@ -271,7 +271,7 @@ timeline story {
 |---|---|---|
 | Frame all | `camera fit-all` | `camera { }` |
 | Focus target(s) | `camera focus [a,b] zoom 1.6` | `camera { focus: [a,b], zoom: 1.6 }` |
-| Absolute zoom | `camera zoom 1.3` | — |
+| Absolute zoom | `camera zoom 1.3` | `camera { zoom: 1.3 }` |
 | Pan | `camera pan (x, y)` | `camera { pan: (x,y) }` |
 | Reset | `camera reset` | — |
 
