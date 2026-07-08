@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CanvasView, type CanvasEngine } from "./CanvasView.js";
 import type { Diagnostic, EditState, LiveState, PlayerState } from "../lib/index.js";
 import { CodeEditor, type CodeEditorDiagnostic } from "../site/CodeEditor.js";
@@ -37,6 +37,25 @@ const SWATCH_HEX: Record<string, string> = {
 };
 const STROKE_HEX: Record<string, string> = { black: "#1e1e1e", blue: "#1971c2", green: "#2f9e44", red: "#e03131", violet: "#6741d9", orange: "#e8590c", teal: "#099268" };
 
+// Glyphs for the collapsed inspector pill (a compact shape hint).
+const SHAPE_GLYPH: Record<string, string> = {
+  rect: "▭", "round-rect": "▢", ellipse: "◯", circle: "◯", diamond: "◇", hexagon: "⬡",
+  parallelogram: "▱", cylinder: "⬢", cloud: "☁", note: "🗒", pill: "⬭", text: "T",
+};
+
+// Tool letter -> engine tool id (keyboard shortcuts, Excalidraw-style).
+const TOOL_KEYS: Record<string, string> = { v: "select", h: "hand", r: "rect", o: "ellipse", d: "diamond", t: "text", a: "arrow" };
+
+type Side = "left" | "right";
+// Tiny, SSR/quota-safe localStorage helpers so layout prefs persist across sessions.
+const lsGet = (key: string, fallback: string): string => {
+  try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+};
+const lsSet = (key: string, value: string): void => {
+  try { localStorage.setItem(key, value); } catch { /* ignore quota / privacy mode */ }
+};
+const cssEscape = (s: string): string => (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(s) : s.replace(/["\\]/g, "\\$&"));
+
 export default function App() {
   const initial = useMemo(() => takePlaygroundSource() ?? EXAMPLES[0].source, []);
   const [source, setSource] = useState<string>(initial);
@@ -45,7 +64,13 @@ export default function App() {
   const [playerState, setPlayerState] = useState<PlayerState | null>(null);
   const [liveState, setLiveState] = useState<LiveState | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
+  // --- editing-UI layout state (Excalidraw-style chrome) ---
+  const [codeCollapsed, setCodeCollapsed] = useState<boolean>(() => lsGet("edd.codeCollapsed", "0") === "1");
+  const [inspectorCollapsed, setInspectorCollapsed] = useState<boolean>(false);
+  const [inspectorSide, setInspectorSide] = useState<Side>(() => (lsGet("edd.inspectorSide", "left") === "right" ? "right" : "left"));
   const engineRef = useRef<CanvasEngine | null>(null);
+  const stageRef = useRef<HTMLElement | null>(null);
+  const dockPinned = useRef(false); // user manually chose a side for this selection
   const debounce = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -53,6 +78,65 @@ export default function App() {
     debounce.current = window.setTimeout(() => setDebounced(source), DEBOUNCE_MS);
     return () => window.clearTimeout(debounce.current);
   }, [source]);
+
+  useEffect(() => lsSet("edd.codeCollapsed", codeCollapsed ? "1" : "0"), [codeCollapsed]);
+  useEffect(() => lsSet("edd.inspectorSide", inspectorSide), [inspectorSide]);
+
+  // Keyboard shortcuts: tools (V/H/R/O/D/T/A) + ⌘B code pane + ⌘I inspector.
+  // Guarded so typing in the code editor / any field never retools the canvas.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey) {
+        const k = e.key.toLowerCase();
+        if (k === "b") { e.preventDefault(); setCodeCollapsed((c) => !c); }
+        else if (k === "i") { e.preventDefault(); setInspectorCollapsed((c) => !c); }
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable || el.closest?.(".edd-cm, .cm-editor"))) return;
+      const tool = TOOL_KEYS[e.key.toLowerCase()];
+      if (tool) engineRef.current?.setTool(tool);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Reset per-selection inspector state whenever the selected node changes.
+  const selectedId = editState?.selected ?? null;
+  useEffect(() => {
+    setInspectorCollapsed(false);
+    dockPinned.current = false;
+  }, [selectedId]);
+
+  // Never cover the selected node: measure its live rect vs the stage and dock
+  // the inspector on whichever side has more clearance (unless the user pinned).
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!selectedId || !stage) return;
+    let raf = 0;
+    const measure = () => {
+      if (dockPinned.current) return;
+      const node = stage.querySelector<SVGGElement>(`[data-node="${cssEscape(selectedId)}"]`);
+      if (!node) return;
+      const sr = stage.getBoundingClientRect();
+      const nr = node.getBoundingClientRect();
+      const gutter = 244; // inspector width + margins
+      const nodeLeft = nr.left - sr.left;
+      const nodeRight = nr.right - sr.left;
+      const intrudesLeft = nodeLeft < gutter;
+      const intrudesRight = nodeRight > sr.width - gutter;
+      let side: Side = "left";
+      if (intrudesLeft && !intrudesRight) side = "right";
+      else if (intrudesLeft && intrudesRight) side = nodeLeft >= sr.width - nodeRight ? "left" : "right";
+      setInspectorSide((prev) => (prev === side ? prev : side));
+    };
+    const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
+    schedule();
+    const ro = new ResizeObserver(schedule);
+    ro.observe(stage);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+  }, [selectedId, playerState, inspectorCollapsed]);
 
   const errorCount = diags.filter((d) => d.severity === "error").length;
   const warnCount = diags.filter((d) => d.severity === "warning").length;
@@ -91,7 +175,6 @@ export default function App() {
 
   const eng = engineRef.current;
   const activeTool = editState?.tool ?? liveState?.tool ?? "select";
-  const selectedId = editState?.selected ?? null;
   const selectedNode = selectedId ? eng?.getScene().nodes.find((n) => n.id === selectedId) : undefined;
 
   return (
@@ -108,13 +191,31 @@ export default function App() {
           <button title="Download scene JSON" onClick={() => eng?.downloadJSON()}>JSON</button>
           <button title="Copy code" onClick={() => navigator.clipboard?.writeText(source)}>⧉ Copy</button>
         </nav>
+        <button
+          className="edd-topbar-hint"
+          onClick={() => setCodeCollapsed((c) => !c)}
+          title="Toggle the code panel (⌘B)"
+        >
+          {codeCollapsed ? "⟩ Show code" : "⟨ Focus mode"} <kbd>⌘B</kbd>
+        </button>
       </header>
 
       <main className="edd-main edd-split">
-        <section className="edd-editor-pane">
+        <section className={`edd-editor-pane${codeCollapsed ? " edd-editor-pane--collapsed" : ""}`}>
           <div className="edd-editor-head">
-            <span>EDodoDraw code</span>
-            <span className="edd-editor-meta">edit the code or the diagram — they stay in sync</span>
+            <span className="edd-editor-title">EDodoDraw code</span>
+            <div className="edd-editor-head-right">
+              <span className="edd-editor-meta">code and diagram stay in sync</span>
+              <button
+                className="edd-editor-collapse"
+                title="Collapse code (⌘B)"
+                aria-label="Collapse code panel"
+                aria-expanded={!codeCollapsed}
+                onClick={() => setCodeCollapsed(true)}
+              >
+                ⟨
+              </button>
+            </div>
           </div>
           <div className="edd-editor" data-testid="editor-wrap">
             <CodeEditor value={source} onChange={setSource} diagnostics={cmDiags} className="edd-cm" />
@@ -122,7 +223,7 @@ export default function App() {
           <DiagnosticsStrip diags={diags} errorCount={errorCount} warnCount={warnCount} />
         </section>
 
-        <section className="edd-stage" data-testid="stage">
+        <section className="edd-stage" data-testid="stage" ref={stageRef}>
           <CanvasView
             source={debounced}
             onEngine={(e) => (engineRef.current = e)}
@@ -132,11 +233,30 @@ export default function App() {
             onDiagnostics={setDiags}
             onEdit={onEdit}
           />
+          {codeCollapsed && (
+            <button
+              className="edd-code-reveal"
+              title="Show code (⌘B)"
+              aria-label="Show code panel"
+              aria-controls="editor-wrap"
+              onClick={() => setCodeCollapsed(false)}
+            >
+              <span className="edd-code-reveal-chevron">⟩</span>
+              <span className="edd-code-reveal-text">CODE</span>
+            </button>
+          )}
           <Toolbar activeTool={activeTool} engine={eng} liveState={liveState} onCommit={commitAnnotations} />
           {selectedNode && (
             <PropertyPanel
               node={selectedNode}
               engine={eng}
+              side={inspectorSide}
+              collapsed={inspectorCollapsed}
+              onToggleCollapsed={() => setInspectorCollapsed((c) => !c)}
+              onToggleSide={() => {
+                dockPinned.current = true;
+                setInspectorSide((s) => (s === "left" ? "right" : "left"));
+              }}
               onDelete={() => eng?.deleteSelected()}
               onRename={() => eng?.renameSelected()}
             />
@@ -151,16 +271,16 @@ export default function App() {
 function Toolbar({ activeTool, engine, liveState, onCommit }: { activeTool: string; engine: CanvasEngine | null; liveState: LiveState | null; onCommit: () => void }) {
   const annCount = liveState?.count ?? 0;
   return (
-    <div className="edd-toolbar" data-testid="toolbar">
-      <div className="edd-tool-group">
+    <div className="edd-toolbar" data-testid="toolbar" role="toolbar" aria-label="Editing tools">
+      <div className="edd-tool-group" title="Edit tools">
         {EDIT_TOOLS.map((t) => (
           <button key={t.tool} title={t.label} className={activeTool === t.tool ? "active" : ""} data-tool={t.tool} onClick={() => engine?.setTool(t.tool)}>
             {t.icon}
           </button>
         ))}
       </div>
-      <div className="edd-tool-label">annotate</div>
-      <div className="edd-tool-group">
+      <span className="edd-toolbar-sep" />
+      <div className="edd-tool-group edd-tool-group--annotate" title="Annotate tools">
         {ANNOT_TOOLS.map((t) => (
           <button key={t.tool} title={t.label} className={activeTool === t.tool ? "active" : ""} data-tool={t.tool} onClick={() => engine?.setTool(t.tool)}>
             {t.icon}
@@ -175,44 +295,84 @@ function Toolbar({ activeTool, engine, liveState, onCommit }: { activeTool: stri
   );
 }
 
-function PropertyPanel({ node, engine, onDelete, onRename }: { node: { id: string; shape: string; style: { fill: string | null; stroke: string } }; engine: CanvasEngine | null; onDelete: () => void; onRename: () => void }) {
+function PropertyPanel({
+  node, engine, side, collapsed, onToggleCollapsed, onToggleSide, onDelete, onRename,
+}: {
+  node: { id: string; shape: string; style: { fill: string | null; stroke: string } };
+  engine: CanvasEngine | null;
+  side: Side;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  onToggleSide: () => void;
+  onDelete: () => void;
+  onRename: () => void;
+}) {
+  const fill = node.style.fill;
+  const stroke = node.style.stroke;
+  // A swatch is "active" if its palette name OR its hex matches the node's value.
+  const isFill = (c: string) => c === fill || SWATCH_HEX[c] === fill;
+  const isStroke = (c: string) => c === stroke || STROKE_HEX[c] === stroke;
+
   return (
-    <div className="edd-props" data-testid="props">
-      <div className="edd-props-row">
-        <span className="edd-props-label">Fill</span>
-        <div className="edd-swatches">
-          {FILL_SWATCHES.map((c) => (
-            <button
-              key={c}
-              className={`edd-swatch${c === "transparent" ? " transparent" : ""}`}
-              style={{ background: SWATCH_HEX[c] }}
-              title={c}
-              onClick={() => engine?.applyStyle(node.id, { fill: c })}
-            />
-          ))}
+    <aside
+      className={`edd-props${side === "right" ? " edd-props--right" : ""}${collapsed ? " edd-props--collapsed" : ""}`}
+      data-testid="props"
+      data-side={side}
+    >
+      <div className="edd-props-head">
+        <span className="edd-props-title">Selection</span>
+        <div className="edd-props-head-actions">
+          <button className="edd-props-dock" title={`Dock ${side === "left" ? "right" : "left"}`} aria-label="Move inspector to the other side" onClick={onToggleSide}>⇄</button>
+          <button className="edd-props-collapse" title="Collapse inspector (⌘I)" aria-label="Collapse inspector" aria-expanded={!collapsed} onClick={onToggleCollapsed}>{collapsed ? "⌄" : "⌃"}</button>
         </div>
       </div>
-      <div className="edd-props-row">
-        <span className="edd-props-label">Stroke</span>
-        <div className="edd-swatches">
-          {STROKE_SWATCHES.map((c) => (
-            <button key={c} className="edd-swatch" style={{ background: STROKE_HEX[c] }} title={c} onClick={() => engine?.applyStyle(node.id, { stroke: c })} />
-          ))}
+
+      {collapsed ? (
+        <button className="edd-props-pill" title="Expand inspector (⌘I)" onClick={onToggleCollapsed}>
+          <span className="edd-props-pill-dot" style={{ background: fill ? SWATCH_HEX[fill] ?? fill : "transparent" }} />
+          <span className="edd-props-pill-dot" style={{ background: STROKE_HEX[stroke] ?? stroke ?? "#1e1e1e" }} />
+          <span className="edd-props-pill-shape">{SHAPE_GLYPH[node.shape] ?? "▭"}</span>
+        </button>
+      ) : (
+        <div className="edd-props-body">
+          <div className="edd-props-row">
+            <span className="edd-props-label">Stroke</span>
+            <div className="edd-swatches">
+              {STROKE_SWATCHES.map((c) => (
+                <button key={c} className={`edd-swatch${isStroke(c) ? " is-active" : ""}`} style={{ background: STROKE_HEX[c] }} title={c} aria-label={`Stroke ${c}`} onClick={() => engine?.applyStyle(node.id, { stroke: c })} />
+              ))}
+            </div>
+          </div>
+          <div className="edd-props-row">
+            <span className="edd-props-label">Fill</span>
+            <div className="edd-swatches">
+              {FILL_SWATCHES.map((c) => (
+                <button
+                  key={c}
+                  className={`edd-swatch${c === "transparent" ? " transparent" : ""}${isFill(c) ? " is-active" : ""}`}
+                  style={{ background: SWATCH_HEX[c] }}
+                  title={c}
+                  aria-label={`Fill ${c}`}
+                  onClick={() => engine?.applyStyle(node.id, { fill: c })}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="edd-props-row edd-props-row--shape">
+            <span className="edd-props-label">Shape</span>
+            <select className="edd-shape-select" value={SHAPES.includes(node.shape) ? node.shape : ""} onChange={(e) => engine?.applyStyle(node.id, { shape: e.target.value })}>
+              {SHAPES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div className="edd-props-actions">
+            <button onClick={onRename} title="Rename (double-click the shape)">✎ Rename</button>
+            <button onClick={onDelete} className="danger" title="Delete (Del)" data-testid="del-btn">🗑 Delete</button>
+          </div>
         </div>
-      </div>
-      <div className="edd-props-row">
-        <span className="edd-props-label">Shape</span>
-        <select className="edd-shape-select" value={SHAPES.includes(node.shape) ? node.shape : ""} onChange={(e) => engine?.applyStyle(node.id, { shape: e.target.value })}>
-          {SHAPES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-      </div>
-      <div className="edd-props-actions">
-        <button onClick={onRename} title="Rename (double-click the shape)">✎ Rename</button>
-        <button onClick={onDelete} className="danger" title="Delete (Del)" data-testid="del-btn">🗑 Delete</button>
-      </div>
-    </div>
+      )}
+    </aside>
   );
 }
 

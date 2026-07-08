@@ -309,6 +309,10 @@ export class EdodoDraw {
     this.renderer.measure();
     this.renderer.applyCamera(this.renderer.getCamera());
     this.updateGrid(this.controller.current);
+    // Re-draw screen-space overlays so the selection box / annotations track the
+    // new viewport (e.g. when the code pane collapses and the canvas reflows).
+    this.edit.render();
+    this.live.render();
   }
   destroy(): void {
     for (const fn of this.cleanup) fn();
@@ -407,8 +411,11 @@ export class EdodoDraw {
     });
 
     const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      // Don't hijack keys while the user is typing in a field or rich editor
+      // (inputs, textareas, and contenteditable code editors like CodeMirror).
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable || t?.closest?.("[contenteditable='true'], .cm-editor")) return;
       if (this.mode === "edit" && this.edit.handleKey(e)) {
         e.preventDefault();
         return;

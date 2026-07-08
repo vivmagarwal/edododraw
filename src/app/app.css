@@ -3,9 +3,17 @@
   --edd-panel: #f8f9fb;
   --edd-border: #e6e8ec;
   --edd-ink: #1e1e1e;
-  --edd-muted: #868e96;
+  --edd-muted: #6b7280;
   --edd-accent: #6741d9;
+  --edd-accent-soft: #efeafc;
   --edd-topbar-h: 52px;
+  /* editing-chrome design tokens */
+  --edd-ring: #6741d9;
+  --edd-shadow-1: 0 2px 8px rgba(20, 20, 40, 0.08);
+  --edd-shadow-2: 0 10px 30px rgba(20, 20, 40, 0.16);
+  --edd-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --edd-glass: saturate(1.4) blur(14px);
+  --edd-inspector-w: 216px;
 }
 
 * { box-sizing: border-box; }
@@ -48,13 +56,28 @@ body {
 .edd-demos button:hover { border-color: var(--edd-accent); }
 .edd-demos button.active { background: var(--edd-accent); color: #fff; border-color: var(--edd-accent); }
 
-.edd-main { flex: 1 1 auto; min-height: 0; display: flex; }
+.edd-main { flex: 1 1 auto; min-height: 0; display: flex; position: relative; }
 .edd-split { flex-direction: row; }
 .edd-stage { flex: 1 1 auto; position: relative; min-width: 0; }
 
+/* focus-mode hint / toggle in the topbar (right-aligned via space-between) */
+.edd-topbar-hint {
+  font: inherit; font-size: 12.5px; font-weight: 700;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 11px; border-radius: 8px;
+  border: 1px solid var(--edd-border); background: #fff; color: var(--edd-muted);
+  cursor: pointer; transition: all 0.12s ease; white-space: nowrap;
+}
+.edd-topbar-hint:hover { color: var(--edd-ink); border-color: var(--edd-accent); }
+.edd-topbar-hint kbd {
+  font: inherit; font-size: 11px; font-weight: 800;
+  padding: 1px 5px; border-radius: 5px;
+  background: var(--edd-panel); border: 1px solid var(--edd-border); color: var(--edd-muted);
+}
+
 .edd-picker-label { font-size: 12px; color: var(--edd-muted); margin-right: 2px; align-self: center; }
 
-/* ---- editor pane ---- */
+/* ---- editor pane (collapsible into focus mode) ---- */
 .edd-editor-pane {
   flex: 0 0 42%;
   max-width: 620px;
@@ -64,13 +87,55 @@ body {
   border-right: 1px solid var(--edd-border);
   background: #fbfbfd;
   min-height: 0;
+  overflow: hidden;
+  transition: flex-basis 0.28s var(--edd-ease-spring), min-width 0.28s var(--edd-ease-spring),
+    max-width 0.28s var(--edd-ease-spring), border-right-width 0.28s var(--edd-ease-spring);
+  will-change: flex-basis;
 }
+.edd-editor-pane > * { transition: opacity 0.16s ease; }
+.edd-editor-pane--collapsed {
+  flex-basis: 0 !important;
+  min-width: 0;
+  max-width: 0;
+  border-right-width: 0;
+}
+.edd-editor-pane--collapsed > * { opacity: 0; pointer-events: none; }
 .edd-editor-head {
   display: flex; justify-content: space-between; align-items: center;
   padding: 7px 14px; font-size: 12px; font-weight: 700; color: var(--edd-muted);
   border-bottom: 1px solid var(--edd-border); text-transform: uppercase; letter-spacing: 0.04em;
+  white-space: nowrap;
 }
-.edd-editor-meta { font-weight: 500; text-transform: none; letter-spacing: 0; }
+.edd-editor-head-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.edd-editor-title { flex: 0 0 auto; }
+.edd-editor-meta { font-weight: 500; text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; }
+.edd-editor-collapse {
+  flex: 0 0 auto;
+  width: 24px; height: 24px; border-radius: 7px;
+  border: 1px solid transparent; background: transparent; color: var(--edd-muted);
+  cursor: pointer; font-size: 14px; line-height: 1; display: grid; place-items: center;
+  transition: all 0.12s ease;
+}
+.edd-editor-collapse:hover { background: var(--edd-panel); color: var(--edd-ink); border-color: var(--edd-border); }
+
+/* left-edge tab to reopen the code pane while in focus mode */
+.edd-code-reveal {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  z-index: 12;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 12px 5px;
+  border: 1px solid var(--edd-border); border-left: none;
+  border-radius: 0 11px 11px 0;
+  background: rgba(255, 255, 255, 0.96); color: var(--edd-accent);
+  box-shadow: var(--edd-shadow-1); cursor: pointer;
+  -webkit-backdrop-filter: var(--edd-glass); backdrop-filter: var(--edd-glass);
+  animation: eddRevealIn 0.18s var(--edd-ease-spring) both;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+.edd-code-reveal:hover { background: #fff; box-shadow: var(--edd-shadow-2); }
+.edd-code-reveal-chevron { font-size: 13px; font-weight: 800; }
+.edd-code-reveal-text { writing-mode: vertical-rl; font-size: 10px; font-weight: 800; letter-spacing: 0.14em; }
+@keyframes eddRevealIn { from { opacity: 0; transform: translate(-6px, -50%); } to { opacity: 1; transform: translate(0, -50%); } }
 .edd-editor { flex: 1 1 auto; min-height: 0; display: flex; overflow: hidden; }
 .edd-cm { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
 .edd-cm .cm-editor { height: 100%; }
@@ -105,27 +170,31 @@ body {
 .edd-diag-code { opacity: 0.85; }
 .edd-diag-msg { color: #343a40; }
 
-/* ---- annotation toolbar ---- */
+/* ---- tool island (top-center, Excalidraw-style) ---- */
 .edd-toolbar {
   position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 10;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.95);
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: nowrap;      /* single row; shrink-to-fit + wrap would minimize width and stack */
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.92);
   border: 1px solid var(--edd-border);
-  border-radius: 12px;
-  padding: 6px;
-  box-shadow: 0 6px 22px rgba(20, 20, 40, 0.12);
-  backdrop-filter: blur(6px);
+  border-radius: 13px;
+  padding: 5px;
+  box-shadow: var(--edd-shadow-1);
+  -webkit-backdrop-filter: var(--edd-glass);
+  backdrop-filter: var(--edd-glass);
 }
 .edd-toolbar button {
-  width: 38px;
-  height: 38px;
-  font-size: 17px;
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
   border-radius: 9px;
   border: 1px solid transparent;
   background: transparent;
@@ -136,43 +205,83 @@ body {
   transition: all 0.1s ease;
 }
 .edd-toolbar button:hover:not(:disabled) { background: #f1f3f5; }
-.edd-toolbar button.active { background: var(--edd-accent); color: #fff; }
-.edd-toolbar button:disabled { opacity: 0.3; cursor: default; }
-.edd-toolbar button.commit { font-size: 16px; font-weight: 800; background: #e7f5ff; color: #1971c2; }
-.edd-toolbar-sep { height: 1px; background: var(--edd-border); margin: 3px 2px; }
-.edd-tool-group { display: flex; flex-direction: column; gap: 3px; }
-.edd-tool-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--edd-muted); text-align: center; margin: 5px 0 1px; }
+.edd-toolbar button.active { background: var(--edd-accent); color: #fff; box-shadow: var(--edd-shadow-1); }
+/* annotate tools read as a different "ink" (warm highlighter) when active */
+.edd-tool-group--annotate button.active { background: #ffec99; color: #7a4d00; }
+.edd-toolbar button:disabled { opacity: 0.32; cursor: default; }
+.edd-toolbar button.commit { font-size: 15px; font-weight: 800; background: #e7f5ff; color: #1971c2; }
+.edd-toolbar button.commit:hover:not(:disabled) { background: #d0ebff; }
+.edd-toolbar-sep { width: 1px; height: 24px; background: var(--edd-border); margin: 0 4px; }
+.edd-tool-group { display: flex; flex-direction: row; align-items: center; gap: 2px; }
 
-/* ---- property panel (selected element) ---- */
+/* ---- selection inspector (vertical, left-docked, Excalidraw-style) ---- */
 .edd-props {
   position: absolute;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 72px;              /* clears the top-center tool island */
+  left: 14px;
   z-index: 11;
+  width: var(--edd-inspector-w);
+  max-height: calc(100% - 150px);
+  overflow-y: auto;
   display: flex;
-  align-items: center;
-  gap: 14px;
-  background: rgba(255, 255, 255, 0.96);
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid var(--edd-border);
-  border-radius: 12px;
-  padding: 8px 14px;
-  box-shadow: 0 6px 22px rgba(20, 20, 40, 0.12);
-  backdrop-filter: blur(6px);
-  flex-wrap: wrap;
-  max-width: calc(100% - 40px);
+  border-radius: 13px;
+  box-shadow: var(--edd-shadow-2);
+  -webkit-backdrop-filter: var(--edd-glass);
+  backdrop-filter: var(--edd-glass);
+  animation: eddInspectorIn 0.16s var(--edd-ease-spring) both;
 }
-.edd-props-row { display: flex; align-items: center; gap: 6px; }
-.edd-props-label { font-size: 11px; font-weight: 800; color: var(--edd-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.edd-swatches { display: flex; gap: 3px; }
-.edd-swatch { width: 20px; height: 20px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.12); cursor: pointer; padding: 0; }
+.edd-props--right { left: auto; right: 14px; }
+.edd-props--collapsed { width: auto; overflow: visible; }
+@keyframes eddInspectorIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+.edd-props-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 8px 8px 13px;
+  border-bottom: 1px solid var(--edd-border);
+}
+.edd-props--collapsed .edd-props-head { border-bottom: none; padding-bottom: 8px; }
+.edd-props-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--edd-muted); }
+.edd-props-head-actions { display: flex; gap: 2px; }
+.edd-props-dock, .edd-props-collapse {
+  width: 24px; height: 24px; border-radius: 7px;
+  border: 1px solid transparent; background: transparent; color: var(--edd-muted);
+  cursor: pointer; font-size: 13px; line-height: 1; display: grid; place-items: center;
+  transition: all 0.12s ease;
+}
+.edd-props-dock:hover, .edd-props-collapse:hover { background: var(--edd-panel); color: var(--edd-ink); border-color: var(--edd-border); }
+
+.edd-props-body { display: flex; flex-direction: column; gap: 13px; padding: 13px; }
+.edd-props-row { display: flex; flex-direction: column; gap: 7px; }
+.edd-props-label { font-size: 10.5px; font-weight: 800; color: var(--edd-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.edd-swatches { display: flex; flex-wrap: wrap; gap: 5px; }
+.edd-swatch {
+  width: 22px; height: 22px; border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.12); cursor: pointer; padding: 0;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
 .edd-swatch:hover { transform: scale(1.12); }
+.edd-swatch.is-active { outline: 2px solid var(--edd-ring); outline-offset: 2px; box-shadow: var(--edd-shadow-1); }
 .edd-swatch.transparent { background-image: linear-gradient(45deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%), linear-gradient(45deg, #ddd 25%, #fff 25%, #fff 75%, #ddd 75%); background-size: 8px 8px; background-position: 0 0, 4px 4px; }
-.edd-shape-select { font: inherit; font-size: 12.5px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--edd-border); background: #fff; }
-.edd-props-actions { display: flex; gap: 6px; }
-.edd-props-actions button { font: inherit; font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--edd-border); background: #fff; cursor: pointer; }
+.edd-shape-select { font: inherit; font-size: 12.5px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--edd-border); background: #fff; width: 100%; cursor: pointer; }
+.edd-props-actions { display: flex; gap: 7px; }
+.edd-props-actions button { flex: 1; font: inherit; font-size: 12px; font-weight: 700; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--edd-border); background: #fff; cursor: pointer; transition: all 0.12s ease; }
+.edd-props-actions button:hover { border-color: var(--edd-accent); }
 .edd-props-actions button.danger { color: #e03131; border-color: #ffc9c9; }
-.edd-props-actions button.danger:hover { background: #fff5f5; }
+.edd-props-actions button.danger:hover { background: #fff5f5; border-color: #e03131; }
+
+/* collapsed inspector -> compact live-state pill */
+.edd-props-pill {
+  display: flex; align-items: center; gap: 7px;
+  margin: 0 10px 10px; padding: 6px 11px;
+  border-radius: 999px; border: 1px solid var(--edd-border); background: #fff;
+  cursor: pointer; transition: all 0.12s ease;
+}
+.edd-props-pill:hover { border-color: var(--edd-accent); box-shadow: var(--edd-shadow-1); }
+.edd-props-pill-dot { width: 15px; height: 15px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.15); }
+.edd-props-pill-shape { font-size: 14px; color: var(--edd-ink); }
 
 .edd-text-input {
   position: absolute;
@@ -255,4 +364,42 @@ body {
   background-image: radial-gradient(circle, #d8dce3 1px, transparent 1px);
   background-size: 26px 26px;
   background-position: -1px -1px;
+}
+
+/* ---- polish: focus rings, glass, motion, responsive ---- */
+.edd-toolbar button:focus-visible,
+.edd-swatch:focus-visible,
+.edd-props-actions button:focus-visible,
+.edd-props-dock:focus-visible,
+.edd-props-collapse:focus-visible,
+.edd-editor-collapse:focus-visible,
+.edd-topbar-hint:focus-visible,
+.edd-code-reveal:focus-visible,
+.edd-shape-select:focus-visible {
+  outline: 2px solid var(--edd-ring);
+  outline-offset: 2px;
+}
+.edd-player-controls { -webkit-backdrop-filter: var(--edd-glass); backdrop-filter: var(--edd-glass); }
+
+@media (prefers-reduced-motion: reduce) {
+  .edd-editor-pane, .edd-props, .edd-code-reveal, .edd-swatch, .edd-toolbar button,
+  .edd-props-actions button, .edd-topbar-hint, .edd-editor-collapse, .edd-props-pill {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* narrow screens: the code pane floats over the canvas instead of splitting */
+@media (max-width: 820px) {
+  .edd-editor-pane {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 15;
+    width: min(88vw, 480px);
+    flex-basis: min(88vw, 480px);
+    box-shadow: var(--edd-shadow-2);
+  }
+  .edd-props { width: 190px; }
+  .edd-toolbar { gap: 2px; padding: 4px; flex-wrap: wrap; max-width: calc(100% - 24px); justify-content: center; }
+  .edd-toolbar button { width: 32px; height: 32px; font-size: 15px; }
 }
