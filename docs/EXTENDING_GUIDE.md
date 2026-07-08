@@ -88,14 +88,15 @@ consistent with the built-ins.
 ### Worked example — a "gauge" shape (add to the builtins)
 
 The canonical place to register in-repo shapes is
-`src/engine/plugins/builtins.ts` (the `star` example already lives there). It is a
-side-effect import from the engine barrel, so registering there means the shape is
-always available. Add:
+`src/engine/plugins/builtins.ts` (the `star` example already lives there). Add your
+shape inside the exported `registerBuiltinShapes()` function — the renderer calls it
+on `mount()` (and it is called eagerly on import), so built-ins survive a
+tree-shaking library build and are always available once you render. Add:
 
 ```ts
-// src/engine/plugins/builtins.ts
-import { nodeRoughOptions } from "../render/shapes.js";
-import { registerShape } from "./registry.js";
+// src/engine/plugins/builtins.ts — add this call INSIDE registerBuiltinShapes()
+// (so it survives the tree-shaking library build, like the star above).
+// `nodeRoughOptions` and `registerShape` are already imported in that file.
 
 // A half-circle gauge with a needle — great for "health"/"load" nodes.
 registerShape("gauge", (rc, rect, style) => {

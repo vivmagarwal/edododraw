@@ -28,6 +28,8 @@ Guidance for AI agents working in this repo.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system overview, pipeline, module table, key decisions.
 - [docs/DEVELOPMENT_STANDARDS.md](docs/DEVELOPMENT_STANDARDS.md) — setup, structure, how to add shapes/arrows/annotations/DSL.
 - [docs/DSL_LANGUAGE_GUIDE.md](docs/DSL_LANGUAGE_GUIDE.md) — the `.edd` language reference (LLM + human friendly).
+- [docs/INTEGRATION_GUIDE.md](docs/INTEGRATION_GUIDE.md) — embed EDodoDraw via npm (`EdodoDraw` facade + React + low-level `compileEdd`).
+- [docs/EXTENDING_GUIDE.md](docs/EXTENDING_GUIDE.md) — add shapes / arrows / annotations / layouts / DSL constructs + plugins.
 - [docs/CAMERA_AND_TIMELINE_GUIDE.md](docs/CAMERA_AND_TIMELINE_GUIDE.md) — magic-move camera + beat player.
 - [docs/ANNOTATIONS_GUIDE.md](docs/ANNOTATIONS_GUIDE.md) — annotation model, real-time editor, commit-to-code, animated arrows.
 - [docs/IMPORT_AND_EXPORT_GUIDE.md](docs/IMPORT_AND_EXPORT_GUIDE.md) — Mermaid import; SVG/PNG/JSON export.

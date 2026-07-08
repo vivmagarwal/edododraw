@@ -29,12 +29,35 @@ Excalidraw is a joy to draw *by hand*. EDodoDraw is a joy to drive *by code* —
 - **15+ hand-drawn shapes** + a **plugin registry** to add your own without touching the core.
 - **Export** to self-contained SVG (font embedded), PNG, or JSON.
 
-## Quick start
+## Use it in your app
 
 ```bash
-npm install
+npm i edododraw
+```
+
+```js
+import { EdodoDraw } from "edododraw";
+
+const edd = new EdodoDraw(document.getElementById("diagram"));
+await edd.render(`
+  scene {
+    a([Start]) --> b[Do work] --> c{OK?}
+    c -->|yes| d(Done)
+  }
+`);
+```
+
+A React wrapper lives at `edododraw/react` (`<EdodoDrawView source={code} />`), and a
+pure, DOM-free compiler (`compileEdd(source) → { scene, diagnostics }`) is exported for
+Node/SSR. See the **[Embed guide](docs/INTEGRATION_GUIDE.md)** for the full API.
+
+## Run this repo (playground + docs site)
+
+```bash
+git clone https://github.com/vivmagarwal/edododraw.git
+cd edododraw && npm install
 npm run dev     # http://localhost:5273
-npm test
+npm test        # 200+ unit tests
 ```
 
 Open the app, pick an example (Welcome · Flowchart · Architecture · Animated Arrows · Mermaid), and edit the code on the left — the diagram updates live.

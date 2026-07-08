@@ -112,7 +112,7 @@ export class EdodoDraw {
 
     const blocks = extractMermaidBlocks(source);
     if (blocks.length) {
-      diags = diags.filter((d) => d.code !== "W-MERMAID-M5");
+      diags = diags.filter((d) => d.code !== "W-MERMAID-SYNC");
       for (const body of blocks) {
         try {
           injectMermaid(scene, await convertMermaid(body, scene.theme.mode));

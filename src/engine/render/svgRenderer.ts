@@ -12,6 +12,7 @@
 import rough from "roughjs";
 import type { Point } from "../geometry.js";
 import type { Scene, SceneNode } from "../scene/types.js";
+import { registerBuiltinShapes } from "../plugins/builtins.js";
 import { renderEdge } from "./edges.js";
 import { labelBelow, renderShapeBody } from "./shapes.js";
 import { ensureEngineStyles, FONT_FAMILY } from "./theme.css.js";
@@ -43,6 +44,7 @@ export class SvgRenderer {
   }
 
   mount(): void {
+    registerBuiltinShapes(); // ensure built-in plugin shapes survive lib builds
     ensureEngineStyles(this.container.ownerDocument);
     const doc = this.container.ownerDocument;
     const svg = doc.createElementNS(SVG_NS, "svg") as SVGSVGElement;

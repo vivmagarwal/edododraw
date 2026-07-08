@@ -194,13 +194,14 @@ scene {
 
 Attach an edge endpoint to a specific point on a node with `.anchor` or `@(u,v)`:
 
-- Compass: `n s e w ne nw se sw c` (aliases `top bottom left right center`).
-- Side fraction: `top:0.3` (30% along the top edge), also `right:0.75`, etc.
-- Normalized: `node@(0.5, 1.0)` (u,v in 0..1 of the node box).
-- Angle: `node.` … or `angle:45` from center.
+- Compass: `.n .s .e .w .ne .nw .se .sw .c` (aliases `.top .bottom .left .right .center`).
+- Side fraction: `.top:0.3` (30% along the top edge), also `.right:0.75`, `.bottom:0.5`, `.left:0.2`.
+- Normalized: `@(0.5, 1.0)` — u,v in 0..1 of the node box.
+- Angle: `.angle:45` — degrees from the center (0 = east, clockwise).
 
 ```edd
-api@(1, 0.5) -> db.writer     // right-middle of api → the "writer" side of db
+gw.s      -> api.n            // bottom of gw → top of api
+api@(1, 0.5) -> db.top:0.3    // right-middle of api → 30% along db's top edge
 ```
 
 Omit the anchor for automatic border attachment aimed at the other endpoint.
@@ -275,7 +276,7 @@ timeline story {
 | Reset | `camera reset` | — |
 
 Shared modifiers: `zoom N` · `over <ms|s>` · `ease <easing>` · `pad N`.
-Easings: `linear ease ease-in ease-out ease-in-out back-out anticipate spring magic spring(stiffness, damping) cubic-bezier(a,b,c,d)`.
+Easings: `linear ease ease-in ease-out ease-in-out back-out anticipate spring` — plus `magic` (an alias for the tuned spring). `spring(…)` and `cubic-bezier(…)` are accepted syntax and currently animate with a smooth spring default (their parameters are reserved for a future release).
 
 ### Reveal / hide
 

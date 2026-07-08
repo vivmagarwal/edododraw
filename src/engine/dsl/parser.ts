@@ -659,6 +659,12 @@ class Parser {
     if (this.is(T.Dot)) {
       this.advance();
       sub = this.eat(T.Ident)?.text;
+      // side-fraction / angle anchors: `.top:0.3`, `.right:0.75`, `.angle:45`
+      if (sub && this.is(T.Colon)) {
+        this.advance();
+        const n = this.eat(T.Number);
+        if (n) sub = `${sub}:${n.num}`;
+      }
     }
     if (this.is(T.At)) {
       this.advance();

@@ -296,10 +296,11 @@ exported from `edododraw` if you want to drive the import yourself. See
 
 ## 7. SSR / bundler notes
 
-- **The facade needs a DOM.** `new EdodoDraw(el)` uses `document`, `getComputedStyle`,
-  `ResizeObserver`, and `window` — construct it in the browser only. In React,
-  create it inside `useEffect` (which is exactly what `EdodoDrawView` does), never
-  during render or on the server.
+- **The facade needs a DOM.** `new EdodoDraw(el)` and its methods use browser globals
+  — `document`, `window`, `getComputedStyle`, `ResizeObserver`, `requestAnimationFrame`
+  / `cancelAnimationFrame` (camera animation), and `XMLSerializer` (SVG export).
+  Construct and use it in the browser only. In React, create it inside `useEffect`
+  (which is exactly what `EdodoDrawView` does), never during render or on the server.
 - **`compileEdd` is DOM-free.** Use it for server-side validation, computing a scene
   ahead of time, or CI checks — no browser or jsdom required.
 - **Fonts are self-contained.** The hand-drawn font (Excalifont/Virgil) is embedded
@@ -311,9 +312,12 @@ exported from `edododraw` if you want to drive the import yourself. See
 - **ESM only.** There is no CommonJS build; use `import` (or dynamic `import()`),
   not `require`. Any modern bundler (Vite, webpack 5, esbuild, Rollup, Next.js)
   resolves the `edododraw` / `edododraw/react` subpath exports directly.
-- **Tree-shaking + side effects.** `package.json` marks only the plugin
-  `builtins` files as having side effects (they self-register the `star` shape), so
-  bundlers can safely drop unused engine code while keeping built-in shapes.
+- **Tree-shaking + built-in shapes.** Built-in plugin shapes (e.g. `star`) are
+  registered from the renderer on `mount()` (via `registerBuiltinShapes()`), so they
+  survive a tree-shaking library build and are always available once you render.
+  `package.json` also lists the `builtins` files under `sideEffects` for the eager
+  registration path. Your own `registerShape(...)` calls run whenever their module is
+  imported — import that module before you render.
 
 ---
 

@@ -111,7 +111,7 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
   }
 
   if (hasMermaid) {
-    diags.warn("W-MERMAID-M5", "mermaid import is wired in a later milestone; the block was skipped", { line: 1, col: 1, start: 0, end: 0 }, { hint: "use EDodoDraw node/edge syntax for now" });
+    diags.warn("W-MERMAID-SYNC", "the pure compiler skips `mermaid` blocks; import Mermaid via the EdodoDraw facade or convertMermaid()", { line: 1, col: 1, start: 0, end: 0 }, { hint: "see docs/IMPORT_AND_EXPORT_GUIDE" });
   }
 
   // ---- collect scene statements (recursing into groups) -------------------

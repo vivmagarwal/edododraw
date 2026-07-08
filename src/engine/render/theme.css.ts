@@ -33,21 +33,8 @@ const CSS = `
   font-style: normal;
   font-display: swap;
 }
-/* UI/code fonts are best-effort from /fonts (app only) with system fallbacks. */
-@font-face {
-  font-family: "Nunito";
-  src: url("/fonts/Nunito-Regular.woff2") format("woff2");
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Cascadia Code";
-  src: url("/fonts/CascadiaCode-Regular.woff2") format("woff2");
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
+/* "normal" and "code" diagram fonts fall back to the host's system sans/mono
+   (no external files) — the engine embeds only the hand-drawn font it needs. */
 
 /* ---- animated arrows -------------------------------------------------- */
 .edd-anim { pointer-events: none; }

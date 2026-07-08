@@ -56,6 +56,12 @@ export function resolveAnchor(
   const key = anchor.trim().toLowerCase();
   if (key in COMPASS) return COMPASS[key](r);
 
+  // normalized position: "@u,v" (u,v in 0..1 of the node box)
+  const uv = key.match(/^@\(?(-?[0-9.]+),\s*(-?[0-9.]+)\)?$/);
+  if (uv) {
+    return { x: r.x + r.w * parseFloat(uv[1]), y: r.y + r.h * parseFloat(uv[2]) };
+  }
+
   // side:fraction — e.g. "top:0.3"
   const frac = key.match(/^(top|bottom|left|right|n|s|e|w)\s*:\s*([0-9.]+)$/);
   if (frac) {
