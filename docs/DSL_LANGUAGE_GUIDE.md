@@ -39,6 +39,7 @@ Everything else is optional layering on top.
 | `scene [name] { … }` | Structure. Multiple `scene` blocks merge. |
 | `annotate ["label"] { … }` | Always-on annotations (outside the timeline). |
 | `timeline [name] { … }` | Choreography (beats). |
+| `overrides { id at (x, y) [size (w, h)] … }` | Pinned positions/sizes (usually machine-written by direct editing — see §11). |
 | `mermaid """ … """` | Import a raw Mermaid diagram (see IMPORT_AND_EXPORT_GUIDE.md). |
 
 Comments: `// line`, `%% line` (Mermaid-style), `/* block */` (nestable).
@@ -288,13 +289,38 @@ Easings: `linear ease ease-in ease-out ease-in-out back-out anticipate spring` �
 
 ---
 
-## 11. Diagnostics
+## 11. Overrides — where direct edits live
+
+The layout engine positions nodes automatically. When you **drag, resize, add, rename, restyle, or delete elements directly on the canvas** (in the playground, or via the editor API — see INTEGRATION_GUIDE.md), those changes are written straight back into the source so the code stays the single source of truth. Geometry lands in an `overrides { … }` block:
+
+```edd
+scene {
+  layout dag { direction: down }
+  rect a "A"
+  rect b "B"
+  a --> b
+}
+
+overrides {
+  a at (120, 40)             // pin a node's top-left corner (world units)
+  b at (120, 220) size (160, 90)   // …and optionally its width/height
+}
+```
+
+- Each entry is `id at (x, y)` with an optional `size (w, h)`. Coordinates are the node's top-left in world units; `id` may be any node — declared, auto-created from an edge, or Mermaid-imported.
+- A pinned node keeps its coordinates; the layout still routes edges and places any *un-pinned* nodes around it.
+- The block is **machine-managed**: dragging a node rewrites its entry, and the engine freezes the other nodes' current positions into the block at the same time so the layout doesn't reshuffle under you. You can hand-edit or delete entries freely — remove the whole block to hand control back to auto-layout.
+- Restyle/rename/add/delete edits patch the node's declaration and edges in place (e.g. a fill swatch upserts `{ fill: green }`); only position/size use `overrides`.
+
+---
+
+## 12. Diagnostics
 
 The compiler recovers from errors and reports many at once, each with `line:col`, a stable code (`E-EDGE-NOOP`, `E-STMT`, `W-UNKNOWN-KEY`, …), and a hint. A bad statement never blanks the diagram — valid statements still render.
 
 ---
 
-## 12. LLM authoring tips
+## 13. LLM authoring tips
 
 - Prefer the **keyword node form** (`cylinder db "…"`) and the **block form** for camera/annotations — they're unambiguous.
 - One statement per line. Attributes are `{ key: value, … }` (commas or newlines both separate).

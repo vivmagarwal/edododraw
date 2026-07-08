@@ -123,11 +123,37 @@ no-op. State changes emit via `on("state", …)`.
 | `restart` | `() => void` | Go to the first beat. |
 | `timeline` | `get timeline(): TimelinePlayer` | The underlying player (`hasTimeline`, current index, …). |
 
+### Tools — direct editing & annotation
+
+`setTool` selects the active pointer tool and switches the engine between its two
+interactive **modes**. All of this requires `interactive: true`.
+
+| Method | Signature | Notes |
+|---|---|---|
+| `setTool` | `(tool: string) => void` | **Edit tools** (mode `edit`): `"select"`, `"hand"`, `"rect"`, `"ellipse"`, `"diamond"`, `"text"`, `"arrow"`. **Annotate tools** (mode `annotate`): `"highlight"`, `"underline"`, `"mark-box"`, `"mark-circle"`, `"point"`, `"note"`. |
+
+**Direct editing (canvas → code).** In `edit` mode, pointer gestures manipulate the
+diagram and every change is patched back into the source (emitted as the `"edit"`
+event — see below), keeping the code the single source of truth:
+
+- **select / move** — click a node to select (8-handle box); drag to move.
+- **resize** — drag a handle. Move/resize write an `overrides { … }` block (see DSL_LANGUAGE_GUIDE §11).
+- **rename** — double-click a node, type, `Enter`.
+- **add** — pick `rect`/`ellipse`/`diamond`/`text` and drag on empty canvas; `arrow` drags between two nodes to connect them.
+- **delete** — `Delete`/`Backspace` on the selection.
+
+| Method | Signature | Notes |
+|---|---|---|
+| `applyStyle` | `(id, { fill?, stroke?, shape? }) => void` | Upsert style attrs on a node's declaration (e.g. `{ fill: green }`). |
+| `renameSelected` | `() => void` | Open the rename field for the current selection. |
+| `deleteSelected` | `() => void` | Delete the selection (node decl + its edges + its override). |
+| `fitNext` | `() => void` | Fit the whole diagram on the next render (e.g. after loading a new document). |
+| `editor` | `get editor(): EditController` | The underlying edit controller (`clearSelection`, `getTool`, …). |
+
 ### Live annotations
 
 | Method | Signature | Notes |
 |---|---|---|
-| `setTool` | `(tool: Tool) => void` | `Tool = "select" \| "highlight" \| "underline" \| "box" \| "circle" \| "arrow" \| "text"`. Requires `interactive: true`. |
 | `undo` / `redo` | `() => void` | Undo/redo live annotation edits. |
 | `clearAnnotations` | `() => void` | Remove all live annotations. |
 | `annotationsToCode` | `() => string` | Serialize live annotations back to an `annotate { … }` DSL block. |
@@ -152,7 +178,7 @@ no-op. State changes emit via `on("state", …)`.
 
 ### Events — `on(event, cb): () => void`
 
-`on` returns an **unsubscribe** function. Four events:
+`on` returns an **unsubscribe** function. Six events:
 
 | Event | Payload | Fires when |
 |---|---|---|
@@ -160,6 +186,8 @@ no-op. State changes emit via `on("state", …)`.
 | `"diagnostics"` | `Diagnostic[]` | After each `render()`, with compile diagnostics. |
 | `"state"` | `PlayerState` `{ index, total, caption, playing, stepName }` | Timeline position/playing changes. |
 | `"live"` | `LiveState` `{ tool, count, canUndo, canRedo, selected }` | Live-annotation tool/selection/undo state changes. |
+| `"edit"` | `source: string` | A direct-manipulation edit patched the source. Re-render with this new source (and mirror it into your code editor). |
+| `"editstate"` | `EditState` `{ tool, selected }` | Edit-mode tool or node selection changes (drive a property panel / toolbar highlight). |
 
 A `Diagnostic` has `{ severity: "error"|"warning"|"info", code, message, line, col,
 start, end, expected?, found?, hint? }` (see `src/engine/dsl/diagnostics.ts`).
@@ -171,6 +199,14 @@ const off = edd.on("diagnostics", (diags) => {
 });
 // later: off();  // unsubscribe
 edd.on("state", (s) => console.log(`beat ${s.index + 1}/${s.total} — ${s.stepName}`));
+
+// Direct-edit round-trip: the diagram is editable, and edits flow back to code.
+let source = "scene { rect a \"A\"\n a --> b }";
+edd.on("edit", (next) => {
+  source = next;              // keep your source of truth in sync…
+  void edd.render(next);      // …and re-render (also mirror `next` into your code editor)
+});
+edd.setTool("select");        // enable move/resize/rename/delete on the canvas
 ```
 
 ---

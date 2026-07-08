@@ -32,6 +32,7 @@ import type {
   MermaidDecl,
   MetaDecl,
   NodeDecl,
+  OverridesDecl,
   Program,
   Prop,
   RevealBlock,
@@ -202,6 +203,8 @@ class Parser {
           return this.parseAnnotate();
         case "mermaid":
           return this.parseMermaid();
+        case "overrides":
+          return this.parseOverrides();
         case "plugin":
         case "define":
           // parsed-but-ignored for now: skip its block/line
@@ -248,6 +251,44 @@ class Parser {
     const t = this.advance(); // mermaid
     const raw = this.eat(T.Raw);
     return { type: "mermaid", body: raw?.text ?? "", span: this.spanFrom(t) };
+  }
+
+  /** `overrides { id at (x,y) [size (w,h)]; … }` — machine-managed positions. */
+  private parseOverrides(): OverridesDecl {
+    const t = this.advance(); // overrides
+    const entries: OverridesDecl["entries"] = [];
+    this.eat(T.LBrace);
+    this.skipSeps();
+    while (!this.is(T.RBrace) && !this.atEnd()) {
+      const id = this.eat(T.Ident)?.text;
+      if (id) {
+        if (this.is(T.Colon)) this.advance();
+        else if (this.isKw("at")) this.advance();
+        const pos = this.parseValue();
+        let x = 0;
+        let y = 0;
+        let w: number | undefined;
+        let h: number | undefined;
+        if (pos.t === "tuple" && pos.v[0]?.t === "num" && pos.v[1]?.t === "num") {
+          x = pos.v[0].v;
+          y = pos.v[1].v;
+        }
+        if (this.isKw("size")) {
+          this.advance();
+          const s = this.parseValue();
+          if (s.t === "tuple" && s.v[0]?.t === "num" && s.v[1]?.t === "num") {
+            w = s.v[0].v;
+            h = s.v[1].v;
+          }
+        }
+        entries.push({ id, x, y, w, h });
+      } else {
+        this.advance();
+      }
+      this.skipSeps();
+    }
+    this.eat(T.RBrace);
+    return { type: "overrides", entries, span: this.spanFrom(t) };
   }
 
   private parseTheme(): ThemeDecl {
@@ -347,6 +388,7 @@ class Parser {
     const t = this.advance(); // scene
     const name = this.is(T.Ident) && !this.is(T.LBrace) ? this.maybeSceneName() : undefined;
     const statements: SceneStmt[] = [];
+    const braceOpen = this.cur().start;
     this.eat(T.LBrace);
     this.skipSeps();
     while (!this.is(T.RBrace) && !this.atEnd()) {
@@ -356,8 +398,9 @@ class Parser {
       if (this.i === before) this.advance();
       this.skipSeps();
     }
+    const closeTok = this.cur();
     this.eat(T.RBrace);
-    return { type: "scene", name, statements, span: this.spanFrom(t) };
+    return { type: "scene", name, statements, span: this.spanFrom(t), braceOpen, braceClose: closeTok.start };
   }
 
   private maybeSceneName(): string | undefined {
@@ -505,10 +548,14 @@ class Parser {
     if (label === undefined && this.is(T.String)) label = this.advance().text;
     const anchors: AnchorDecl[] = [];
     let attrs: AttrBlock = [];
+    let attrOpen: number | undefined;
+    let attrClose: number | undefined;
     if (this.is(T.LBrace)) {
       const block = this.parseNodeBlock();
       attrs = block.attrs;
       anchors.push(...block.anchors);
+      attrOpen = block.attrOpen;
+      attrClose = block.attrClose;
       if (block.diamondLabel !== undefined) {
         shape = shape ?? block.diamondShape ?? "diamond";
         if (label === undefined) label = block.diamondLabel;
@@ -518,17 +565,20 @@ class Parser {
           const attrBlock = this.parseNodeBlock();
           attrs = attrBlock.attrs;
           anchors.push(...attrBlock.anchors);
+          attrOpen = attrBlock.attrOpen;
+          attrClose = attrBlock.attrClose;
         }
       }
     }
-    return { type: "node", id, label, shape, classes, attrs, anchors, span: this.spanFrom(t) };
+    return { type: "node", id, label, shape, classes, attrs, anchors, span: this.spanFrom(t), attrOpen, attrClose };
   }
 
   /** Parse `{ ... }` after a node: could be attr-block OR a diamond label (D1). */
-  private parseNodeBlock(): { attrs: AttrBlock; anchors: AnchorDecl[]; diamondLabel?: string; diamondShape?: string } {
+  private parseNodeBlock(): { attrs: AttrBlock; anchors: AnchorDecl[]; diamondLabel?: string; diamondShape?: string; attrOpen?: number; attrClose?: number } {
     if (this.braceIsAttr()) {
       const anchors: AnchorDecl[] = [];
       const attrs: AttrBlock = [];
+      const attrOpen = this.cur().start;
       this.eat(T.LBrace);
       this.skipSeps();
       while (!this.is(T.RBrace) && !this.atEnd()) {
@@ -545,8 +595,9 @@ class Parser {
         }
         this.skipSeps();
       }
+      const closeTok = this.cur();
       this.eat(T.RBrace);
-      return { attrs, anchors };
+      return { attrs, anchors, attrOpen, attrClose: closeTok.end };
     }
     // brace sugar ({Label} diamond, {{Label}} hexagon): raw-capture to close
     const open = this.cur();

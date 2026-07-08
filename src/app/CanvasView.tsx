@@ -6,7 +6,7 @@
 
 import { useEffect, useRef } from "react";
 import { EdodoDraw } from "../lib/index.js";
-import type { Diagnostic, LiveState, PlayerState } from "../lib/index.js";
+import type { Diagnostic, EditState, LiveState, PlayerState } from "../lib/index.js";
 
 export type CanvasEngine = EdodoDraw;
 
@@ -15,10 +15,12 @@ interface Props {
   onEngine?: (engine: EdodoDraw | null) => void;
   onState?: (state: PlayerState) => void;
   onLiveState?: (state: LiveState) => void;
+  onEditState?: (state: EditState) => void;
   onDiagnostics?: (diags: Diagnostic[]) => void;
+  onEdit?: (source: string) => void;
 }
 
-export function CanvasView({ source, onEngine, onState, onLiveState, onDiagnostics }: Props) {
+export function CanvasView({ source, onEngine, onState, onLiveState, onEditState, onDiagnostics, onEdit }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const eddRef = useRef<EdodoDraw | null>(null);
   const sourceRef = useRef(source);
@@ -31,7 +33,9 @@ export function CanvasView({ source, onEngine, onState, onLiveState, onDiagnosti
     eddRef.current = edd;
     if (onState) edd.on("state", onState);
     if (onLiveState) edd.on("live", onLiveState);
+    if (onEditState) edd.on("editstate", onEditState);
     if (onDiagnostics) edd.on("diagnostics", onDiagnostics);
+    if (onEdit) edd.on("edit", onEdit);
     onEngine?.(edd);
     void edd.render(sourceRef.current);
     return () => {

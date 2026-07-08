@@ -5,6 +5,7 @@
  */
 
 import { applyLayout } from "../layout/index.js";
+import { applyOverrides } from "../scene/overrides.js";
 import { emptyScene, makeEdge, makeNode } from "../scene/defaults.js";
 import { resolveMarker } from "../scene/palette.js";
 import type {
@@ -77,11 +78,15 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
   let timeline: BeatDecl[] = [];
   let timelineProps: Record<string, Value> = {};
   const metaAttrs: AttrBlock = [];
+  const overrideEntries: Scene["overrides"] = [];
   let activeTheme: string | undefined;
   let hasMermaid = false;
 
   for (const s of program.statements) {
     switch (s.type) {
+      case "overrides":
+        overrideEntries!.push(...s.entries);
+        break;
       case "meta":
         metaAttrs.push(...s.attrs);
         break;
@@ -336,6 +341,12 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
   const centerId = attr(layoutAttrs, "center");
   if (centerId && centerId.t === "ref") (scene.meta as { center?: string }).center = centerId.id;
   else if (centerId && centerId.t === "ident") (scene.meta as { center?: string }).center = centerId.v;
+
+  // Position/size overrides (direct-edit round-trip): pin before layout.
+  if (overrideEntries && overrideEntries.length) {
+    scene.overrides = overrideEntries;
+    applyOverrides(scene);
+  }
 
   applyLayout(scene);
 

@@ -320,6 +320,17 @@ export interface SceneMeta {
   background?: string;
 }
 
+/** A machine-managed position/size override (from the `overrides { … }` block).
+ *  Applied before layout so the node is pinned at these coords — this is what
+ *  direct canvas edits (drag/resize) write back to code. */
+export interface NodeOverride {
+  id: string;
+  x: number;
+  y: number;
+  w?: number;
+  h?: number;
+}
+
 export interface Scene {
   id: string;
   theme: Theme;
@@ -330,4 +341,6 @@ export interface Scene {
   /** Baseline annotations always present (step annotations layer on top). */
   annotations: Annotation[];
   steps: Step[];
+  /** Position/size overrides applied before layout (direct-edit round-trip). */
+  overrides?: NodeOverride[];
 }

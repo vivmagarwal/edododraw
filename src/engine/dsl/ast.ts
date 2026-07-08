@@ -75,6 +75,9 @@ export interface NodeDecl {
   attrs: AttrBlock;
   anchors: AnchorDecl[];
   span: Span;
+  /** Source offsets of the attribute block braces (for surgical patching). */
+  attrOpen?: number;
+  attrClose?: number;
 }
 
 export interface EdgeOpInfo {
@@ -260,6 +263,23 @@ export interface SceneDecl {
   name?: string;
   statements: SceneStmt[];
   span: Span;
+  /** Source offsets of the scene block braces (for appending nodes/edges). */
+  braceOpen?: number;
+  braceClose?: number;
+}
+
+export interface OverrideEntry {
+  id: string;
+  x: number;
+  y: number;
+  w?: number;
+  h?: number;
+}
+
+export interface OverridesDecl {
+  type: "overrides";
+  entries: OverrideEntry[];
+  span: Span;
 }
 
 export interface VersionDecl {
@@ -285,7 +305,8 @@ export type TopStmt =
   | SceneDecl
   | TimelineDecl
   | AnnotateDecl
-  | MermaidDecl;
+  | MermaidDecl
+  | OverridesDecl;
 
 export interface Program {
   type: "program";

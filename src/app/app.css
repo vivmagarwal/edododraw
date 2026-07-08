@@ -71,21 +71,10 @@ body {
   border-bottom: 1px solid var(--edd-border); text-transform: uppercase; letter-spacing: 0.04em;
 }
 .edd-editor-meta { font-weight: 500; text-transform: none; letter-spacing: 0; }
-.edd-editor {
-  flex: 1 1 auto;
-  resize: none;
-  border: 0;
-  outline: none;
-  padding: 14px 16px;
-  font-family: "Cascadia Code", ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 13.5px;
-  line-height: 1.6;
-  tab-size: 2;
-  color: #24292f;
-  background: #fbfbfd;
-  white-space: pre;
-  overflow: auto;
-}
+.edd-editor { flex: 1 1 auto; min-height: 0; display: flex; overflow: hidden; }
+.edd-cm { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
+.edd-cm .cm-editor { height: 100%; }
+.edd-cm .cm-scroller { overflow: auto; }
 
 /* ---- diagnostics ---- */
 .edd-diagnostics {
@@ -149,8 +138,41 @@ body {
 .edd-toolbar button:hover:not(:disabled) { background: #f1f3f5; }
 .edd-toolbar button.active { background: var(--edd-accent); color: #fff; }
 .edd-toolbar button:disabled { opacity: 0.3; cursor: default; }
-.edd-toolbar button.commit { font-size: 12px; font-weight: 800; background: #e7f5ff; color: #1971c2; width: auto; padding: 0 8px; }
+.edd-toolbar button.commit { font-size: 16px; font-weight: 800; background: #e7f5ff; color: #1971c2; }
 .edd-toolbar-sep { height: 1px; background: var(--edd-border); margin: 3px 2px; }
+.edd-tool-group { display: flex; flex-direction: column; gap: 3px; }
+.edd-tool-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--edd-muted); text-align: center; margin: 5px 0 1px; }
+
+/* ---- property panel (selected element) ---- */
+.edd-props {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--edd-border);
+  border-radius: 12px;
+  padding: 8px 14px;
+  box-shadow: 0 6px 22px rgba(20, 20, 40, 0.12);
+  backdrop-filter: blur(6px);
+  flex-wrap: wrap;
+  max-width: calc(100% - 40px);
+}
+.edd-props-row { display: flex; align-items: center; gap: 6px; }
+.edd-props-label { font-size: 11px; font-weight: 800; color: var(--edd-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.edd-swatches { display: flex; gap: 3px; }
+.edd-swatch { width: 20px; height: 20px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.12); cursor: pointer; padding: 0; }
+.edd-swatch:hover { transform: scale(1.12); }
+.edd-swatch.transparent { background-image: linear-gradient(45deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%), linear-gradient(45deg, #ddd 25%, #fff 25%, #fff 75%, #ddd 75%); background-size: 8px 8px; background-position: 0 0, 4px 4px; }
+.edd-shape-select { font: inherit; font-size: 12.5px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--edd-border); background: #fff; }
+.edd-props-actions { display: flex; gap: 6px; }
+.edd-props-actions button { font: inherit; font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--edd-border); background: #fff; cursor: pointer; }
+.edd-props-actions button.danger { color: #e03131; border-color: #ffc9c9; }
+.edd-props-actions button.danger:hover { background: #fff5f5; }
 
 .edd-text-input {
   position: absolute;
