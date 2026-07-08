@@ -39,6 +39,9 @@ export function Home() {
           </div>
           <div className="hero-install">
             <code>npm i edododraw</code>
+            <a className="hero-llms" href={`${import.meta.env.BASE_URL}llms-full.txt`} target="_blank" rel="noreferrer" title="Every doc + example in one plain-text file — paste it into any LLM">
+              📄 llms-full.txt
+            </a>
           </div>
         </div>
         <div className="hero-demo">

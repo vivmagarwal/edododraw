@@ -53,6 +53,8 @@
   },
   "scripts": {
     "dev": "vite",
+    "gen:llms": "node scripts/gen-llms-txt.mjs",
+    "prebuild": "node scripts/gen-llms-txt.mjs",
     "build": "tsc -b && vite build",
     "build:lib": "vite build --config vite.lib.config.ts",
     "build:types": "tsc -p tsconfig.lib.json",

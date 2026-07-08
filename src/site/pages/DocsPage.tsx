@@ -12,6 +12,10 @@ export function DocsPage({ slug }: { slug?: string }) {
   return (
     <div className="page docs-layout">
       <nav className="docs-nav">
+        <a className="docs-llms" href={`${import.meta.env.BASE_URL}llms-full.txt`} target="_blank" rel="noreferrer" title="All docs + examples in one plain-text file, ideal for pasting into an LLM">
+          📄 llms-full.txt
+          <span>all docs + examples · one file for LLMs</span>
+        </a>
         {DOC_GROUPS.map((group) => (
           <div key={group} className="docs-nav-group">
             <div className="docs-nav-title">{group}</div>
