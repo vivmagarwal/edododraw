@@ -184,7 +184,7 @@ event — see below), keeping the code the single source of truth:
 |---|---|---|
 | `"render"` | `RenderResult` `{ scene, diagnostics }` | After each successful `render()`. |
 | `"diagnostics"` | `Diagnostic[]` | After each `render()`, with compile diagnostics. |
-| `"state"` | `PlayerState` `{ index, total, caption, playing, stepName }` | Timeline position/playing changes. |
+| `"state"` | `PlayerState` `{ index, total, caption, playing, stepName }` | Timeline position/playing changes. `index === -1` is the home/overview state (before any beat; `stepName` is `"Overview"`). |
 | `"live"` | `LiveState` `{ tool, count, canUndo, canRedo, selected }` | Live-annotation tool/selection/undo state changes. |
 | `"edit"` | `source: string` | A direct-manipulation edit patched the source. Re-render with this new source (and mirror it into your code editor). |
 | `"editstate"` | `EditState` `{ tool, selected }` | Edit-mode tool or node selection changes (drive a property panel / toolbar highlight). |
@@ -198,7 +198,7 @@ const off = edd.on("diagnostics", (diags) => {
   if (errors.length) console.warn(errors.map((d) => `${d.code}: ${d.message}`).join("\n"));
 });
 // later: off();  // unsubscribe
-edd.on("state", (s) => console.log(`beat ${s.index + 1}/${s.total} — ${s.stepName}`));
+edd.on("state", (s) => console.log(s.index < 0 ? "Overview" : `beat ${s.index + 1}/${s.total} — ${s.stepName}`));
 
 // Direct-edit round-trip: the diagram is editable, and edits flow back to code.
 let source = "scene { rect a \"A\"\n a --> b }";

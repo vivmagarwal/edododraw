@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cameraForBBox } from "@engine/camera/fit.js";
+import { cameraForBBox, cameraForCenter } from "@engine/camera/fit.js";
 import { EASINGS, easingByName } from "@engine/camera/easing.js";
 
 describe("camera fit math", () => {
@@ -25,6 +25,23 @@ describe("camera fit math", () => {
     const cam = cameraForBBox({ minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }, { w: 800, h: 600 });
     expect(cam).toEqual({ cx: 0, cy: 0, zoom: 1 });
   });
+
+  it("clamps a huge bbox up to minZoom (0.05)", () => {
+    const cam = cameraForBBox({ minX: 0, minY: 0, maxX: 1_000_000, maxY: 1_000_000 }, { w: 800, h: 600 }, { padding: 0 });
+    expect(cam.zoom).toBe(0.05);
+  });
+
+  it("handles a degenerate zero-size bbox without dividing by zero", () => {
+    const cam = cameraForBBox({ minX: 5, minY: 5, maxX: 5, maxY: 5 }, { w: 800, h: 600 }, { padding: 0 });
+    expect(cam.cx).toBe(5);
+    expect(cam.cy).toBe(5);
+    expect(Number.isFinite(cam.zoom)).toBe(true);
+    expect(cam.zoom).toBeGreaterThan(0);
+  });
+
+  it("cameraForCenter centers at an explicit zoom", () => {
+    expect(cameraForCenter({ x: 12, y: 34 }, 1.5)).toEqual({ cx: 12, cy: 34, zoom: 1.5 });
+  });
 });
 
 describe("easing catalog", () => {
@@ -46,5 +63,12 @@ describe("easing catalog", () => {
 
   it("falls back to ease-in-out for unknown names", () => {
     expect(easingByName(undefined)).toBe(EASINGS["ease-in-out"]);
+    // @ts-expect-error — exercise the runtime fallback for an unrecognized name
+    expect(easingByName("not-a-real-easing")).toBe(EASINGS["ease-in-out"]);
+  });
+
+  it("returns the requested easing when the name is valid", () => {
+    expect(easingByName("spring")).toBe(EASINGS.spring);
+    expect(easingByName("linear")).toBe(EASINGS.linear);
   });
 });

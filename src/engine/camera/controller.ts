@@ -103,9 +103,7 @@ export class CameraController {
 
   /** Duration heuristic: further travel + bigger zoom change => longer. */
   private autoDuration(from: CameraTransform, to: CameraTransform): number {
-    const dist = Math.hypot(to.cx - from.cx, to.cy - from.cy) * Math.min(from.zoom, to.zoom);
-    const zoomRatio = Math.abs(Math.log(to.zoom / from.zoom));
-    return clamp(420 + dist * 0.12 + zoomRatio * 320, 420, 1300);
+    return autoDuration(from, to);
   }
 
   // ---- high-level ops -----------------------------------------------------
@@ -152,10 +150,18 @@ export class CameraController {
   }
 }
 
-function lerp(a: number, b: number, t: number): number {
+/** Auto-move duration (ms): further travel + bigger zoom change => longer, clamped 420..1300. */
+export function autoDuration(from: CameraTransform, to: CameraTransform): number {
+  const dist = Math.hypot(to.cx - from.cx, to.cy - from.cy) * Math.min(from.zoom, to.zoom);
+  const zoomRatio = Math.abs(Math.log(to.zoom / from.zoom));
+  return clamp(420 + dist * 0.12 + zoomRatio * 320, 420, 1300);
+}
+
+export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
-function logLerp(a: number, b: number, t: number): number {
+/** Interpolate zoom in log space so 1x->4x passes through 2x at t=0.5. */
+export function logLerp(a: number, b: number, t: number): number {
   return a * Math.pow(b / a, t);
 }
 function clamp(v: number, lo: number, hi: number): number {

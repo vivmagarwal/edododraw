@@ -60,6 +60,7 @@ timeline story {
 
   beat ingress "Traffic enters at the edge" {
     camera focus [client, cdn, gw] zoom 1.5 ease spring
+    reveal { show [client, cdn, gw] with pop }   // pop the entry path into focus
     annotate {
       point-at gw "single entry point" { from: ne, color: $accent }
       highlight cdn { color: yellow }
@@ -68,6 +69,7 @@ timeline story {
 
   beat services "Inside the app tier" {
     camera focus services zoom 1.6
+    reveal { show [auth, api, worker] with pop }
     annotate {
       spotlight services { dim: 0.72 }
       underline api "the hot path" { color: $accent }
@@ -77,6 +79,7 @@ timeline story {
 
   beat data "Where state lives" {
     camera focus data zoom 1.7 ease ease-in-out
+    reveal { draw-on [db, cache, queue] }        // sweep the data stores in
     annotate {
       callout db "primary of record" { placement: right }
       circle-mark queue "retry here"

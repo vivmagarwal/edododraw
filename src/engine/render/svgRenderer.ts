@@ -19,6 +19,13 @@ import { ensureEngineStyles, FONT_FAMILY } from "./theme.css.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
+/** Reveal effect name (from the DSL `reveal … with <effect>`) -> CSS class. */
+const REVEAL_EFFECT_CLASS: Record<string, string | undefined> = {
+  fade: "edd-reveal-fade",
+  pop: "edd-reveal-pop",
+  sweep: "edd-reveal-sweep",
+};
+
 export interface CameraTransform {
   cx: number;
   cy: number;
@@ -161,6 +168,25 @@ export class SvgRenderer {
       const id = el.getAttribute("data-node") ?? el.getAttribute("data-edge");
       if (id && hidden.has(id)) el.classList.add("edd-hidden");
       else el.classList.remove("edd-hidden");
+    });
+  }
+
+  /**
+   * Play a per-beat reveal animation (`fade` | `pop` | `sweep`) on the named
+   * element groups. Clears any prior reveal classes first and forces a reflow so
+   * re-entering the same beat restarts the animation. `fx` = id -> effect.
+   */
+  playReveal(fx: Record<string, string> | undefined): void {
+    const classes = ["edd-reveal-fade", "edd-reveal-pop", "edd-reveal-sweep"];
+    const els = this.svg.querySelectorAll<SVGGElement>("[data-node],[data-edge]");
+    els.forEach((el) => el.classList.remove(...classes));
+    if (!fx || !Object.keys(fx).length) return;
+    // reflow so removed classes fully clear before we re-add (animation restart)
+    void this.svg.getBoundingClientRect();
+    els.forEach((el) => {
+      const id = el.getAttribute("data-node") ?? el.getAttribute("data-edge");
+      const cls = id ? REVEAL_EFFECT_CLASS[fx[id]] : undefined;
+      if (cls) el.classList.add(cls);
     });
   }
 

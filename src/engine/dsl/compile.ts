@@ -791,12 +791,38 @@ function beatToStep(b: BeatDecl, idx: number, scene: Scene, tokens: Map<string, 
   return step;
 }
 
-function applyRevealToStep(c: { verb: string; targets: Value[] }, scene: Scene, step: Step): void {
+function applyRevealToStep(c: { verb: string; targets: Value[]; with?: string }, scene: Scene, step: Step): void {
   const ids = c.targets.flatMap((t) => resolveTargetIds(t, scene));
   if (c.verb === "hide" || c.verb === "fade-out" || c.verb === "remove") {
     step.hide!.push(...ids);
-  } else {
-    step.reveal!.push(...ids);
+    return;
+  }
+  step.reveal!.push(...ids);
+  // Reveal animation: an explicit `with <effect>`, or an effect-verb like
+  // `pop [a]` / `draw-on [x]` / `fade-in all`. Plain `show` stays instant.
+  const effect = revealEffect(c.with ?? (c.verb !== "show" ? c.verb : undefined));
+  if (effect) {
+    step.revealFx = step.revealFx ?? {};
+    for (const id of ids) step.revealFx[id] = effect;
+  }
+}
+
+/** Normalize a reveal-effect word to a renderer effect ("fade" | "pop" | "sweep"). */
+function revealEffect(raw: string | undefined): string | undefined {
+  switch (raw) {
+    case "fade-in":
+    case "fade":
+      return "fade";
+    case "pop":
+    case "pop-in":
+    case "emphasize":
+      return "pop";
+    case "draw-on":
+    case "draw":
+    case "sweep":
+      return "sweep";
+    default:
+      return undefined; // unknown / continuous verbs (flow, pulse) => plain show
   }
 }
 

@@ -16,13 +16,28 @@ translate(vw/2, vh/2) · scale(zoom) · translate(-cx, -cy)
 
 ```ts
 const controller = new CameraController(renderer);
-await controller.fitAll(scene, { padding: 80 });
+await controller.fitAll(scene, { padding: 80 });           // frame everything
 await controller.focus(scene, ["db", "cache"], { zoom: 1.7, easing: "spring" });
-controller.zoomBy(1.2, screenPoint);   // wheel zoom around cursor
+await controller.focusBBox({ minX, minY, maxX, maxY }, { zoom: 2 }); // frame an arbitrary world box
+controller.zoomBy(1.2, screenPoint);   // wheel zoom around cursor (relative)
 controller.panByScreen(dx, dy);         // drag pan
 ```
 
 Mid-flight `animateTo` retargets smoothly from the current interpolated state — no snap.
+
+### Numeric contracts
+
+The behaviors an author or embedder can rely on (all from `controller.ts` / `fit.ts`):
+
+| Contract | Value |
+|---|---|
+| Zoom = scale factor | `1.0` = 100% (1 world unit = 1 screen px); `zoom: 1.7` = 170%. |
+| Wheel / `zoomBy` clamp | **0.05–8×** (5%–800%). |
+| Fit clamp | `fitAll`/`focusBBox` cap at **2.5×**; `focus`'s *computed* framing caps at **4×**. |
+| Explicit `zoom` | **Bypasses all clamps** — a passed `zoom` (DSL `camera … zoom N`, or `focus(..,{zoom})`) is applied as-is, so a beat can exceed the interactive limits. |
+| Auto-duration | When `over`/`durationMs` is omitted: `clamp(420 + dist·0.12 + |ln(zoomTo/zoomFrom)|·320, 420, 1300)` ms. |
+| Padding defaults | `fitAll` 80px, `focus`/`focusBBox` 90px, bare `cameraForBBox` 64px. |
+| Default easing | Compiled DSL beats default to **`ease-in-out`** (via `mapEasing`); a raw programmatic `animateTo` with no `easing` defaults to **`spring`**. |
 
 ## Interaction (built into the canvas)
 
@@ -38,9 +53,10 @@ Mid-flight `animateTo` retargets smoothly from the current interpolated state �
 |---|---|
 | Camera | **Sticky** — a beat with no `camera` keeps the current one. |
 | Visibility (`show`/`hide`) | **Sticky** until changed. |
+| Reveal effect (`with fade-in`/`pop`/`draw-on`) | **Beat-scoped** — replayed each time the beat is entered (only when animating). |
 | Annotations | **Beat-scoped** — replaced each beat (always-on `annotate` block persists underneath). |
 
-API: `player.load(scene)`, `play()`, `pause()`, `next()`, `prev()`, `restart()`, `goto(i)`. It emits `PlayerState { index, total, caption, stepName, playing }` for the UI. Auto-advance uses each beat's `hold:` (default 3.2s).
+API: `player.load(scene)`, `play()`, `pause()`, `next()`, `prev()`, `restart()`, `goto(i)`. It emits `PlayerState { index, total, caption, stepName, playing }` for the UI. **`index === -1`** is the home/overview state (before any beat; `stepName` is `"Overview"`) — `prev()` from beat 0 returns there and re-fits. Auto-advance uses each beat's `hold:` (default 3.2s).
 
 ```edd
 timeline story {

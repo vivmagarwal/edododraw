@@ -289,6 +289,10 @@ export interface Step {
   annotations: Annotation[];
   /** Node/edge ids to reveal (fade/draw-in) at this step; empty = all visible. */
   reveal?: string[];
+  /** Per-beat reveal animation: element id -> effect ("fade" | "pop" | "sweep").
+   *  Set when a `reveal … with <effect>` (or an effect-verb) names targets;
+   *  the player replays it each time the beat is entered. */
+  revealFx?: Record<string, string>;
   /** Node/edge ids to hide during this step. */
   hide?: string[];
   /** Narration / caption shown for the step. */

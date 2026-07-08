@@ -1,6 +1,6 @@
 {
   "name": "edododraw",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "description": "A 100% code/syntax-to-diagram engine with the Excalidraw hand-drawn aesthetic, magic-move camera, scriptable + real-time annotations, animated arrows, and first-class Mermaid import.",
   "license": "MIT",

@@ -82,6 +82,9 @@ export class TimelinePlayer {
     // visibility (sticky)
     this.renderer.applyVisibility(this.computeHidden(i));
 
+    // reveal animation (fade / pop / draw-on) for this beat's targets
+    if (animate) this.renderer.playReveal(step.revealFx);
+
     // annotations: always-on + this step's (beat-scoped)
     this.annotations.render(scene, [...scene.annotations, ...step.annotations], animate);
 
