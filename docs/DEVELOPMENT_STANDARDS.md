@@ -10,7 +10,7 @@ npm run typecheck  # tsc -b --noEmit
 npm run build      # tsc + vite build → dist/
 ```
 
-Node ≥ 20. The `reference/` directory (Excalidraw + mermaid-to-excalidraw clones, studied during design) is gitignored and excluded from Vite (`vite.config.ts → optimizeDeps.entries` + `server.watch.ignored`).
+Node ≥ 18 (matches `engines`). The `reference/` directory (Excalidraw + mermaid-to-excalidraw clones, studied during design) is gitignored and excluded from Vite (`vite.config.ts → optimizeDeps.entries` + `server.watch.ignored`).
 
 ## Project structure
 

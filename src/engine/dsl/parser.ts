@@ -925,6 +925,12 @@ class Parser {
           break;
       }
     }
+    // A block that only sets zoom/pan (no focus/fit/center) IS a zoom/pan op —
+    // otherwise it would default to fit-all and drop the value at runtime.
+    if (!cam.op) {
+      if (cam.pan) cam.op = "pan";
+      else if (cam.zoom != null) cam.op = "zoom";
+    }
   }
 
   private parseReveal(): RevealBlock {

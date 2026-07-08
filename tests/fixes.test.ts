@@ -41,6 +41,24 @@ timeline {
     expect(scene.steps[1].camera!.center).toEqual({ x: 10, y: 20 });
   });
 
+  it("R3: block `camera { zoom }` / `camera { pan }` set the op (not fit-all)", () => {
+    const { scene, diagnostics } = compileEdd(`
+scene { rect a "A" }
+timeline {
+  beat z { camera { zoom: 1.3 } }
+  beat p { camera { pan: (100, 200) } }
+  beat f { camera { focus: a, zoom: 1.6 } }
+}`);
+    expect(diagnostics.errors).toEqual([]);
+    expect(scene.steps[0].camera!.op).toBe("zoom");
+    expect(scene.steps[0].camera!.zoom).toBe(1.3);
+    expect(scene.steps[1].camera!.op).toBe("pan");
+    expect(scene.steps[1].camera!.center).toEqual({ x: 100, y: 200 });
+    // focus + zoom together stays a focus op
+    expect(scene.steps[2].camera!.op).toBe("focus");
+    expect(scene.steps[2].camera!.zoom).toBe(1.6);
+  });
+
   it("D2b: @(u,v) resolves to the right point on a node box", () => {
     const n = makeNode({ id: "n", x: 100, y: 200, w: 200, h: 100 });
     // u=1, v=0.5 -> right-middle

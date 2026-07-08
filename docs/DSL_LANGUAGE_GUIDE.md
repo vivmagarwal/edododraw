@@ -276,7 +276,7 @@ timeline story {
 | Reset | `camera reset` | — |
 
 Shared modifiers: `zoom N` · `over <ms|s>` · `ease <easing>` · `pad N`.
-Easings: `linear ease ease-in ease-out ease-in-out back-out anticipate spring` — plus `magic` (an alias for the tuned spring). `spring(…)` and `cubic-bezier(…)` are accepted syntax and currently animate with a smooth spring default (their parameters are reserved for a future release).
+Easings: `linear ease ease-in ease-out ease-in-out back-out anticipate spring` — plus `magic` (an alias for the tuned spring). `spring(…)` is accepted and animates with the tuned spring; `cubic-bezier(…)` is accepted syntax but currently falls back to the default `ease-in-out` (parameters for both are reserved for a future release).
 
 ### Reveal / hide
 
