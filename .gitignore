@@ -1,0 +1,15 @@
+node_modules/
+dist/
+reference/
+.screenshots/
+.playwright-cli/
+.playwright-profile/
+*.trace.zip
+.DS_Store
+*.local
+.env
+.vite/
+coverage/
+dist-lib/
+*.tgz
+*.tsbuildinfo

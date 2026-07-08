@@ -1,0 +1,21 @@
+edd 1.0
+meta { title: "Signup Flow" }
+
+scene {
+  layout dag { direction: down, gap: 60 }
+
+  start([Start])
+  form[Signup Form]
+  valid{Valid?}
+  ok(Create Account):::good
+  err(Show Errors):::bad
+
+  start --> form
+  form  --> valid
+  valid -->|yes| ok
+  valid -->|no|  err
+  err   --> form
+}
+
+style .good { stroke: green, fill: green }
+style .bad  { stroke: red,   fill: red }

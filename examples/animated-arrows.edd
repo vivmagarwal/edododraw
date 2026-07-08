@@ -1,0 +1,18 @@
+edd 1.0
+meta { title: "Animated Arrow Gallery" }
+
+// EDodoDraw ships far more animated connectors than Excalidraw.
+scene {
+  layout dag { direction: right, gap: 120 }
+
+  circle a "A" { fill: blue }
+  circle b "B" { fill: green }
+
+  a -> b "flow"          { animate: flow }
+  a -> b "dash-march"    { animate: dash-march }
+  a -> b "draw-on"       { animate: draw-on }
+  a -> b "comet"         { animate: comet, color: red }
+  a -> b "gradient-flow" { animate: gradient-flow }
+  a -> b "electric"      { animate: electric, color: violet }
+  a -> b "pulse"         { animate: pulse }
+}

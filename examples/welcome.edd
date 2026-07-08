@@ -1,0 +1,19 @@
+edd 1.0
+meta { title: "Welcome to EDodoDraw" }
+
+// Everything you see is generated from THIS code.
+// Edit anything on the left and the diagram updates live.
+
+scene {
+  layout dag { direction: down, gap: 72 }
+
+  ellipse     hello "Hello 👋"                 { fill: yellow }
+  rect        idea  "Diagrams as CODE"         { fill: blue }
+  round-rect  vibe  "…with the Excalidraw vibe" { fill: green }
+  diamond     edit  "Try editing me!"          { fill: violet }
+
+  hello --> idea   "type"
+  idea  --> vibe   "render"
+  vibe  --> edit   "enjoy"
+  edit  ~> hello   "loop"        // ~>  == a flowing animated arrow
+}

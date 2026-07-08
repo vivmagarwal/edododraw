@@ -1,0 +1,53 @@
+# Camera & Timeline Guide
+
+How EDodoDraw does "magic-move" — smooth, scriptable camera moves and step-by-step presentations.
+
+## Architecture
+
+The camera is a `{ cx, cy, zoom }` transform (world point centered in the viewport). It is applied as the SVG `transform` on the world `<g>`:
+
+```
+translate(vw/2, vh/2) · scale(zoom) · translate(-cx, -cy)
+```
+
+- **Math** — `src/engine/camera/fit.ts` (`cameraForBBox`: frame any bbox with padding).
+- **Easing** — `src/engine/camera/easing.ts` (`linear ease ease-in ease-out ease-in-out back-out anticipate spring`; `spring` is a tuned overshoot for magic-move).
+- **Controller** — `src/engine/camera/controller.ts` drives interruptible, retargetable rAF tweens. Position eases linearly; **zoom interpolates in log space** so fast/slow zooms feel natural. Duration auto-scales with travel distance + zoom ratio when not specified.
+
+```ts
+const controller = new CameraController(renderer);
+await controller.fitAll(scene, { padding: 80 });
+await controller.focus(scene, ["db", "cache"], { zoom: 1.7, easing: "spring" });
+controller.zoomBy(1.2, screenPoint);   // wheel zoom around cursor
+controller.panByScreen(dx, dy);         // drag pan
+```
+
+Mid-flight `animateTo` retargets smoothly from the current interpolated state — no snap.
+
+## Interaction (built into the canvas)
+
+- **Wheel** → zoom around the cursor.
+- **Drag** → pan.
+- Any user gesture pauses the timeline player.
+
+## Timeline player
+
+`src/engine/timeline/player.ts` plays `scene.steps` (compiled from a `timeline { beat … }` block — see [DSL_LANGUAGE_GUIDE §10](DSL_LANGUAGE_GUIDE.md)). Each beat diffs against the running state:
+
+| Channel | Rule |
+|---|---|
+| Camera | **Sticky** — a beat with no `camera` keeps the current one. |
+| Visibility (`show`/`hide`) | **Sticky** until changed. |
+| Annotations | **Beat-scoped** — replaced each beat (always-on `annotate` block persists underneath). |
+
+API: `player.load(scene)`, `play()`, `pause()`, `next()`, `prev()`, `restart()`, `goto(i)`. It emits `PlayerState { index, total, caption, stepName, playing }` for the UI. Auto-advance uses each beat's `hold:` (default 3.2s).
+
+```edd
+timeline story {
+  beat overview "All"  { camera fit-all over 800ms; narrate: "the system" }
+  beat focus  "Detail" { camera focus [db, queue] zoom 1.7 ease spring; hold: 2s
+                         annotate { spotlight [db, queue] { dim: 0.7 } } }
+}
+```
+
+In the app, the bottom **player bar** shows Fit / Restart / Prev / Play / Next, the step indicator, and the caption. `⤢ Fit` reframes the whole diagram at any time.

@@ -1,0 +1,99 @@
+{
+  "name": "edododraw",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A 100% code/syntax-to-diagram engine with the Excalidraw hand-drawn aesthetic, magic-move camera, scriptable + real-time annotations, animated arrows, and first-class Mermaid import.",
+  "license": "MIT",
+  "author": "vivmagarwal",
+  "homepage": "https://vivmagarwal.github.io/edododraw/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vivmagarwal/edododraw.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vivmagarwal/edododraw/issues"
+  },
+  "keywords": [
+    "diagram",
+    "diagrams-as-code",
+    "excalidraw",
+    "mermaid",
+    "flowchart",
+    "hand-drawn",
+    "svg",
+    "rough",
+    "visualization",
+    "presentation"
+  ],
+  "main": "./dist-lib/index.js",
+  "module": "./dist-lib/index.js",
+  "types": "./dist-lib/lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist-lib/lib/index.d.ts",
+      "import": "./dist-lib/index.js"
+    },
+    "./react": {
+      "types": "./dist-lib/lib/react.d.ts",
+      "import": "./dist-lib/react.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": [
+    "**/builtins.js",
+    "**/builtins.ts"
+  ],
+  "files": [
+    "dist-lib",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:lib": "vite build --config vite.lib.config.ts",
+    "build:types": "tsc -p tsconfig.lib.json",
+    "build:pkg": "npm run build:lib && npm run build:types",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build:pkg"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^1.1.4",
+    "roughjs": "^4.6.6"
+  },
+  "optionalDependencies": {
+    "@excalidraw/mermaid-to-excalidraw": "^1.1.4"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@excalidraw/mermaid-to-excalidraw": "^1.1.4",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^25.0.1",
+    "marked": "^18.0.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,35 @@
+edd 1.0
+meta { title: "Imported from Mermaid" }
+
+// Paste raw Mermaid — EDodoDraw imports it, keeps the node ids,
+// and lets you choreograph a walkthrough on top.
+mermaid """
+flowchart LR
+  app[App Servers] --> otel[OTel Collector]
+  otel --> prom[Prometheus]
+  otel --> loki[Loki]
+  prom --> grafana[Grafana]
+  loki --> grafana
+  prom --> alertmgr[Alertmanager]
+"""
+
+timeline walkthrough {
+  beat all "Pipeline overview" {
+    camera fit-all over 700ms
+    narrate: "Telemetry flows left to right into Grafana."
+  }
+  beat collect "Collection" {
+    camera focus [app, otel] zoom 1.7
+    annotate {
+      highlight otel { color: yellow }
+      point-at otel "single ingestion point" { from: s }
+    }
+  }
+  beat visualize "Dashboards & alerts" {
+    camera focus [grafana, alertmgr] zoom 1.6
+    annotate {
+      circle-mark grafana "the pane of glass"
+      callout alertmgr "pages on-call" { placement: top }
+    }
+  }
+}

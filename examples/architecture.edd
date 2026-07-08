@@ -1,0 +1,87 @@
+edd 1.0
+meta { title: "WebShop Reference Architecture" }
+
+theme light {
+  tokens { $accent: #2563eb, $muted: #9ca3af, $danger: #e03131 }
+}
+
+style .card     { shape: round-rect, fill: blue }
+style .critical { stroke: $danger, strokeWidth: bold }
+
+defaults {
+  edge { endArrow: arrow }
+}
+
+scene {
+  use theme light
+  layout dag { direction: down, gap: 64, rankGap: 110 }
+
+  actor  client "User"
+  cloud  cdn    "CDN / Edge"       { fill: cyan }
+  hexagon gw    "API Gateway"      { fill: violet, strokeWidth: bold }
+
+  group services "Application Services" {
+    round-rect auth   "Auth Service"  :::card
+    round-rect api    "API Service"   :::card :::critical
+    subroutine worker "Async Worker"
+  }
+
+  group data "Data Layer" {
+    cylinder      db    "Postgres"       { fill: teal }
+    cylinder      cache "Redis"          { fill: red }
+    parallelogram queue "Message Queue"  { fill: orange }
+  }
+
+  note legacy "Legacy Billing\n(deprecate)" { at: (760, 40), pin: true, strokeStyle: dashed }
+
+  // Arrowhead + animation variety
+  client  -> cdn    "https"
+  cdn     ==> gw    "cache miss"   { color: $accent }
+  gw      -> auth   "authZ"        { startArrow: dot }
+  gw      -> api    "REST"         { animate: dash-march }
+  api     ~> worker "enqueue"      { animate: flow }
+  api     -> db     "write"        { endArrow: triangle, animate: draw-on }
+  api     -.-> cache "read-through"
+  worker  -> queue  "publish"      { animate: comet, color: $accent }
+  queue   -> db     "persist"
+  api     -x legacy "deprecated"   { color: $muted, strokeStyle: dashed }
+}
+
+annotate "persistent" {
+  callout db "source of truth" { placement: bottom }
+}
+
+timeline story {
+  beat overview "The whole system" {
+    camera fit-all over 800ms
+    reveal { show all with fade-in }
+    narrate: "End-to-end request path."
+  }
+
+  beat ingress "Traffic enters at the edge" {
+    camera focus [client, cdn, gw] zoom 1.5 ease spring
+    annotate {
+      point-at gw "single entry point" { from: ne, color: $accent }
+      highlight cdn { color: yellow }
+    }
+  }
+
+  beat services "Inside the app tier" {
+    camera focus services zoom 1.6
+    annotate {
+      spotlight services { dim: 0.72 }
+      underline api "the hot path" { color: $accent }
+    }
+    narrate: "Auth fronts the API; the worker drains async jobs."
+  }
+
+  beat data "Where state lives" {
+    camera focus data zoom 1.7 ease ease-in-out
+    annotate {
+      callout db "primary of record" { placement: right }
+      circle-mark queue "retry here"
+    }
+    narrate: "All writes funnel through Postgres; Redis is read-through."
+    hold: 2s
+  }
+}
