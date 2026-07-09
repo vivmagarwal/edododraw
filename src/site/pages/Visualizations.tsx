@@ -5,19 +5,16 @@
  */
 
 import { useMemo, useState } from "react";
-import { listReferencePresets } from "@engine/style/presets.js";
+import { listStyleChoices } from "@engine/style/presets.js";
 import { DemoCard } from "../DemoCard.js";
 import type { Demo } from "../demos.js";
 import { VIZ_CATEGORIES, VIZ_DEMOS } from "../vizDemos.js";
 
-const PRESETS = [
-  { name: "classic", label: "Classic (hand-drawn)" },
-  ...listReferencePresets().map((p) => ({ name: p.name, label: p.label })),
-];
+const PRESETS = listStyleChoices().map((p) => ({ name: p.name, label: p.label }));
 
 /** Inject the chosen preset into a demo snippet (before any existing meta). */
 function withStyle(code: string, style: string): string {
-  if (style === "classic") return code;
+  if (style === "classic") return code; // classic is the default look — no meta needed
   return `meta { style: ${style} }\n${code}`;
 }
 

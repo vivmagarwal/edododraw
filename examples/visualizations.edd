@@ -1,9 +1,10 @@
 edd 1.0
-meta { title: "Visualizations", style: glowful-breeze }
+meta { title: "Visualizations" }
 
 // 62 chart & diagram templates ship built-in — declare DATA, get a diagram.
-// Change `style:` above to restyle everything: bold-canvas, sketch-notes,
-// carefree-mist, corporate-clean, monochrome-pro, artistic-flair, …
+// The default look is the black-and-white hand-drawn Classic. Add a style to
+// restyle everything, e.g. `meta { style: classic-color }` — also colorful-lines,
+// chalkboard, crayon, earthy-gradient, mono-accent, fine-line, neutral-lines.
 // Full catalog: Docs → Visualizations.
 
 viz funnel sales "Sales Funnel" {

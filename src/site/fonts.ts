@@ -24,25 +24,17 @@ const css = `
 }`;
 
 /**
- * Webfonts used by the style presets (Roboto for the reference styles,
- * Fredoka/Montserrat/Shantell Sans/… for their headings). Loaded from Google
- * Fonts on the site only — every preset declares system fallbacks, so diagrams
- * still render fine offline or in exported SVGs without these.
+ * Webfonts used by the style presets (Roboto for the line-art styles, Shantell
+ * Sans for the crayon headings, STIX Two Text for the serif accents). Loaded
+ * from Google Fonts on the site only — every preset declares system fallbacks,
+ * so diagrams still render fine offline or in exported SVGs without these.
  */
 const PRESET_FONTS_URL =
   "https://fonts.googleapis.com/css2?" +
   [
     "family=Roboto:wght@400;700",
-    "family=Roboto+Slab:wght@400;700",
-    "family=Fredoka:wght@400;500;700",
-    "family=Montserrat:wght@400;700",
     "family=Shantell+Sans:wght@400;700",
-    "family=Libre+Baskerville:wght@400;700",
     "family=STIX+Two+Text:wght@400;700",
-    "family=Aboreto",
-    "family=Noto+Serif+JP:wght@400;700",
-    "family=Funnel+Display:wght@300;400;600",
-    "family=Source+Code+Pro:wght@400;700",
   ].join("&") +
   "&display=swap";
 

@@ -211,7 +211,7 @@ EDodoDraw is a **text→visualization generator**: it renders whatever you give 
 Viz output is plain Scene IR, so the rest of the language applies:
 
 ```edd
-meta { style: bold-canvas }
+meta { style: chalkboard }
 
 viz funnel sales "Pipeline" {
   item "Leads" 1200

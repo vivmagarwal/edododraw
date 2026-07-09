@@ -40,6 +40,8 @@ export interface PresetFonts {
 export interface StylePreset {
   /** kebab-case id used in `meta { style: <name> }`. */
   name: string;
+  /** Former ids that still resolve to this preset (backwards-compatible renames). */
+  aliases?: string[];
   label: string;
   description: string;
   mode: "light" | "dark";
@@ -224,7 +226,9 @@ export function presetTheme(preset: StylePreset): Theme {
     background: preset.background,
     defaultStroke: preset.ink,
     defaultText: preset.ink,
-    gridColor: preset.mode === "dark" ? withAlpha("#ffffff", 0.09) : withAlpha("#000000", 0.1),
+    // Match the engine's standard dotted-grid tints so the grid reads the same
+    // whether or not a preset is active.
+    gridColor: preset.mode === "dark" ? "#2c313a" : "#d5d9e0",
     mode: preset.mode,
   };
 }
@@ -260,16 +264,19 @@ export function presetEdgeDefaults(preset: StylePreset): Partial<EdgeStyle> {
 // ----------------------------------------------------------------------------
 
 const presets = new Map<string, StylePreset>();
+const aliasToName = new Map<string, string>();
 
 export function registerStylePreset(p: StylePreset): void {
   presets.set(p.name, p);
+  for (const a of p.aliases ?? []) aliasToName.set(a, p.name);
 }
 
 export function getStylePreset(name: string | undefined): StylePreset | undefined {
   if (!name) return undefined;
-  return presets.get(name);
+  return presets.get(name) ?? presets.get(aliasToName.get(name) ?? "");
 }
 
+/** Canonical presets only (aliases don't appear as separate entries). */
 export function listStylePresets(): StylePreset[] {
   return [...presets.values()];
 }
@@ -278,29 +285,61 @@ export function listStylePresets(): StylePreset[] {
 // Built-in presets
 // ----------------------------------------------------------------------------
 
-/** Shared 10-hue wheel used by vibrant-strokes and glowful-breeze. */
+/** Shared 10-hue wheel used by the line-art styles (colorful-lines, neutral-lines, soft-tint). */
 const WHEEL10 = ["#4e88e7", "#e55753", "#3cc583", "#de8431", "#ba5de5", "#1eabda", "#de58a9", "#92bd39", "#7f64ea", "#e0cb15"];
 
 const SANS = '"Roboto", "Nunito", system-ui, -apple-system, sans-serif';
-const SLAB = '"Roboto Slab", "Rockwell", Georgia, serif';
-const SERIF = '"Libre Baskerville", Georgia, "Times New Roman", serif';
 const STIX = '"STIX Two Text", Georgia, serif';
 const SHANTELL = '"Shantell Sans", "Excalifont", "Segoe Print", cursive';
-const MONTSERRAT = '"Montserrat", "Futura", system-ui, sans-serif';
-const FREDOKA = '"Fredoka", "Nunito", system-ui, sans-serif';
-const FUNNEL = '"Funnel Display", "Archivo", system-ui, sans-serif';
-const ABORETO = '"Aboreto", "Optima", Georgia, serif';
-const NOTOSERIF = '"Noto Serif JP", Georgia, serif';
-const SOURCECODE = '"Source Code Pro", ui-monospace, Menlo, monospace';
 
 /**
- * The engine's classic look as a preset — used when no `meta { style }` is set
- * so the viz templates always have a coherent identity to draw from.
+ * The archetypal Excalidraw look: black-and-white hand-drawn ink on white
+ * paper — thick wobbly outlines, bold hand lettering, no fills. Monochrome even
+ * for viz (single-ink palette), so it reads as a clean pen sketch everywhere.
  */
 export const CLASSIC_PRESET: StylePreset = {
   name: "classic",
-  label: "Classic EDodoDraw",
-  description: "The default Excalidraw-style hand-drawn look: soft pastel fills, matching outlines, Excalifont.",
+  label: "Classic",
+  description: "Classic Excalidraw-style black-and-white hand-drawn ink: bold wobbly outlines, hand lettering, no fills. The default look everywhere.",
+  mode: "light",
+  background: "#ffffff",
+  palette: ["#1e1e1e"],
+  neutral: "#8a8a8a",
+  fillMode: "outline",
+  // `hachure` so a shape that DECLARES a fill still renders it (sketchy, on-brand);
+  // auto-coloured plain shapes and viz series stay outline-only (roleStyle → `none`).
+  fillStyle: "hachure",
+  strokeMode: "same",
+  strokeWidth: 2.2,
+  roughness: 1.15,
+  fonts: { body: "hand", heading: "hand", bodyWeight: 700, headingWeight: 700 },
+  ink: "#1e1e1e",
+  mutedInk: "#4a4a4a",
+  edge: "#1e1e1e",
+  autoColorNodes: false,
+  cornerRadius: null,
+};
+
+/** Black-and-white classic on a dark canvas — the default when a diagram is
+ *  viewed dark with no explicit style. */
+export const CLASSIC_DARK_PRESET: StylePreset = {
+  ...CLASSIC_PRESET,
+  name: "classic-dark",
+  label: "Classic (dark)",
+  mode: "dark",
+  background: "#121212",
+  palette: ["#e3e3e3"],
+  neutral: "#8a8a8a",
+  ink: "#e3e3e3",
+  mutedInk: "#b0b0b0",
+  edge: "#e3e3e3",
+};
+
+/** The soft-pastel COLORED hand-drawn look — a first-class style choice. */
+export const CLASSIC_COLOR_PRESET: StylePreset = {
+  name: "classic-color",
+  label: "Classic Colored",
+  description: "The colored Excalidraw hand-drawn look: soft pastel fills, matching outlines, Excalifont.",
   mode: "light",
   background: "#ffffff",
   palette: ["#1971c2", "#e8590c", "#2f9e44", "#9c36b5", "#f08c00", "#0c8599", "#e03131", "#66a80f"],
@@ -319,25 +358,34 @@ export const CLASSIC_PRESET: StylePreset = {
   softAmount: 0.75,
 };
 
-export const CLASSIC_DARK_PRESET: StylePreset = {
-  ...CLASSIC_PRESET,
-  name: "classic-dark",
-  label: "Classic EDodoDraw (dark)",
-  mode: "dark",
-  background: "#121212",
-  ink: "#e3e3e3",
-  mutedInk: "#9aa0a8",
-  edge: "#e3e3e3",
-  fillMode: "translucent",
-  fillOpacity: 0.3,
-};
-
 const BUILTIN_PRESETS: StylePreset[] = [
   CLASSIC_PRESET,
   CLASSIC_DARK_PRESET,
+  CLASSIC_COLOR_PRESET,
   {
-    name: "vibrant-strokes",
-    label: "Vibrant Strokes",
+    name: "colorful-lines",
+    label: "Colorful Lines",
+    description: "Clean line-art where each item's outline takes its palette color.",
+    mode: "light",
+    background: "#ffffff",
+    palette: WHEEL10,
+    neutral: "#a3a3a3",
+    fillMode: "outline",
+    fillStyle: "none",
+    strokeMode: "same",
+    strokeWidth: 2,
+    roughness: 0,
+    fonts: { body: SANS, heading: SANS },
+    ink: "#484848",
+    mutedInk: "#7a7a7a",
+    edge: "#484848",
+    autoColorNodes: true,
+    cornerRadius: null,
+  },
+  {
+    name: "neutral-lines",
+    aliases: ["vibrant-strokes"],
+    label: "Neutral Lines",
     description: "Neutral gray line-art where color lives in accents and colored labels only.",
     mode: "light",
     background: "#ffffff",
@@ -356,89 +404,9 @@ const BUILTIN_PRESETS: StylePreset[] = [
     cornerRadius: null,
   },
   {
-    name: "colorful-lines",
-    label: "Colorful Lines",
-    description: "Clean line-art where each item's outline takes its palette color (the reference default).",
-    mode: "light",
-    background: "#ffffff",
-    palette: WHEEL10,
-    neutral: "#a3a3a3",
-    fillMode: "outline",
-    fillStyle: "none",
-    strokeMode: "same",
-    strokeWidth: 2,
-    roughness: 0,
-    fonts: { body: SANS, heading: SANS },
-    ink: "#484848",
-    mutedInk: "#7a7a7a",
-    edge: "#484848",
-    autoColorNodes: true,
-    cornerRadius: null,
-  },
-  {
-    name: "glowful-breeze",
-    label: "Glowful Breeze",
-    description: "Airy 20%-tint shapes with crisp same-hue colored outlines and colored labels.",
-    mode: "light",
-    background: "#ffffff",
-    palette: WHEEL10,
-    neutral: "#a3a3a3",
-    fillMode: "translucent",
-    fillOpacity: 0.2,
-    fillStyle: "solid",
-    strokeMode: "same",
-    strokeWidth: 2,
-    roughness: 0,
-    fonts: { body: SANS, heading: SANS },
-    ink: "#484848",
-    mutedInk: "#7a7a7a",
-    edge: "#484848",
-    autoColorNodes: true,
-    cornerRadius: null,
-  },
-  {
-    name: "bold-canvas",
-    label: "Bold Canvas",
-    description: "Neon color blocks on deep navy with hairline seams and friendly Fredoka headings.",
-    mode: "dark",
-    background: "#121d46",
-    palette: ["#4edaed", "#e3ef3a", "#f56099", "#80e876", "#ae89f8", "#fdb461", "#50eebf", "#da67f1", "#b6e233", "#76b7f5"],
-    neutral: "#f0faff",
-    fillMode: "solid",
-    fillStyle: "solid",
-    strokeMode: "seam",
-    strokeWidth: 1,
-    roughness: 0,
-    fonts: { body: SANS, heading: FREDOKA, headingWeight: 700 },
-    ink: "#f0faff",
-    mutedInk: "#aebadd",
-    edge: "#f0faff",
-    autoColorNodes: true,
-    cornerRadius: null,
-  },
-  {
-    name: "radiant-blocks",
-    label: "Radiant Blocks",
-    description: "Warm gold-to-plum solid serif-labeled blocks glowing against charcoal.",
-    mode: "dark",
-    background: "#2f333a",
-    palette: ["#e3c451", "#e98a54", "#d85582", "#9856b3", "#e66b68", "#bc529a", "#ceb567", "#8864ba", "#957aa9", "#b09989"],
-    neutral: "#a3a3a3",
-    fillMode: "solid",
-    fillStyle: "solid",
-    strokeMode: "seam",
-    strokeWidth: 2,
-    roughness: 0,
-    fonts: { body: SERIF, heading: SERIF, headingWeight: 700 },
-    ink: "#ffffff",
-    mutedInk: "#c9cbd1",
-    edge: "#ffffff",
-    autoColorNodes: true,
-    cornerRadius: null,
-  },
-  {
-    name: "pragmatic-shades",
-    label: "Pragmatic Shades",
+    name: "earthy-gradient",
+    aliases: ["pragmatic-shades"],
+    label: "Earthy Gradient",
     description: "Muted earthy gradient shades unified by a constant dark-slate ink outline.",
     mode: "light",
     background: "#cfdfcb",
@@ -458,48 +426,9 @@ const BUILTIN_PRESETS: StylePreset[] = [
     cornerRadius: null,
   },
   {
-    name: "carefree-mist",
-    label: "Carefree Mist",
-    description: "Sun-faded coral-to-seafoam pastels on cream with plum handwriting headings.",
-    mode: "light",
-    background: "#eeead7",
-    palette: ["#f97b4f", "#fcbc66", "#9ccbb5", "#e08666", "#beca9b", "#8dc6bf", "#ff964e", "#e3c47c", "#9bb6ae", "#bc9d8b"],
-    neutral: "#a3a3a3",
-    fillMode: "solid",
-    fillStyle: "solid",
-    strokeMode: "seam",
-    strokeWidth: 2,
-    roughness: 0,
-    fonts: { body: SANS, heading: SHANTELL, headingWeight: 700 },
-    ink: "#584053",
-    mutedInk: "#7c6a77",
-    edge: "#584053",
-    autoColorNodes: true,
-    cornerRadius: null,
-  },
-  {
-    name: "lively-layers",
-    label: "Lively Layers",
-    description: "Earthy terracotta-to-teal layers with fat paper-colored gaps and geometric Montserrat.",
-    mode: "light",
-    background: "#fdfbf7",
-    palette: ["#e16338", "#db9941", "#71af96", "#cc6b49", "#96aa79", "#61aca2", "#bfa258", "#ab7b64", "#6da198", "#898f81"],
-    neutral: "#898f81",
-    fillMode: "solid",
-    fillStyle: "solid",
-    strokeMode: "seam",
-    strokeWidth: 4,
-    roughness: 0,
-    fonts: { body: MONTSERRAT, heading: MONTSERRAT, headingWeight: 700 },
-    ink: "#584053",
-    mutedInk: "#7c6a77",
-    edge: "#584053",
-    autoColorNodes: true,
-    cornerRadius: null,
-  },
-  {
-    name: "artistic-flair",
-    label: "Artistic Flair",
+    name: "crayon",
+    aliases: ["artistic-flair"],
+    label: "Crayon",
     description: "Crayon-and-ink sketchbook — painted color dabs inside heavy wobbly brown outlines.",
     mode: "light",
     background: "#f4eee4",
@@ -519,28 +448,9 @@ const BUILTIN_PRESETS: StylePreset[] = [
     cornerRadius: null,
   },
   {
-    name: "sketch-notes",
-    label: "Sketch Notes",
-    description: "White-chalk sketches and handwriting on a blue chalkboard.",
-    mode: "dark",
-    background: "#195e98",
-    palette: ["#dfe7ee"],
-    neutral: "#b8c6d4",
-    fillMode: "outline",
-    fillStyle: "none",
-    strokeMode: "same",
-    strokeWidth: 2,
-    roughness: 1.9,
-    fonts: { body: "hand", heading: "hand", headingWeight: 700 },
-    ink: "#dfe7ee",
-    mutedInk: "#b8c6d4",
-    edge: "#dfe7ee",
-    autoColorNodes: true,
-    cornerRadius: null,
-  },
-  {
-    name: "elegant-outline",
-    label: "Elegant Outline",
+    name: "fine-line",
+    aliases: ["elegant-outline"],
+    label: "Fine Line",
     description: "Austere 1px black wireframe where hierarchy is carried by weight alone.",
     mode: "light",
     background: "#ffffff",
@@ -560,89 +470,9 @@ const BUILTIN_PRESETS: StylePreset[] = [
     emphasis: "#4f92ff",
   },
   {
-    name: "subtle-accent",
-    label: "Subtle Accent",
-    description: "Quiet single-accent document style — eucalyptus chips, pine ink, all-bold slab headings.",
-    mode: "light",
-    background: "#f3f7f5",
-    palette: ["#c1d8d4"],
-    neutral: "#a3a3a3",
-    fillMode: "solid",
-    fillStyle: "solid",
-    strokeMode: "seam",
-    strokeWidth: 1,
-    roughness: 0,
-    fonts: { body: SANS, heading: SLAB, bodyWeight: 700, headingWeight: 700 },
-    ink: "#22403b",
-    mutedInk: "#5b736e",
-    edge: "#22403b",
-    autoColorNodes: true,
-    cornerRadius: null,
-    emphasis: "#22403b",
-  },
-  {
-    name: "monochrome-pro",
-    label: "Monochrome Pro",
-    description: "Two-tone editorial — cream serif plates floating on muted plum.",
-    mode: "dark",
-    background: "#564f64",
-    palette: ["#f1e9e9"],
-    neutral: "#a3a3a3",
-    fillMode: "ramp",
-    fillStyle: "solid",
-    strokeMode: "seam",
-    strokeWidth: 1,
-    roughness: 0,
-    fonts: { body: NOTOSERIF, heading: ABORETO, headingWeight: 700 },
-    ink: "#f1e9e9",
-    mutedInk: "#cfc7d1",
-    edge: "#f1e9e9",
-    autoColorNodes: true,
-    cornerRadius: null,
-  },
-  {
-    name: "corporate-clean",
-    label: "Corporate Clean",
-    description: "Flat business gray with one mustard-gold accent stepped by opacity; typewriter titles.",
-    mode: "light",
-    background: "#e7e8e6",
-    palette: ["#debe64"],
-    neutral: "#a3a3a3",
-    fillMode: "ramp",
-    fillStyle: "solid",
-    strokeMode: "seam",
-    strokeWidth: 2,
-    roughness: 0,
-    fonts: { body: SANS, heading: SLAB, title: SOURCECODE },
-    ink: "#494b45",
-    mutedInk: "#75776f",
-    edge: "#494b45",
-    autoColorNodes: true,
-    cornerRadius: null,
-  },
-  {
-    name: "minimal-contrast",
-    label: "Minimal Contrast",
-    description: "One electric-violet ramp on near-black, thin geometric display type.",
-    mode: "dark",
-    background: "#1a1536",
-    palette: ["#7e56ff"],
-    neutral: "#4b4470",
-    fillMode: "ramp",
-    fillStyle: "solid",
-    strokeMode: "seam",
-    strokeWidth: 2,
-    roughness: 0,
-    fonts: { body: FUNNEL, heading: FUNNEL, headingWeight: 700 },
-    ink: "#ffffff",
-    mutedInk: "#b9b3d6",
-    edge: "#ffffff",
-    autoColorNodes: true,
-    cornerRadius: null,
-  },
-  {
-    name: "silver-beam",
-    label: "Silver Beam",
+    name: "mono-accent",
+    aliases: ["silver-beam"],
+    label: "Mono Accent",
     description: "Gallery grayscale with one terracotta spotlight and bookish serif headings.",
     mode: "light",
     background: "#ffffff",
@@ -661,16 +491,51 @@ const BUILTIN_PRESETS: StylePreset[] = [
     cornerRadius: null,
     emphasis: "#dd7758",
   },
+  {
+    name: "chalkboard",
+    aliases: ["sketch-notes"],
+    label: "Chalkboard",
+    description: "White-chalk hand-drawn sketches and handwriting on a blue chalkboard.",
+    mode: "dark",
+    background: "#195e98",
+    palette: ["#dfe7ee"],
+    neutral: "#b8c6d4",
+    fillMode: "outline",
+    fillStyle: "none",
+    strokeMode: "same",
+    strokeWidth: 2,
+    roughness: 1.9,
+    fonts: { body: "hand", heading: "hand", headingWeight: 700 },
+    ink: "#dfe7ee",
+    mutedInk: "#b8c6d4",
+    edge: "#dfe7ee",
+    autoColorNodes: true,
+    cornerRadius: null,
+  },
 ];
 
 for (const p of BUILTIN_PRESETS) registerStylePreset(p);
 
-/** The 15 reference styles (excludes the classic pair). */
+/** The reference styles (excludes the classic family). */
 export function listReferencePresets(): StylePreset[] {
   return listStylePresets().filter((p) => !p.name.startsWith("classic"));
 }
 
-/** Resolve the effective preset for a scene: explicit name, else classic. */
+/**
+ * User-facing style choices in display order (Classic B&W first — the default,
+ * then Classic Colored, then the reference looks). Excludes the internal
+ * `classic-dark` auto-variant.
+ */
+export function listStyleChoices(): StylePreset[] {
+  const order = ["classic", "classic-color", "colorful-lines", "neutral-lines", "earthy-gradient", "crayon", "chalkboard", "fine-line", "mono-accent"];
+  const seen = new Set(order);
+  const ordered = order.map((n) => getStylePreset(n)).filter((p): p is StylePreset => !!p);
+  // append any future presets not in the explicit order (except internal darks)
+  for (const p of listStylePresets()) if (!seen.has(p.name) && p.name !== "classic-dark") ordered.push(p);
+  return ordered;
+}
+
+/** Resolve the effective preset for a scene: explicit name, else the B&W classic. */
 export function effectivePreset(name: string | undefined, mode: "light" | "dark"): StylePreset {
   const found = getStylePreset(name);
   if (found) return found;

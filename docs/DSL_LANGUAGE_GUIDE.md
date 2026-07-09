@@ -32,7 +32,7 @@ Everything else is optional layering on top.
 | Statement | Purpose |
 |---|---|
 | `edd 1.0` | Optional version marker (first line). |
-| `meta { title: "…", background: "#…", style: bold-canvas }` | Diagram metadata; `style:` applies a [style preset](STYLES_GUIDE.md). |
+| `meta { title: "…", background: "#…", style: chalkboard }` | Diagram metadata; `style:` applies a [style preset](STYLES_GUIDE.md). |
 | `theme name { tokens { $x: #hex, … } }` | Named theme + reusable `$tokens`. |
 | `style .name { … }` / `style .name extends .other { … }` | Reusable style class. |
 | `defaults { node { … } edge { … } }` | Defaults applied to every node/edge. |
@@ -339,7 +339,7 @@ overrides {
 Declare a chart or diagram template with data instead of drawing it:
 
 ```edd
-meta { style: glowful-breeze }        // optional: one of the built-in style presets
+meta { style: chalkboard }          // optional: one of the built-in styles (default is classic B&W)
 
 viz funnel sales "Sales Funnel" {
   input: "Potential customers"        // template option
@@ -351,7 +351,7 @@ viz funnel sales "Sales Funnel" {
 
 62 templates ship built-in — funnel, pyramid, venn, pie, bar/line/area, waterfall, sankey, gantt, timeline, mindmap, swot, quadrant, journey, iceberg, and many more. Entries are `<kind> [id] ["Label"] [-> target] [values…] [{ attrs }] [{ nested entries }]`; every template accepts `item` plus natural synonyms (`stage`, `flow "A" -> "B" 25`, `task "Design" 0 3`, `set`, `pro`/`con`, …).
 
-Viz output is ordinary scene structure: elements get ids like `sales.won`, so annotations, camera beats, `reveal`, and direct editing all target them. `meta { style: <name> }` restyles the *whole* document — viz templates and classic scenes alike — through one of the named presets (`bold-canvas`, `sketch-notes`, `corporate-clean`, …).
+Viz output is ordinary scene structure: elements get ids like `sales.won`, so annotations, camera beats, `reveal`, and direct editing all target them. `meta { style: <name> }` restyles the *whole* document — viz templates and classic scenes alike — through one of the named styles (`classic-color`, `chalkboard`, `crayon`, `mono-accent`, …).
 
 Full catalog + per-template options: [VISUALIZATIONS_GUIDE.md](VISUALIZATIONS_GUIDE.md). Preset reference: [STYLES_GUIDE.md](STYLES_GUIDE.md).
 

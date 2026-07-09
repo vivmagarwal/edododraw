@@ -232,16 +232,22 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
   }
   // ---- style preset --------------------------------------------------------
   // `meta { style: <name> }`, overridable per-compile (host style switcher).
+  // When nothing is declared, the black-and-white Classic preset is applied by
+  // default so EVERY diagram — plain scenes and viz alike — shares one coherent
+  // hand-drawn look. Author-declared themes/tokens still opt out of a preset.
   const metaStyleAttr = attr(metaAttrs, "style");
   const metaStyleName = metaStyleAttr && (metaStyleAttr.t === "str" || metaStyleAttr.t === "ident") ? metaStyleAttr.v : undefined;
   const presetName = opts.stylePreset ?? metaStyleName;
-  const preset = getStylePreset(presetName);
-  if (presetName && !preset) {
+  const explicitPreset = getStylePreset(presetName);
+  if (presetName && !explicitPreset) {
     diags.warn("W-STYLE-PRESET", `unknown style preset '${presetName}'`, { line: 1, col: 1, start: 0, end: 0 }, { hint: "see docs/STYLES_GUIDE for the built-in preset names" });
   }
 
   const derivedMode: "light" | "dark" = themeName?.toLowerCase().includes("dark") ? "dark" : "light";
-  const mode: "light" | "dark" = opts.mode ?? preset?.mode ?? derivedMode;
+  const mode: "light" | "dark" = opts.mode ?? explicitPreset?.mode ?? derivedMode;
+  // Default to the Classic B&W look (light or dark) unless the author declared a
+  // custom theme (which drives the older token-based styling path).
+  const preset = explicitPreset ?? (themeName ? undefined : effectivePreset(undefined, mode));
 
   // ---- class chain resolution --------------------------------------------
   const classAttrs = (name: string, seen = new Set<string>()): { attrs: AttrBlock } => {
@@ -309,6 +315,18 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
         base.textColor = role.textColor;
       }
       style = { ...base, ...style };
+      // Contrast pass: on a shape the author explicitly filled with a SOLID
+      // light color, any LIGHT ink/outline (a dark preset's light default) would
+      // vanish — darken it. Only touches gaps the author left, and only when the
+      // current color is actually light (so colored strokes stay).
+      if (built.style.fill != null) {
+        const fillStyle = style.fillStyle ?? "solid";
+        const coveringFill = fillStyle !== "none" && fillStyle !== "hachure";
+        if (coveringFill && isLightColor(style.fill ?? null)) {
+          if (built.style.textColor === undefined && isLightColor(style.textColor ?? null)) style = { ...style, textColor: "#1e1e1e" };
+          if (built.style.stroke === undefined && isLightColor(style.stroke ?? null)) style = { ...style, stroke: "#1e1e1e" };
+        }
+      }
     }
     const shape = mapShape(built.shape ?? nd.shape);
     const label = built.label ?? nd.label ?? prettyId(id);

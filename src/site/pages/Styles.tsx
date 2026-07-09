@@ -5,10 +5,10 @@
  */
 
 import { useState } from "react";
-import { listReferencePresets } from "@engine/style/presets.js";
+import { listStyleChoices } from "@engine/style/presets.js";
 import { StyleTile } from "../StyleTile.js";
 
-const PRESETS = [{ name: "classic", label: "Classic (hand-drawn)" }, ...listReferencePresets().map((p) => ({ name: p.name, label: p.label }))];
+const PRESETS = listStyleChoices().map((p) => ({ name: p.name, label: p.label }));
 
 interface Sample {
   id: string;

@@ -4,14 +4,14 @@
  * (item counts + text lengths) AND every style preset, plus its source.
  */
 
-import { listReferencePresets } from "@engine/style/presets.js";
+import { listStyleChoices } from "@engine/style/presets.js";
 import { EdodoDrawView } from "../../lib/react.js";
 import { navigate, openInPlayground } from "../router.js";
 import { StyleTile } from "../StyleTile.js";
 import { VIZ_DEMOS } from "../vizDemos.js";
 import { variationsFor } from "../vizVariations.js";
 
-const PRESETS = [{ name: "classic", label: "Classic (hand-drawn)" }, ...listReferencePresets().map((p) => ({ name: p.name, label: p.label }))];
+const PRESETS = listStyleChoices().map((p) => ({ name: p.name, label: p.label }));
 
 export function VizDetail({ type }: { type: string }) {
   const demo = VIZ_DEMOS.find((d) => d.type === type);

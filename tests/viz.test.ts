@@ -82,10 +82,41 @@ describe("content variations", () => {
 });
 
 describe("style presets", () => {
-  it("ships the 16 reference styles + classic pair", () => {
-    expect(listReferencePresets().length).toBeGreaterThanOrEqual(16);
+  it("ships the classic family + reference styles", () => {
+    expect(listReferencePresets().length).toBeGreaterThanOrEqual(7);
     expect(getStylePreset("classic")).toBeTruthy();
     expect(getStylePreset("classic-dark")).toBeTruthy();
+    expect(getStylePreset("classic-color")).toBeTruthy();
+    // Classic is the black-and-white hand-drawn default
+    const classic = getStylePreset("classic")!;
+    expect(classic.fillMode).toBe("outline");
+    expect(classic.palette).toEqual(["#1e1e1e"]);
+  });
+
+  it("removed styles are gone", () => {
+    for (const gone of ["subtle-accent", "monochrome-pro", "corporate-clean", "minimal-contrast", "bold-canvas", "radiant-blocks", "glowful-breeze", "carefree-mist", "lively-layers"]) {
+      expect(getStylePreset(gone), gone).toBeUndefined();
+    }
+  });
+
+  it("renamed styles resolve via their old-id aliases", () => {
+    expect(getStylePreset("vibrant-strokes")?.name).toBe("neutral-lines");
+    expect(getStylePreset("sketch-notes")?.name).toBe("chalkboard");
+    expect(getStylePreset("pragmatic-shades")?.name).toBe("earthy-gradient");
+    expect(getStylePreset("silver-beam")?.name).toBe("mono-accent");
+    expect(getStylePreset("artistic-flair")?.name).toBe("crayon");
+    expect(getStylePreset("elegant-outline")?.name).toBe("fine-line");
+    // aliases don't appear as separate entries in the list
+    expect(listStylePresets().some((p) => p.name === "vibrant-strokes")).toBe(false);
+  });
+
+  it("default (no style) applies the Classic B&W look", () => {
+    const { scene } = compileEdd(`scene { rect a "Hi" }`);
+    expect(scene.meta.style).toBe("classic");
+    expect(scene.theme.background).toBe("#ffffff");
+    const node = scene.nodes.find((n) => n.id === "a")!;
+    expect(node.style.stroke).toBe("#1e1e1e");
+    expect(node.style.strokeWidth).toBe(2.2);
   });
 
   it("role label colors contrast with the canvas", () => {
@@ -99,9 +130,9 @@ describe("style presets", () => {
   });
 
   it("meta style flows into the scene theme", () => {
-    const { scene } = compileEdd(`meta { style: bold-canvas }\nscene { a[Hi] }`);
-    expect(scene.meta.style).toBe("bold-canvas");
-    expect(scene.theme.background).toBe("#121d46");
+    const { scene } = compileEdd(`meta { style: chalkboard }\nscene { a[Hi] }`);
+    expect(scene.meta.style).toBe("chalkboard");
+    expect(scene.theme.background).toBe("#195e98");
     expect(scene.theme.mode).toBe("dark");
   });
 
@@ -112,8 +143,8 @@ describe("style presets", () => {
   });
 
   it("compile option overrides the declared preset", () => {
-    const { scene } = compileEdd(`meta { style: bold-canvas }\nscene { a[Hi] }`, { stylePreset: "sketch-notes" });
-    expect(scene.meta.style).toBe("sketch-notes");
+    const { scene } = compileEdd(`meta { style: neon-night }\nscene { a[Hi] }`, { stylePreset: "chalkboard" });
+    expect(scene.meta.style).toBe("chalkboard");
     expect(scene.theme.background).toBe("#195e98");
   });
 });

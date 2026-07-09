@@ -3,7 +3,7 @@
 A **style preset** is a whole-diagram visual identity: an ordered color palette, a fill treatment, stroke behavior, typography, and a canvas. One line restyles everything — classic node/edge scenes and [viz templates](VISUALIZATIONS_GUIDE.md) alike:
 
 ```edd
-meta { style: bold-canvas }
+meta { style: chalkboard }
 ```
 
 The presets were reverse-engineered from a professional reference set, so each one is a coherent designed system, not just a palette swap.
@@ -13,39 +13,35 @@ The presets were reverse-engineered from a professional reference set, so each o
 ## 1. Applying a style
 
 - **In the source:** `meta { style: <name> }`.
-- **Per-view (embedders):** `EdodoDraw.setStylePreset("sketch-notes")` or `compileEdd(src, { stylePreset })` — overrides the declared style without editing the source (see [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md)).
+- **Per-view (embedders):** `EdodoDraw.setStylePreset("chalkboard")` or `compileEdd(src, { stylePreset })` — overrides the declared style without editing the source (see [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md)).
 - No `style:` at all → the classic Excalidraw-style hand-drawn look.
 
 Unknown names emit a `W-STYLE-PRESET` warning and keep the classic look. A dark preset switches the whole scene to dark mode; an explicit `setColorScheme` still wins.
 
-## 2. The built-in presets
+## 2. The built-in styles
+
+There are **9 curated styles**. `classic` — the black-and-white hand-drawn look — is the **default applied to every diagram** unless you pick another.
 
 | name | canvas | character |
 |---|---|---|
-| `classic` / `classic-dark` | white / near-black | The default hand-drawn Excalidraw look, as a preset. |
+| `classic` | white | **Default.** Black-and-white hand-drawn ink: bold wobbly outlines, hand lettering, no fills. |
+| `classic-color` | white | The colored hand-drawn look: soft pastel fills, matching outlines, Excalifont. |
 | `colorful-lines` | white | Clean line-art; each item's outline takes its palette color. |
-| `vibrant-strokes` | white | Neutral gray line-art; color lives in labels, icons, accents. |
-| `glowful-breeze` | white | Airy 20%-tint fills with crisp same-hue outlines. |
-| `bold-canvas` | deep navy | Neon color blocks, hairline seams, friendly Fredoka headings. |
-| `radiant-blocks` | charcoal | Warm gold-to-plum solid blocks, serif labels. |
-| `pragmatic-shades` | pale sage | Muted earthy gradient fills unified by a dark-slate outline. |
-| `carefree-mist` | warm cream | Sun-faded coral-to-seafoam pastels, handwriting headings. |
-| `lively-layers` | warm paper | Earthy terracotta-to-teal solids with fat paper-colored seams, Montserrat. |
-| `artistic-flair` | parchment | Crayon-and-ink sketchbook: translucent dabs in heavy wobbly outlines. |
-| `sketch-notes` | chalkboard blue | White-chalk wobbly outlines and handwriting. |
-| `elegant-outline` | white | Austere 1px black wireframe; hierarchy by weight alone. |
-| `subtle-accent` | mist green | One eucalyptus accent, pine ink, all-bold slab headings. |
-| `monochrome-pro` | gray plum | Cream plates stepped by opacity; editorial serif type. |
-| `corporate-clean` | light gray | One mustard-gold accent stepped by opacity; typewriter titles. |
-| `minimal-contrast` | near-black violet | One electric-violet ramp, thin display type. |
-| `silver-beam` | white | Gallery grayscale with one terracotta spotlight. |
+| `neutral-lines` | white | Neutral gray line-art; color lives in labels, icons, accents. |
+| `earthy-gradient` | pale sage | Muted earthy gradient fills unified by a dark-slate outline. |
+| `crayon` | parchment | Crayon-and-ink sketchbook: translucent dabs in heavy wobbly outlines. |
+| `chalkboard` | chalkboard blue | White-chalk wobbly outlines and handwriting on blue. |
+| `fine-line` | white | Austere 1px black wireframe; hierarchy by weight alone. |
+| `mono-accent` | white | Gallery grayscale with one terracotta spotlight and serif headings. |
 
-Two palette architectures are modeled faithfully:
+Renamed styles keep working under their old ids (`vibrant-strokes`→`neutral-lines`, `pragmatic-shades`→`earthy-gradient`, `artistic-flair`→`crayon`, `sketch-notes`→`chalkboard`, `elegant-outline`→`fine-line`, `silver-beam`→`mono-accent`). A hidden `classic-dark` is the automatic black-and-white variant when a diagram is viewed in dark mode.
 
-- **Multi-hue wheel** — items cycle through an ordered 10-hue palette (`colorful-lines`, `bold-canvas`, `carefree-mist`, …).
-- **Single-accent opacity ramp** — one color whose fill opacity encodes the series: the *i*-th of *n* items gets an evenly spaced opacity ending at 100% (`monochrome-pro`, `corporate-clean`, `minimal-contrast`, `silver-beam`).
+Two palette architectures are modeled:
 
-Several styles use **seam strokes** — shapes are outlined in the *canvas* color, so adjacent solids read as flat cut-outs separated by gaps. The engine recomputes seams automatically if the background changes.
+- **Multi-hue wheel** — items cycle through an ordered 10-hue palette (`colorful-lines`, `neutral-lines`, `classic-color`).
+- **Single-accent opacity ramp** — one color whose fill opacity encodes the series (`mono-accent`).
+
+Some styles use **seam strokes** — shapes are outlined in the *canvas* color, so adjacent solids read as flat cut-outs. The engine recomputes seams automatically if the background changes.
 
 ## 3. What a preset controls
 
@@ -53,7 +49,7 @@ Several styles use **seam strokes** — shapes are outlined in the *canvas* colo
 - **Plain nodes** — a node that declares **no color of its own** cycles through the preset palette with the preset's fill treatment (`autoColorNodes`); nodes with explicit `fill:`/`stroke:` always keep them. Font, stroke width, roughness, and corner radius defaults also come from the preset.
 - **Edges** — connector color, width, roughness, label font, label background.
 - **Viz templates** — every item's shape/label/icon color resolves through the preset's role system, including ramp opacities, seam strokes, gradient fills, and per-shape contrast text.
-- **Typography** — body/heading/title font stacks (webfont on the site, with system fallbacks everywhere else) and weights (e.g. `subtle-accent` sets everything bold).
+- **Typography** — body/heading/title font stacks (webfont on the site, with system fallbacks everywhere else) and weights (e.g. `classic` sets everything bold).
 
 Label colors are contrast-assured: a pastel palette color is automatically pulled toward the ink until it reads on the canvas.
 
