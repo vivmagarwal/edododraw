@@ -3,6 +3,8 @@ import { navigate, useHashRoute } from "./router.js";
 import { Home } from "./pages/Home.js";
 import { Gallery } from "./pages/Gallery.js";
 import { Visualizations } from "./pages/Visualizations.js";
+import { VizDetail } from "./pages/VizDetail.js";
+import { Styles } from "./pages/Styles.js";
 import { DocsPage } from "./pages/DocsPage.js";
 import "./site.css";
 
@@ -13,6 +15,7 @@ const NAV = [
   { route: "/", label: "Home" },
   { route: "/playground", label: "Playground" },
   { route: "/visualizations", label: "Visualizations" },
+  { route: "/styles", label: "Styles" },
   { route: "/gallery", label: "Gallery" },
   { route: "/docs/language", label: "Docs" },
 ];
@@ -68,7 +71,11 @@ export default function Site() {
 function Route({ route }: { route: string }) {
   if (route === "/" || route === "") return <Home />;
   if (route.startsWith("/playground")) return <Playground />;
-  if (route.startsWith("/visualizations")) return <Visualizations />;
+  if (route.startsWith("/visualizations")) {
+    const type = route.split("/")[2];
+    return type ? <VizDetail type={type} /> : <Visualizations />;
+  }
+  if (route.startsWith("/styles")) return <Styles />;
   if (route.startsWith("/gallery")) return <Gallery />;
   if (route.startsWith("/docs")) {
     const slug = route.split("/")[2];

@@ -31,12 +31,14 @@ export function Home() {
             Draw diagrams by <span className="accent">writing</span>, not dragging.
           </h1>
           <p>
-            EDodoDraw is a 100% code-to-diagram engine with the Excalidraw hand-drawn soul — plus a magic-move camera,
-            real-time annotations, animated arrows, and first-class Mermaid import.
+            EDodoDraw is a 100% code-to-diagram engine with the Excalidraw hand-drawn soul — 62 chart &amp; diagram
+            templates, 18 style presets, a magic-move camera, real-time annotations, animated arrows, and first-class
+            Mermaid import.
           </p>
           <div className="hero-cta">
             <button className="btn primary" onClick={() => navigate("/playground")}>Open the playground</button>
-            <button className="btn" onClick={() => navigate("/gallery")}>See the gallery</button>
+            <button className="btn" onClick={() => navigate("/visualizations")}>62 visualizations</button>
+            <button className="btn" onClick={() => navigate("/styles")}>18 styles</button>
             <a className="btn ghost" href="https://github.com/vivmagarwal/edododraw" target="_blank" rel="noreferrer">GitHub ↗</a>
           </div>
           <div className="hero-install">

@@ -50,6 +50,11 @@ export function DemoCard({ demo }: { demo: Demo }) {
           </button>
         )}
         <span className="demo-spacer" />
+        {demo.detailRoute && (
+          <a className="demo-btn open" href={`#${demo.detailRoute}`}>
+            {demo.detailLabel ?? "All styles →"}
+          </a>
+        )}
         <button className="demo-btn open" onClick={() => openInPlayground(demo.code)}>
           Open in playground ↗
         </button>

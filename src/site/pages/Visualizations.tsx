@@ -33,6 +33,8 @@ export function Visualizations() {
         description: d.description,
         code: withStyle(d.code, style),
         height: 320,
+        detailRoute: `/visualizations/${d.type}`,
+        detailLabel: "All styles →",
       })),
     [style],
   );

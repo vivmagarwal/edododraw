@@ -15,6 +15,9 @@ export interface Demo {
   /** show timeline play controls on the card. */
   timeline?: boolean;
   height?: number;
+  /** optional deep-dive route rendered as a footer link (e.g. all-styles matrix). */
+  detailRoute?: string;
+  detailLabel?: string;
 }
 
 export const CATEGORIES = [
