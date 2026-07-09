@@ -118,7 +118,7 @@ a --> b "label"              // trailing label
 a -->|mid label| b           // Mermaid mid-label
 a -> b -> c                  // chain → two edges
 a -> b & c                   // fan-out → a→b and a→c
-a@(1,0.5) -> b.north         // anchored endpoints (see §7)
+a@(1,0.5) -> b.n             // anchored endpoints (see §7)
 edge e1: a --> b "named"     // give the edge an id
 ```
 
@@ -133,6 +133,7 @@ edge e1: a --> b "named"     // give the edge an id
 | `-.->` | dashed | arrow | async |
 | `..>` | dotted | arrow | dependency |
 | `==>` | solid (thick) | arrow | emphasis |
+| `===` | solid (thick) | none | plain connector (thick) |
 | `~>` | solid (curved) | arrow | **animated `flow` by default** |
 | `--o` `-o` | solid | circle | association |
 | `--x` `-x` | solid | bar | termination |
@@ -334,7 +335,7 @@ overrides {
 
 ## 12. Diagnostics
 
-The compiler recovers from errors and reports many at once, each with `line:col`, a stable code (`E-EDGE-NOOP`, `E-STMT`, `W-UNKNOWN-KEY`, …), and a hint. A bad statement never blanks the diagram — valid statements still render.
+The compiler recovers from errors and reports many at once, each with `line:col`, a stable code (`E-EDGE-NOOP`, `E-STMT`, `E-ATTR`, `W-MERMAID-SYNC`, …), and a hint. A bad statement never blanks the diagram — valid statements still render.
 
 ---
 

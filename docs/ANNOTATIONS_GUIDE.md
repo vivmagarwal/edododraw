@@ -23,8 +23,8 @@ The floating toolbar (left of the canvas) selects a tool; `LiveAnnotationControl
 
 | Tool | Gesture | Result |
 |---|---|---|
-| Select | click a mark → select; drag → move; Delete → remove | edit existing |
-| Highlight / Underline / Box / Circle | click an element | anchored annotation, spring reveal |
+| Select | click a mark → select; drag a **point-anchored** mark (sticky note / free arrow) → move; Delete → remove | edit existing |
+| Highlight / Underline / Box / Circle | click an element | anchored annotation (tracks its element; can't be dragged) |
 | Arrow | drag; endpoints snap to elements | `point-at` / free connector |
 | Text | click | sticky note (inline text input) |
 

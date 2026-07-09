@@ -60,6 +60,10 @@ default: {
 }
 ```
 
+The registry exposes three public functions (all exported from `edododraw`):
+`registerShape(name, fn)`, `getShapePlugin(name)`, and `listShapePlugins(): string[]`
+(the names of all registered shapes — handy for introspection/debugging).
+
 ### The plugin contract
 
 ```ts
@@ -321,8 +325,14 @@ To let users draw it interactively, teach `LiveAnnotationController`
    ```
 3. **(Optional) commit-to-code:** add a `case "cross"` to `serialize()` so
    `annotationsToCode()` round-trips it back to DSL.
-4. **Add a toolbar button** in the playground: `src/app/App.tsx`, the `TOOLS`
+4. **Add a toolbar button** in the playground: `src/app/App.tsx`, the `ANNOT_TOOLS`
    array — `{ tool: "cross", icon: "✕", label: "Cross out element" }`.
+5. **Route the tool name** in `src/lib/EdodoDraw.ts`: add the button's `tool` string
+   to the `ANNOT_MAP` record — `cross: "cross"` (key = the app tool name, value = the
+   controller `Tool` from `interact.ts`). The facade's `setTool` only acts on names in
+   `EDIT_TOOLS` or `ANNOT_MAP`, so **without this the button is inert**. (App tool names
+   are remapped to controller tools here — that's why `mark-box`→`box`, `point`→`arrow`,
+   `note`→`text`.)
 
 The live layer already handles selection, undo/redo, and camera tracking generically,
 so those come for free.

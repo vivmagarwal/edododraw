@@ -293,6 +293,31 @@ const dark = compileEdd(`scene { a -> b }`, { mode: "dark" });
 > `.hasErrors`, `.errors`). This differs from the facade's `render()`, whose
 > `diagnostics` is already a flat `Diagnostic[]`.
 
+### Programmatic source edits (`.edd` string → string)
+
+`edododraw` also exports the **source-patch API** — pure, synchronous, DOM-free
+transforms that rewrite `.edd` source text (Node/SSR/build-step safe, same as
+`compileEdd`). These are the primitives the interactive editor writes back with
+(see [DSL_LANGUAGE_GUIDE §11 — Overrides](DSL_LANGUAGE_GUIDE.md)), so a script can
+make the same edits a user would by dragging on the canvas:
+
+```ts
+import {
+  writeOverrides, renameNode, styleNode, addNode, addEdge, deleteElements,
+  type OverrideEntry,
+} from "edododraw";
+
+// each takes the current source and returns new source
+writeOverrides(src, [{ id: "db", x: 120, y: 40, w: 160, h: 80 }]); // upsert the overrides {} block (move/resize)
+renameNode(src, "db", "Primary DB");
+styleNode(src, "db", { fill: "green", stroke: "black", shape: "cylinder" });
+addNode(src, { id: "cache", shape: "rect", label: "Cache" });
+addEdge(src, { from: "api", to: "cache", glyph: "-->", label: "reads" });
+deleteElements(src, ["cache"]);
+
+// type OverrideEntry = { id: string; x: number; y: number; w?: number; h?: number }
+```
+
 The full engine is re-exported from `edododraw` for building your own rendering
 pipeline instead of using the `EdodoDraw` facade:
 

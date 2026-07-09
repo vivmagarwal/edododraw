@@ -17,18 +17,22 @@ Node ≥ 18 (matches `engines`). The `reference/` directory (Excalidraw + mermai
 ```
 src/
   engine/            framework-agnostic engine (no React)
-    scene/           Scene IR: types, palette, defaults, anchors, query
-    dsl/             lexer, tokens, ast, parser, lower, compile, diagnostics
+    scene/           Scene IR: types, palette, defaults, anchors, query, overrides
+    dsl/             lexer, tokens, ast, parser, lower, compile, patch, diagnostics
     layout/          dagre / grid / radial → node positions
     render/          svgRenderer, shapes, edges, theme.css, fonts
     camera/          fit math, easing, controller
     timeline/        beat player
+    edit/            direct-manipulation edit controller (EditController)
     annotate/        layer (render) + interact (live editor)
     import/          mermaid adapter
     plugins/         registry + builtins
     export.ts        SVG / PNG / JSON
     index.ts         public barrel (import from "@engine/…")
+  lib/               published npm package: EdodoDraw facade, react.tsx (EdodoDrawView), index.ts (public exports)
   app/               React playground (App, CanvasView, examples)
+  site/              marketing + docs site (renders docs/*.md verbatim)
+  main.tsx           SPA entry
 examples/            *.edd sample programs (imported ?raw)
 docs/                this documentation
 tests/               vitest suites
