@@ -37,7 +37,7 @@ item "Root" { item "Child A"; item "Child B" }   // nested children (mindmap, sw
 item "Won" 38 { icon: trophy, color: green, detail: "Signed contracts" }
 ```
 
-Entry attributes understood everywhere: `icon:` (glyph name, §4), `color:`/`fill:` (override this item's palette color), `detail:`/`note:`/`desc:` (description text). Every template accepts the generic `item` keyword plus natural synonyms (`stage`, `step`, `task`, `set`, `flow`, …) noted below.
+Entry attributes understood everywhere: `icon:` (glyph name, §5), `color:`/`fill:` (override this item's palette color), `detail:`/`note:`/`desc:` (description text). Every template accepts the generic `item` keyword plus natural synonyms (`stage`, `step`, `task`, `set`, `flow`, …) noted below.
 
 Multiple `viz` blocks in one document stack vertically; a `viz` block after a `scene` graph is placed below it.
 
@@ -91,7 +91,7 @@ Multiple `viz` blocks in one document stack vertically; a `viz` block after a `s
 | `decision` | question = title (or `question:`) + `item "Option" "why" { icon }` | — |
 | `spectrum` | `item` / `zone` — first/last get arrow ends | — |
 | `quadrant` (`2x2`, `matrix`) | 4 `item`s in order TL, TR, BL, BR (+ children bullets) | `xLabels: [neg, pos]`, `yLabels: [neg, pos]` |
-| `venn` | `set "Name" "desc" { icon }` (2–6 sets) + `overlap all "Label"` / `overlap [a, b] "Label"` | — |
+| `venn` | `set "Name" "desc" { icon }` (2–7 sets) + `overlap all "Label"` / `overlap [a, b] "Label"` | — |
 
 ### Business Frameworks
 
@@ -141,7 +141,72 @@ Multiple `viz` blocks in one document stack vertically; a `viz` block after a `s
 
 ---
 
-## 3. Composing with everything else
+## 3. Ranges & limits
+
+EDodoDraw is a **text→visualization generator**: it renders whatever you give it. Each template has a *sweet spot* of item counts and text lengths where it looks its best. Inside the range the layout is polished and self-spacing (side-label rows grow to fit longer descriptions); outside it, it still renders but can crowd. **If you're generating `.edd` (human or LLM), stay inside these ranges.**
+
+| template | items — best | hard behavior at the edges |
+|---|---|---|
+| `flowchart` | 2–8 steps | vertical chain (tall); `direction: right` for a horizontal one |
+| `sequence` | 2–9 steps | 3 per row, boustrophedon; grows downward |
+| `stairs` | 2–6 steps | wider per step; >6 gets very wide |
+| `journey` | 2–7 stages | one ribbon run per stage |
+| `cycle` | 3–8 phases | 3–4 = large icon nodes; **5+ switches to compact dots** |
+| `gantt` | 1–10 tasks | give `scale` enough ticks to cover the last `end` |
+| `bar` | 1–12 bars | — |
+| `bar-horizontal` | 1–8 bars | — |
+| `stacked-bar` / `-horizontal` | 2–5 series × 2–6 categories | legend from `series` entries |
+| `line` / `area` | 2–14 points | — |
+| `waterfall` | 2–8 deltas | plus the start `item` and a `total` |
+| `gauge` | **exactly 1** value (0–100) | one dial |
+| `pie` / `donut` | 2–8 slices (best ≤6) | callouts crowd past ~8 |
+| `drop-off` | 2–5 stages | each card shrinks; >5 gets tiny |
+| `dumbbell-vertical` | 2–6 rows | — |
+| `dumbbell-horizontal` | 2–8 rows | — |
+| `sankey` | 2–5 sources × 2–5 targets | ribbons cross; keep it small |
+| `timeline` | 2–7 events | alternates up/down; grows wide |
+| `pros-and-cons` | 1–6 per side | two panels |
+| `table` | 1–8 rows × 2–6 columns | first column = row label; wide with many columns |
+| `versus` | **exactly 2 sides** × 1–6 criteria | — |
+| `balance` | **exactly 2 sides** × 1–4 items each | — |
+| `relationship` | 3–10 satellites | + one `center` |
+| `podium` | 1–3 ranks | fixed 2-1-3 podium; extra ranks ignored |
+| `decision` | 2–6 options | rows self-space for long descriptions |
+| `spectrum` | 2–6 zones | first/last get arrow ends |
+| `quadrant` | **exactly 4** (TL, TR, BL, BR) | extra items ignored; bullets via children |
+| `venn` | **2–7 sets** | **8+ dropped with a `W-VIZ-VENN` warning** |
+| `swot` | **exactly 4** sections × 1–5 bullets | fixed S/W/O/T |
+| `pestel` | 3–6 cards | — |
+| `porters` | 3–7 forces | on a ring |
+| `pyramid` | 2–7 levels | bands grow to fit long slope labels |
+| `bullseye` | 2–5 rings | **outermost first**; left labels self-space |
+| `funnel` | 2–7 stages | bands grow to fit long side labels |
+| `mindmap` (+ variants) | 2–7 branches × 0–5 children | balanced across sides |
+| `key-ideas` | 2–5 ideas | lightbulbs in a row |
+| `list` | 2–9 items | **vertical ≤5, horizontal ≥6** (or `orientation:`) |
+| `diverge` | 2–4 options | 4 arrow slots; a 5th+ becomes a straight ray |
+| `converge` / `lens` | 2–6 inputs | + one `output` |
+| `iceberg` | 1 above + 1–5 below | first `above`, rest `below` |
+| `problem-solution` | fixed + 0–3 supports | problem / solution / outcome |
+| `transformation` | **exactly** before + after | — |
+| `challenges` / `bridge` | 2–5 steps | + `from` / `to` states |
+| `root-causes` | 2–5 causes | tree: crown + roots |
+| `impact` | 2–5 effects | + one `cause` |
+| `vision` | **exactly** current + vision | — |
+| `performance` | 1–4 metrics | donut cards |
+| `bottleneck` | fixed scene | `in:` / `out:` labels only |
+| `hole` | title (+ `caption:`) | no items |
+| `trend` | 2–6 levels | rising staircase |
+| `race` | 2–4 racers | rank order |
+| `dialogue` | 2–8 turns | **exactly 2 speakers** (`a:` / `b:`) |
+| `prism` | 2–6 outputs | + one `input` |
+| `pillar` | 2–5 columns | — |
+
+**Text length.** Labels are single-line-ish (they wrap, but keep them a few words). Descriptions (`detail:` / trailing string) wrap to a column and the layout expands to fit — but on the compact-side-label templates (`funnel`, `pyramid`, `bullseye`, `spectrum`, `decision`) a stage/level reads best with a **name + one short sentence**; multi-sentence prose is supported but makes those layouts tall. Narrative templates (`sequence`, `journey`, `dialogue`, `iceberg`, `problem-solution`, `transformation`, `root-causes`) comfortably hold 1–2 sentences per item.
+
+---
+
+## 4. Composing with everything else
 
 Viz output is plain Scene IR, so the rest of the language applies:
 
@@ -166,11 +231,11 @@ timeline {
 - `reveal all` in a beat covers viz elements too.
 - Direct manipulation: viz elements are pinned nodes — drag/restyle writes overrides like any node.
 
-## 4. Icons
+## 5. Icons
 
 `icon:` accepts a built-in line-glyph name; unknown names render nothing (layouts don't depend on them). Available: `check x plus minus arrow-up arrow-down arrow-right arrow-left trend-up trend-down star heart flag target bulb gear user users clock calendar rocket trophy medal search warning dollar chart pie doc mail chat home globe lock key leaf fire drop cloud database shield eye book wrench phone megaphone handshake scale puzzle diamond circle` (plus aliases like `idea`, `growth`, `money`, `team`, `award` — see `src/engine/viz/icons.ts`).
 
-## 5. Extending
+## 6. Extending
 
 Register your own template and it's immediately usable from the DSL — no grammar change:
 

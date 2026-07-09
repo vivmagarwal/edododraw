@@ -20,10 +20,13 @@ registerViz({
     const n = Math.max(items.length, 1);
     const topW = 360;
     const tipW = 140;
-    const bandH = 82;
     const cx = topW / 2;
     const input = optStr(spec.options, "input");
     const output = optStr(spec.options, "output");
+    // band height grows to fit the tallest side label so long descriptions
+    // never overlap the next stage (keeps the funnel proportional).
+    const labelH = Math.max(0, ...items.map((it) => ctx.measureLabelBlock(it.label + (it.value !== undefined ? `  ${fmtNum(it.value)}` : ""), it.detail, { maxW: 240 }).h));
+    const bandH = Math.max(82, labelH + 18);
 
     let y = 0;
     if (input) {
@@ -71,8 +74,10 @@ registerViz({
     const items = itemsOf(spec, "item", "level");
     const n = Math.max(items.length, 1);
     const baseW = 520;
-    const bandH = n <= 4 ? 96 : 84;
     const cx = baseW / 2;
+    // band height grows to fit the tallest slope label (long descriptions).
+    const labelH = Math.max(0, ...items.map((it) => ctx.measureLabelBlock(it.label, it.detail, { maxW: 250 }).h));
+    const bandH = Math.max(n <= 4 ? 96 : 84, labelH + 14);
     items.forEach((item, i) => {
       const role = ctx.role(i, { n, color: item.color });
       const wT = baseW * (i / n);
@@ -116,7 +121,9 @@ registerViz({
     const n = items.length;
     const horizontal = optStr(spec.options, "orientation") === "horizontal" || (n >= 6 && optStr(spec.options, "orientation") !== "vertical");
     if (!horizontal) {
-      const pitch = 88;
+      // row pitch grows to fit the tallest label so long details don't overlap
+      const rowH = Math.max(0, ...items.map((it) => ctx.measureLabelBlock(it.label, it.detail, { maxW: 340 }).h));
+      const pitch = Math.max(88, rowH + 26);
       items.forEach((item, i) => {
         const role = ctx.role(i, { n, color: item.color });
         const cy = i * pitch + 30;

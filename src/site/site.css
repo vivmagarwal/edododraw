@@ -270,3 +270,9 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); -webk
 .viz-detail-code { position: relative; }
 .viz-detail-code .demo-code { max-height: 280px; overflow: auto; margin: 0 0 10px; }
 .styles-sample-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+
+/* ---- viz detail: variations + jump links -------------------------------- */
+.viz-detail-jump { font-size: 14px; margin-top: 6px; }
+.viz-detail-jump a { color: var(--accent, #6d5ae6); text-decoration: none; font-weight: 600; }
+.section-lead { color: var(--muted, #6b7280); margin: -6px 0 16px; font-size: 15px; }
+.style-tile-name.var-label { font-weight: 700; color: var(--fg, #1f2430); }

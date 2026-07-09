@@ -12,6 +12,7 @@ import { getViz, listViz } from "../src/engine/viz/registry.js";
 import { listStylePresets, listReferencePresets, roleStyle, getStylePreset } from "../src/engine/style/presets.js";
 import { luma } from "../src/engine/style/color.js";
 import { VIZ_DEMOS } from "../src/site/vizDemos.js";
+import { variationsFor } from "../src/site/vizVariations.js";
 
 /** The 62 unique layouts from the reference catalog (07-visual-catalog.md). */
 const REFERENCE_LAYOUTS = [
@@ -56,6 +57,25 @@ describe("viz demos × style presets", () => {
       expect(scene.nodes.length, `${demo.type} × ${preset}`).toBeGreaterThan(0);
       for (const n of scene.nodes) {
         expect(Number.isFinite(n.x) && Number.isFinite(n.y) && Number.isFinite(n.w) && Number.isFinite(n.h), `${demo.type} × ${preset}: node ${n.id} has non-finite geometry`).toBe(true);
+      }
+    }
+  });
+});
+
+describe("content variations", () => {
+  it("every template has content variations", () => {
+    const missing = VIZ_DEMOS.filter((d) => variationsFor(d.type).length === 0).map((d) => d.type);
+    expect(missing).toEqual([]);
+  });
+
+  it.each(VIZ_DEMOS.map((d) => [d.type] as const))("%s variations compile with finite geometry", (type) => {
+    for (const v of variationsFor(type)) {
+      const { scene, diagnostics } = compileEdd(v.code);
+      const errors = diagnostics.items.filter((d) => d.severity === "error");
+      expect(errors, `${type} / ${v.label}: ${errors.map((e) => e.message).join("; ")}`).toEqual([]);
+      expect(scene.nodes.length, `${type} / ${v.label}`).toBeGreaterThan(0);
+      for (const n of scene.nodes) {
+        expect(Number.isFinite(n.x) && Number.isFinite(n.y) && Number.isFinite(n.w) && Number.isFinite(n.h), `${type} / ${v.label}: node ${n.id}`).toBe(true);
       }
     }
   });

@@ -34,7 +34,7 @@ export function Visualizations() {
         code: withStyle(d.code, style),
         height: 320,
         detailRoute: `/visualizations/${d.type}`,
-        detailLabel: "All styles →",
+        detailLabel: "Styles & variations →",
       })),
     [style],
   );
@@ -46,7 +46,8 @@ export function Visualizations() {
         <p>
           All 62 built-in chart and diagram templates ({VIZ_DEMOS.length} demos — the mindmap variants share one card),
           each generated 100% from the code on its card. Pick a style to restyle every one of them — the same source, a
-          different visual identity.
+          different visual identity. Open any card's <strong>Styles &amp; variations →</strong> to see it flex across
+          item counts and text lengths, in every style.
         </p>
         <label className="viz-style-picker">
           style:{" "}

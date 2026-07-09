@@ -162,6 +162,9 @@ registerViz({
     const cx = 420 + outerR;
     const cy = outerR + 20;
     const textX = 0;
+    // label pitch grows to fit the tallest block (long descriptions)
+    const labelH = Math.max(0, ...items.map((it) => ctx.measureLabelBlock(it.label, it.detail, { maxW: 240 }).h));
+    const labelPitch = Math.max(72, labelH + 20);
     items.forEach((item, i) => {
       const role = ctx.role(i, { n, color: item.color });
       const r = outerR * (1 - i / n);
@@ -172,7 +175,7 @@ registerViz({
       });
       // leader line from the left text column to this ring's left edge
       const bandMidX = cx - (r + innerRatio * r) / 2;
-      const ly = cy - outerR + 16 + i * 72; // stagger down from the top
+      const ly = cy - outerR + 16 + i * labelPitch; // stagger down from the top
       const block = ctx.labelBlock(item.label, item.detail, textX, ly, { color: role.color, align: "left", maxW: 240 });
       ctx.shape("circle", block.x + block.w + 10, ly - 3, 6, 6, { stroke: ctx.ink, fill: ctx.ink, fillStyle: "solid", strokeWidth: 1, roughness: 0.5 });
       ctx.line(

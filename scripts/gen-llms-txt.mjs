@@ -18,6 +18,8 @@ const SITE = pkg.homepage.replace(/\/$/, "");
 // [file, title, site slug] — same order as the docs site nav.
 const DOCS = [
   ["DSL_LANGUAGE_GUIDE.md", "Language reference", "language"],
+  ["VISUALIZATIONS_GUIDE.md", "Visualizations", "visualizations"],
+  ["STYLES_GUIDE.md", "Style presets", "styles"],
   ["CAMERA_AND_TIMELINE_GUIDE.md", "Camera & timeline", "camera-timeline"],
   ["ANNOTATIONS_GUIDE.md", "Annotations", "annotations"],
   ["IMPORT_AND_EXPORT_GUIDE.md", "Import & export", "import-export"],

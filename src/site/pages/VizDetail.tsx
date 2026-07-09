@@ -1,13 +1,15 @@
 /**
- * Deep-dive page for one visualization template: the demo rendered in EVERY
- * style preset (the "one layout × all styles" matrix from the reference
- * explorer), plus its source code.
+ * Deep-dive page for one visualization template — matches the reference lab's
+ * `l-<layout>.html`: the template rendered across every content variation
+ * (item counts + text lengths) AND every style preset, plus its source.
  */
 
 import { listReferencePresets } from "@engine/style/presets.js";
+import { EdodoDrawView } from "../../lib/react.js";
 import { navigate, openInPlayground } from "../router.js";
 import { StyleTile } from "../StyleTile.js";
 import { VIZ_DEMOS } from "../vizDemos.js";
+import { variationsFor } from "../vizVariations.js";
 
 const PRESETS = [{ name: "classic", label: "Classic (hand-drawn)" }, ...listReferencePresets().map((p) => ({ name: p.name, label: p.label }))];
 
@@ -32,6 +34,7 @@ export function VizDetail({ type }: { type: string }) {
   const idx = VIZ_DEMOS.indexOf(demo);
   const prev = VIZ_DEMOS[(idx - 1 + VIZ_DEMOS.length) % VIZ_DEMOS.length];
   const next = VIZ_DEMOS[(idx + 1) % VIZ_DEMOS.length];
+  const variations = variationsFor(demo.type);
 
   return (
     <div className="page gallery viz-detail">
@@ -52,7 +55,10 @@ export function VizDetail({ type }: { type: string }) {
         <h1>
           {demo.title} <code className="viz-type-chip">viz {demo.type}</code>
         </h1>
-        <p>{demo.description} Below: the exact same source rendered in all {PRESETS.length} style presets.</p>
+        <p>{demo.description}</p>
+        <p className="viz-detail-jump">
+          <a href="#variations">↓ {variations.length} content variations</a> · <a href="#styles">↓ {PRESETS.length} styles</a>
+        </p>
       </div>
 
       <section className="gallery-section">
@@ -66,8 +72,33 @@ export function VizDetail({ type }: { type: string }) {
         </div>
       </section>
 
+      {variations.length > 0 && (
+        <section className="gallery-section">
+          <h2 id="variations">Content variations</h2>
+          <p className="section-lead">
+            The same template flexes to different item counts and text lengths — declare the data, the layout adapts.
+          </p>
+          <div className="style-matrix">
+            {variations.map((v) => (
+              <figure className="style-tile" key={v.label}>
+                <div className="style-tile-canvas" style={{ height: 250 }}>
+                  <EdodoDrawView source={v.code} interactive />
+                </div>
+                <figcaption>
+                  <span className="style-tile-name var-label">{v.label}</span>
+                  <button className="style-tile-open" title="Open in playground" onClick={() => openInPlayground(v.code)}>
+                    ↗
+                  </button>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="gallery-section">
-        <h2>One source, {PRESETS.length} styles</h2>
+        <h2 id="styles">One source, {PRESETS.length} styles</h2>
+        <p className="section-lead">The exact same code, restyled by each built-in preset.</p>
         <div className="style-matrix">
           {PRESETS.map((p) => (
             <StyleTile key={p.name} presetName={p.name} presetLabel={p.label} code={demo.code} />

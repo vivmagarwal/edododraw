@@ -305,8 +305,9 @@ function gapSpanGenerator(variant: "hurdles" | "planks") {
     };
     if (from) placeBox(from, archW / 2);
     if (to) placeBox(to, W - archW / 2);
-    // action caption centered in the middle arch area
-    if (action) ctx.label(ctx.wrap(action, 250, 26, "heading", 2), W / 2, boxY + boxH / 2 - 4, { size: 26, color: ctx.ink, weight: 700, font: "heading" });
+    // action caption below the from/to boxes so it's always clear of them
+    // (at 2 steps the boxes meet in the middle, so a centered caption collides)
+    if (action) ctx.label(ctx.wrap(action, W - 40, 26, "heading", 2), W / 2, boxY + boxH + 30, { size: 26, color: ctx.ink, weight: 700, font: "heading" });
   };
 }
 

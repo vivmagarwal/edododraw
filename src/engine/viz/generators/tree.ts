@@ -8,7 +8,7 @@ import { registerViz } from "../registry.js";
 import { itemsOf, optStr, type VizItem, type VizSpec } from "../types.js";
 import type { VizContext } from "../context.js";
 import type { NodeStyle } from "../../scene/types.js";
-import { polar, radialAlign } from "./util.js";
+import { polar, rad, radialAlign } from "./util.js";
 
 // ---- shared helpers ----------------------------------------------------------
 
@@ -51,6 +51,45 @@ function outline(ctx: VizContext, color: string, strokeWidth?: number): Partial<
 /** Small solid dot (leader-line endpoints, diverge hub). */
 function dot(ctx: VizContext, cx: number, cy: number, d: number): void {
   ctx.shape("circle", cx - d / 2, cy - d / 2, d, d, { stroke: ctx.ink, fill: ctx.ink, fillStyle: "solid", strokeWidth: 1, roughness: 0.5 });
+}
+
+/**
+ * A tapering root sliver: a closed outline that starts `halfW` wide at `base`,
+ * bows sideways (`bow` = -1|0|1), and narrows to a point `len` away at `ang°`.
+ * Returns the boundary points + the tip. Reads like a real tree root.
+ */
+function taperRoot(base: [number, number], angDeg: number, len: number, halfW: number, bow: number): { outline: Array<[number, number]>; tip: [number, number] } {
+  const a = rad(angDeg);
+  const dx = Math.cos(a);
+  const dy = Math.sin(a);
+  const px = -dy;
+  const py = dx;
+  const tip: [number, number] = [base[0] + dx * len, base[1] + dy * len];
+  const ctrl: [number, number] = [base[0] + dx * len * 0.55 + px * bow * len * 0.17, base[1] + dy * len * 0.55 + py * bow * len * 0.17];
+  const segs = 14;
+  const spine: Array<[number, number]> = [];
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    const u = 1 - t;
+    spine.push([u * u * base[0] + 2 * u * t * ctrl[0] + t * t * tip[0], u * u * base[1] + 2 * u * t * ctrl[1] + t * t * tip[1]]);
+  }
+  const left: Array<[number, number]> = [];
+  const right: Array<[number, number]> = [];
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    const p = spine[i];
+    const prev = spine[Math.max(0, i - 1)];
+    const next = spine[Math.min(segs, i + 1)];
+    let tx = next[0] - prev[0];
+    let ty = next[1] - prev[1];
+    const l = Math.hypot(tx, ty) || 1;
+    tx /= l;
+    ty /= l;
+    const w = halfW * (1 - t) * (1 - t * 0.15); // taper to a point
+    left.push([p[0] - ty * w, p[1] + tx * w]);
+    right.push([p[0] + ty * w, p[1] - tx * w]);
+  }
+  return { outline: [...left, ...right.reverse()], tip };
 }
 
 /** Measured wrapped text for a small labelled box (mindmap nodes). */
@@ -335,7 +374,9 @@ registerViz({
     const question = questionEntry?.label ?? optStr(spec.options, "question") ?? spec.title;
     if (question && question === spec.title) ctx.titleHandled = true;
 
-    const pitch = 78;
+    // row pitch grows to fit the tallest option block (long descriptions)
+    const rowH = Math.max(0, ...options.map((o) => ctx.measureLabelBlock(o.label, o.detail, { maxW: 280 }).h));
+    const pitch = Math.max(78, rowH + 26);
     const rowTop = 84;
     const rows = options.map((_, i) => rowTop + i * pitch);
     const midY = rowTop + ((n - 1) * pitch) / 2;
@@ -398,7 +439,7 @@ registerViz({
   name: "root-causes",
   aliases: ["root-cause"],
   category: "Cause and Effect",
-  summary: "A tree — the problem in the canopy, causes around the trunk and roots.",
+  summary: "A leafy tree — the problem is the crown, the causes are its roots.",
   generate(spec: VizSpec, ctx: VizContext) {
     const causes = itemsOf(spec, "item", "cause");
     const n = Math.max(causes.length, 1);
@@ -406,49 +447,65 @@ registerViz({
     const problem = problemEntry?.label ?? spec.title;
     if (problem && problem === spec.title) ctx.titleHandled = true;
 
-    // canopy: one lumpy cloud mass (the built-in cloud glyph) holding the problem,
-    // seated on the trunk (the trunk top overlaps up into the canopy)
-    ctx.shape("cloud", -185, -128, 370, 232, outline(ctx, ctx.ink), { id: ctx.uid("canopy") });
+    // leafy crown: a cluster of overlapping puffs (circle outlines)
+    const puffs: Array<[number, number, number]> = [
+      [0, -92, 60],
+      [-62, -60, 48],
+      [62, -60, 48],
+      [-98, -14, 40],
+      [98, -14, 40],
+      [-48, 6, 46],
+      [48, 6, 46],
+      [0, -32, 56],
+    ];
+    for (const [px, py, pr] of puffs) {
+      ctx.shape("circle", px - pr, py - pr, pr * 2, pr * 2, outline(ctx, ctx.ink, 2));
+    }
+    // problem stated above the crown (the tree "grows from" it)
     if (problem) {
-      ctx.label(ctx.wrap(problem, 230, 19, "heading", 3), 0, -12, { size: 19, color: ctx.ink, weight: 700, font: "heading", z: 3 });
+      ctx.label(ctx.wrap(problem, 320, 20, "heading", 2), 0, -182, { size: 20, color: ctx.ink, weight: 700, font: "heading", z: 3 });
     }
 
-    // trunk: two gently flaring sides from inside the canopy down to the ground
-    const trunkTopY = 72;
-    const groundY = 264;
-    const trunkStyle = { color: ctx.ink, width: 2 };
-    ctx.line(cubicPts([-27, trunkTopY], [-29, trunkTopY + 70], [-31, groundY - 60], [-44, groundY], 12), trunkStyle);
-    ctx.line(cubicPts([27, trunkTopY], [29, trunkTopY + 70], [31, groundY - 60], [44, groundY], 12), trunkStyle);
+    // tapering trunk flaring into buttress roots at the ground line
+    const groundY = 214;
+    const trunk: Array<[number, number]> = [
+      [-13, 4],
+      [-19, 70],
+      [-27, 142],
+      [-42, groundY - 6],
+      [-56, groundY],
+      [-20, groundY + 5],
+      [0, groundY + 12],
+      [20, groundY + 5],
+      [56, groundY],
+      [42, groundY - 6],
+      [27, 142],
+      [19, 70],
+      [13, 4],
+    ];
+    ctx.poly(trunk, outline(ctx, ctx.ink, 2), { id: ctx.uid("trunk") });
 
-    // roots: the trunk splits below the implied ground line into wavy tendrils
-    // spreading down and outward; each is a sampled curve in ink
-    const tendrilSpecs = [
-      { sx: -32, tx: -168, ty: 16 },
-      { sx: -22, tx: -120, ty: 58 },
-      { sx: -11, tx: -58, ty: 96 },
-      { sx: 0, tx: 4, ty: 118 },
-      { sx: 11, tx: 64, ty: 96 },
-      { sx: 22, tx: 124, ty: 58 },
-      { sx: 32, tx: 168, ty: 16 },
+    // tapering root tendrils spreading down + outward from the base.
+    // (angles: 90° = straight down, <90 = down-right, >90 = down-left)
+    const base: [number, number] = [0, groundY + 8];
+    const rootSpecs = [
+      { ang: 143, len: 158, hw: 11, bow: 1 },
+      { ang: 122, len: 132, hw: 9, bow: 1 },
+      { ang: 104, len: 106, hw: 8, bow: -1 },
+      { ang: 90, len: 150, hw: 10, bow: 0 },
+      { ang: 76, len: 106, hw: 8, bow: 1 },
+      { ang: 58, len: 132, hw: 9, bow: -1 },
+      { ang: 37, len: 158, hw: 11, bow: -1 },
     ];
     const tips: Array<[number, number]> = [];
-    tendrilSpecs.forEach((t, k) => {
-      const tip: [number, number] = [t.tx, groundY + t.ty];
-      // leave the trunk with outward velocity, then droop toward the tip
-      const pts = cubicPts([t.sx, groundY - 18], [t.sx + (t.tx - t.sx) * 0.45, groundY + t.ty * 0.2], [t.tx * 0.75, groundY + t.ty * 0.9], tip, 16);
-      // fading wave along each tendril so it reads hand-drawn/root-like
-      pts.forEach((p, idx) => {
-        const tt = idx / (pts.length - 1);
-        const wave = Math.sin(tt * Math.PI * 2.6 + k * 1.7) * 6 * Math.sin(tt * Math.PI);
-        p[1] += wave;
-        p[0] += wave * 0.3;
-      });
-      ctx.line(pts, { color: ctx.ink, width: 1.8 });
+    for (const r of rootSpecs) {
+      const { outline: shape, tip } = taperRoot(base, r.ang, r.len, r.hw, r.bow);
+      ctx.poly(shape, outline(ctx, ctx.ink, 1.6));
       tips.push(tip);
-    });
+    }
 
-    // causes: colored label + gray detail, each leader terminating ON a distinct
-    // root tendril — pairs at root level left/right, an odd last one lower-center
+    // causes: colored label + gray detail, each leader terminating on a distinct
+    // root tip — pairs at root level left/right, an odd last one lower-center
     const leftTipIdx = [0, 1, 2];
     const rightTipIdx = [6, 5, 4];
     const leader = { color: ctx.preset.edge, width: 1.5 };
@@ -459,40 +516,24 @@ registerViz({
       const bottom = i === causes.length - 1 && causes.length % 2 === 1 && causes.length >= 3;
       if (bottom) {
         const tip = tips[3];
-        const lx = 96;
-        const topY = groundY + 168;
-        ctx.line(
-          [
-            tip,
-            [tip[0], topY - 28],
-            [lx, topY - 28],
-            [lx, topY - 8],
-          ],
-          leader,
-        );
+        const lx = 92;
+        const topY = tip[1] + 74;
+        ctx.line([tip, [tip[0], topY - 24], [lx, topY - 24], [lx, topY - 6]], leader);
         ctx.labelBlock(item.label, item.detail, lx, topY, { color: role.color, align: "center", maxW: 280, vAnchor: "top" });
         return;
       }
       const side = i % 2 === 0 ? -1 : 1;
       const j = side < 0 ? leftJ++ : rightJ++;
       const tip = tips[side < 0 ? leftTipIdx[Math.min(j, 2)] : rightTipIdx[Math.min(j, 2)]];
-      const y = tip[1] + Math.max(0, j - 2) * 76;
-      const bx = side * 232;
-      ctx.labelBlock(item.label, item.detail, bx, y, { color: role.color, align: side < 0 ? "right" : "left", maxW: 230 });
+      const y = tip[1] + Math.max(0, j - 2) * 78;
+      const bx = side * 220;
+      ctx.labelBlock(item.label, item.detail, bx, y, { color: role.color, align: side < 0 ? "right" : "left", maxW: 220 });
       const sx = bx + side * -8;
       if (Math.abs(y - tip[1]) < 2) {
         ctx.line([[sx, y], tip], leader);
       } else {
         const mx = (sx + tip[0]) / 2;
-        ctx.line(
-          [
-            [sx, y],
-            [mx, y],
-            [mx, tip[1]],
-            tip,
-          ],
-          leader,
-        );
+        ctx.line([[sx, y], [mx, y], [mx, tip[1]], tip], leader);
       }
     });
   },

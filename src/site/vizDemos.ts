@@ -257,7 +257,7 @@ viz quadrant "Prioritization" {
   item "Drop" "Time sinks" { icon: x }
   item "Delegate" "Interruptions, some email" { icon: users }
 }`),
-  d("venn", "Comparison", "Venn", "Overlapping sets (2–6) with region labels.", `
+  d("venn", "Comparison", "Venn", "Overlapping sets (2–7 circles) in a symmetric rosette, with region labels.", `
 viz venn "Product Sweet Spot" {
   set "Desirable" "What users want" { icon: heart }
   set "Feasible" "What we can build" { icon: gear }
