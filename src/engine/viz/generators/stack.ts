@@ -102,8 +102,9 @@ registerViz({
       if (i > 0) {
         ctx.label(String(i + 1), cx - wT / 2 + 14, midY, { size: 30, color: role.textColor, weight: 700, align: "left", font: "heading" });
       }
-      // label on the right slope
-      const slopeX = cx + (wT + wB) / 4 + 26;
+      // label just clear of the band's widest (bottom) right edge, so long
+      // descriptions never overlap the pyramid — labels stagger out with width
+      const slopeX = cx + wB / 2 + 22;
       ctx.labelBlock(item.label, item.detail, slopeX, midY, { color: role.color, align: "left", maxW: 250 });
       if (item.icon) ctx.icon(item.icon, cx + 14, i === 0 ? midY + 10 : midY, 30, role.textColor);
     });
