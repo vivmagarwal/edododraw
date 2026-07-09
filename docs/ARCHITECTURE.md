@@ -26,6 +26,8 @@ Everything flows through the **Scene IR** (`src/engine/scene/types.ts`) — a fl
 |---|---|---|---|
 | Scene IR | `src/engine/scene/` | Types, palette, factories, anchors, queries | — |
 | DSL | `src/engine/dsl/` | `lexer → parser → ast → compile` + diagnostics | [DSL_LANGUAGE_GUIDE](DSL_LANGUAGE_GUIDE.md) |
+| Viz templates | `src/engine/viz/` | `viz` blocks → Scene IR: registry, generator context, icons, text metrics | [VISUALIZATIONS_GUIDE](VISUALIZATIONS_GUIDE.md) |
+| Style presets | `src/engine/style/` | Named visual identities (palette, fills, seams, typography) + color math | [STYLES_GUIDE](STYLES_GUIDE.md) |
 | Layout | `src/engine/layout/` | dagre/grid/radial → node positions | — |
 | Renderer | `src/engine/render/` | SVG + rough.js, shapes, edges, arrowheads, fonts | — |
 | Camera | `src/engine/camera/` | fit math, easing, animated controller | [CAMERA_AND_TIMELINE_GUIDE](CAMERA_AND_TIMELINE_GUIDE.md) |
@@ -43,6 +45,8 @@ Everything flows through the **Scene IR** (`src/engine/scene/types.ts`) — a fl
 - **Imperative renderer outside React.** `SvgRenderer` owns the SVG DOM directly (like Excalidraw owns its canvas). React only mounts the container and drives high-level state. Full re-render on scene change; camera/animation mutate transforms only.
 - **Deterministic hand-drawn strokes.** Every element gets a stable rough.js `seed` (hash of its id) so re-rendering never re-jitters strokes.
 - **Open unions + a shape registry.** `ShapeKind`, `ArrowAnimationKind`, and `AnnotationKind` are open string unions, so the compiler already accepts unknown values. Only `ShapeKind` is resolved through a plugin registry (`src/engine/plugins/`), so **new shapes need no grammar or core change**. Arrow animations (`render/edges.ts`) and annotation kinds (`annotate/layer.ts`) are still resolved by built-in switches, so adding one of those is a small core change today (an animation/annotation registry is planned, not yet built).
+- **Viz templates compile to plain Scene IR.** A `viz` block is data (`VizSpec`); its registered generator (`src/engine/viz/registry.ts`) emits ordinary pinned nodes/edges via data-driven primitive shapes (`polygon`, `path`, `sector`, `block-arrow`, …). Nothing downstream knows visualizations exist — camera, annotations, editing, and export just see a scene. `registerViz` makes new templates a no-grammar-change addition.
+- **Style presets are one code path for everything.** A preset (`src/engine/style/presets.ts`) provides the scene theme, node/edge defaults under the user cascade, and a role-color system (`roleStyle`) that viz generators and auto-colored plain nodes share — including opacity-ramp palettes, canvas-colored "seam" strokes, and contrast-assured label colors.
 - **Sync compiler, async Mermaid.** The DSL compiler is synchronous and DOM-free (unit-testable in Node). Mermaid rendering needs the browser, so the app awaits `convertMermaid` and injects the fragment — the compiler itself stays pure.
 
 ## Rendering layers (bottom → top)

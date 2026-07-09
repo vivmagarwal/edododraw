@@ -6,6 +6,8 @@
 import architecture from "../../docs/ARCHITECTURE.md?raw";
 import devStandards from "../../docs/DEVELOPMENT_STANDARDS.md?raw";
 import language from "../../docs/DSL_LANGUAGE_GUIDE.md?raw";
+import visualizations from "../../docs/VISUALIZATIONS_GUIDE.md?raw";
+import styles from "../../docs/STYLES_GUIDE.md?raw";
 import cameraTimeline from "../../docs/CAMERA_AND_TIMELINE_GUIDE.md?raw";
 import annotations from "../../docs/ANNOTATIONS_GUIDE.md?raw";
 import importExport from "../../docs/IMPORT_AND_EXPORT_GUIDE.md?raw";
@@ -21,6 +23,8 @@ export interface DocPage {
 
 export const DOC_PAGES: DocPage[] = [
   { slug: "language", title: "Language reference", group: "Learn", content: language },
+  { slug: "visualizations", title: "Visualizations", group: "Learn", content: visualizations },
+  { slug: "styles", title: "Style presets", group: "Learn", content: styles },
   { slug: "camera-timeline", title: "Camera & timeline", group: "Learn", content: cameraTimeline },
   { slug: "annotations", title: "Annotations", group: "Learn", content: annotations },
   { slug: "import-export", title: "Import & export", group: "Learn", content: importExport },

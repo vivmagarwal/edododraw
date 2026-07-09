@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { navigate, useHashRoute } from "./router.js";
 import { Home } from "./pages/Home.js";
 import { Gallery } from "./pages/Gallery.js";
+import { Visualizations } from "./pages/Visualizations.js";
 import { DocsPage } from "./pages/DocsPage.js";
 import "./site.css";
 
@@ -11,6 +12,7 @@ const Playground = lazy(() => import("../app/App.js"));
 const NAV = [
   { route: "/", label: "Home" },
   { route: "/playground", label: "Playground" },
+  { route: "/visualizations", label: "Visualizations" },
   { route: "/gallery", label: "Gallery" },
   { route: "/docs/language", label: "Docs" },
 ];
@@ -66,6 +68,7 @@ export default function Site() {
 function Route({ route }: { route: string }) {
   if (route === "/" || route === "") return <Home />;
   if (route.startsWith("/playground")) return <Playground />;
+  if (route.startsWith("/visualizations")) return <Visualizations />;
   if (route.startsWith("/gallery")) return <Gallery />;
   if (route.startsWith("/docs")) {
     const slug = route.split("/")[2];

@@ -16,3 +16,8 @@ dist-lib/
 .npmrc
 public/llms-full.txt
 public/llms.txt
+
+# Visualization_demo AI experiment — local only, not part of the EDodoDraw product
+/visualization_demo-lab/
+/docs/WORKING_WITH_VISUALIZATION_DEMO_AI.md
+.playwright-mcp/

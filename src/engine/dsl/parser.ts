@@ -47,6 +47,8 @@ import type {
   TopStmt,
   UseStmt,
   Value,
+  VizDecl,
+  VizEntry,
 } from "./ast.js";
 
 const SUGAR: Array<{ open: string; close: string; shape: string }> = [
@@ -203,6 +205,8 @@ class Parser {
           return this.parseAnnotate();
         case "mermaid":
           return this.parseMermaid();
+        case "viz":
+          return this.parseViz();
         case "overrides":
           return this.parseOverrides();
         case "plugin":
@@ -428,6 +432,8 @@ class Parser {
           return this.parseAnnotate();
         case "mermaid":
           return this.parseMermaid();
+        case "viz":
+          return this.parseViz();
         case "node":
           return this.parseExplicitNode();
       }
@@ -1051,6 +1057,89 @@ class Parser {
     const text = this.is(T.String) ? this.advance().text : undefined;
     const attrs = this.is(T.LBrace) ? this.parseAttrBlock() : [];
     return { type: "annotcmd", kind, target, targetList, text, attrs, span: this.spanFrom(t) };
+  }
+
+  // ---- viz ------------------------------------------------------------------
+  /**
+   * `viz <type> [id] ["Title"] { options + data entries }`
+   * Body lines are either `key: value` options or data entries:
+   *   item "Label" 40 { color: red }
+   *   flow source -> target 25
+   *   row ["Q1", 10, 12]
+   *   item "Root" { item "Child A"; item "Child B" }
+   */
+  private parseViz(): VizDecl {
+    const t = this.advance(); // viz
+    const vizType = this.is(T.String) ? this.advance().text : (this.eat(T.Ident)?.text ?? "");
+    const id: string | undefined = this.is(T.Ident) ? this.advance().text : undefined;
+    const title = this.is(T.String) ? this.advance().text : undefined;
+    const attrs: AttrBlock = [];
+    const entries: VizEntry[] = [];
+    this.eat(T.LBrace);
+    this.parseVizBody(attrs, entries);
+    this.eat(T.RBrace);
+    return { type: "viz", vizType, id, title, attrs, entries, span: this.spanFrom(t) };
+  }
+
+  private parseVizBody(attrs: AttrBlock, entries: VizEntry[]): void {
+    this.skipSeps();
+    while (!this.is(T.RBrace) && !this.atEnd()) {
+      const before = this.i;
+      const t = this.cur();
+      if (t.kind === T.Ident && (this.peek().kind === T.Colon || this.peek().kind === T.Eq)) {
+        const a = this.parseAttrEntry();
+        if (a) attrs.push(a);
+      } else if (t.kind === T.Ident) {
+        const e = this.parseVizEntry();
+        if (e) entries.push(e);
+      } else {
+        this.error("E-VIZ", `unexpected '${t.text || t.kind}' in viz block`, t, {
+          hint: "expected `key: value` options or a data entry like `item \"Label\" 40`",
+        });
+        this.recoverStmt();
+      }
+      if (this.i === before) this.advance();
+      this.skipSeps();
+    }
+  }
+
+  private parseVizEntry(): VizEntry | null {
+    const t = this.cur();
+    const kind = this.eat(T.Ident)?.text ?? "";
+    const entry: VizEntry = { kind, values: [], attrs: [], children: [], span: this.tokSpan(t) };
+    // optional bare id ident (e.g. `item apples "Apples"`, `flow coal -> power`)
+    if (this.is(T.Ident)) entry.id = this.advance().text;
+    if (this.is(T.String)) entry.label = this.advance().text;
+    // connection form: `flow a -> b`, `flow "Coal" -> "Power"`
+    if (this.is(T.EdgeOp)) {
+      this.advance();
+      if (this.is(T.String)) entry.to = this.advance().text;
+      else if (this.is(T.Ident)) entry.to = this.advance().text;
+    }
+    // positional values: numbers, strings, lists, colors, bare idents
+    while (!this.isSep() && !this.is(T.LBrace)) {
+      const k = this.cur().kind;
+      if (k === T.Number || k === T.String || k === T.LBracket || k === T.Color || k === T.Ident || k === T.LParen) {
+        entry.values.push(this.parseValue());
+        if (this.is(T.Comma)) this.advance();
+      } else {
+        break;
+      }
+    }
+    // trailing blocks: `{ attrs }` and/or `{ nested entries }` in any order
+    while (this.is(T.LBrace)) {
+      if (this.braceIsAttr()) {
+        entry.attrs.push(...this.parseAttrBlock());
+      } else {
+        this.eat(T.LBrace);
+        const childAttrs: AttrBlock = [];
+        this.parseVizBody(childAttrs, entry.children);
+        entry.attrs.push(...childAttrs);
+        this.eat(T.RBrace);
+      }
+    }
+    entry.span = this.spanFrom(t);
+    return entry;
   }
 
   // ---- attributes & values ------------------------------------------------

@@ -33,6 +33,16 @@ export type ShapeKind =
   | "actor"
   | "pill"
   | "text"
+  // data-driven primitives (parametric geometry via node.data — see
+  // render/shapes.ts ShapeData); the viz templates build on these
+  | "polygon"
+  | "polyline"
+  | "path"
+  | "sector"
+  | "ring"
+  | "arc"
+  | "block-arrow"
+  | "chevron"
   | (string & {});
 
 export type FillStyle =
@@ -45,7 +55,11 @@ export type FillStyle =
 
 export type StrokeStyle = "solid" | "dashed" | "dotted";
 
-export type FontKind = "hand" | "normal" | "code";
+/**
+ * Font selector: a named kind (mapped through FONT_FAMILY) or any raw CSS
+ * font-family stack (style presets use specific stacks like Montserrat).
+ */
+export type FontKind = "hand" | "normal" | "code" | "serif" | (string & {});
 
 export type TextAlign = "left" | "center" | "right";
 export type VerticalAlign = "top" | "middle" | "bottom";
@@ -108,6 +122,8 @@ export interface NodeStyle {
   opacity: number; // 0..100
   seed: number; // deterministic rough seed
   shadow?: boolean;
+  /** Text weight (400/700). Undefined = the font's normal weight. */
+  fontWeight?: number;
 }
 
 export interface EdgeStyle {
@@ -322,6 +338,8 @@ export interface SceneMeta {
   spacing?: { rank?: number; node?: number };
   /** Author-declared canvas hints. */
   background?: string;
+  /** Active style preset name (see engine/style/presets.ts). */
+  style?: string;
 }
 
 /** A machine-managed position/size override (from the `overrides { … }` block).

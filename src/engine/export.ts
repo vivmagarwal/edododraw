@@ -72,8 +72,12 @@ export async function exportSVGString(renderer: SvgRenderer, scene: Scene, opts:
     }
   }
 
-  clone.setAttribute("xmlns", SVG_NS);
-  return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(clone);
+  // XMLSerializer emits xmlns from the element's namespace by itself; setting
+  // the attribute too would DUPLICATE it (invalid XML — strict parsers reject
+  // the file). Only patch it in if a serializer somehow left it out.
+  let out = new XMLSerializer().serializeToString(clone);
+  if (!/^<svg[^>]*\sxmlns=/.test(out)) out = out.replace(/^<svg/, `<svg xmlns="${SVG_NS}"`);
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' + out;
 }
 
 export async function exportPNGBlob(renderer: SvgRenderer, scene: Scene, opts: ExportOptions = {}): Promise<Blob> {

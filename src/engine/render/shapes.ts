@@ -115,18 +115,141 @@ export interface ShapeRect {
 }
 
 /**
+ * Data payload for the data-driven primitive shapes (polygon, polyline, path,
+ * sector, ring, arc, block-arrow, chevron). Generators — especially the viz
+ * templates — set these on `node.data` to describe parametric geometry that
+ * scales with the node box.
+ */
+export interface ShapeData {
+  /** polygon/polyline: points normalized 0..1 within the node box. */
+  points?: Array<[number, number]>;
+  /** polyline: close the path back to the first point. */
+  closed?: boolean;
+  /** path: an SVG path in design-space local coordinates… */
+  d?: string;
+  /** …designed at this size; the renderer scales it to the node box. */
+  vw?: number;
+  vh?: number;
+  /** sector/arc: angles in degrees (0 = east, clockwise). */
+  start?: number;
+  end?: number;
+  /** sector/ring: inner radius as a fraction of the outer (donut hole). */
+  inner?: number;
+  /** block-arrow/chevron: direction. */
+  dir?: "right" | "left" | "up" | "down";
+  /** block-arrow: arrowhead length as a fraction of the long axis. */
+  headRatio?: number;
+  /** block-arrow: shaft thickness as a fraction of the short axis. */
+  bodyRatio?: number;
+  /** chevron: notch depth as a fraction of the long axis. */
+  notch?: number;
+}
+
+function polarPoint(cx: number, cy: number, rx: number, ry: number, deg: number): [number, number] {
+  const a = (deg * Math.PI) / 180;
+  return [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry];
+}
+
+/** Elliptical annular sector path (pie slice when inner=0, donut segment otherwise). */
+function sectorPath(x: number, y: number, w: number, h: number, start: number, end: number, inner: number): string {
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const rx = w / 2;
+  const ry = h / 2;
+  const irx = rx * inner;
+  const iry = ry * inner;
+  const sweep = Math.min(359.999, Math.max(0.001, end - start));
+  const large = sweep > 180 ? 1 : 0;
+  const [ox1, oy1] = polarPoint(cx, cy, rx, ry, start);
+  const [ox2, oy2] = polarPoint(cx, cy, rx, ry, start + sweep);
+  if (inner <= 0.001) {
+    return [`M${cx},${cy}`, `L${ox1},${oy1}`, `A${rx},${ry} 0 ${large} 1 ${ox2},${oy2}`, "Z"].join(" ");
+  }
+  const [ix1, iy1] = polarPoint(cx, cy, irx, iry, start + sweep);
+  const [ix2, iy2] = polarPoint(cx, cy, irx, iry, start);
+  return [
+    `M${ox1},${oy1}`,
+    `A${rx},${ry} 0 ${large} 1 ${ox2},${oy2}`,
+    `L${ix1},${iy1}`,
+    `A${irx},${iry} 0 ${large} 0 ${ix2},${iy2}`,
+    "Z",
+  ].join(" ");
+}
+
+function blockArrowPoints(x: number, y: number, w: number, h: number, dir: string, headRatio: number, bodyRatio: number): Array<[number, number]> {
+  // Build for "right", then transform for the other directions.
+  const long = dir === "up" || dir === "down" ? h : w;
+  const short = dir === "up" || dir === "down" ? w : h;
+  const head = Math.min(long, Math.max(8, long * headRatio));
+  const bodyHalf = (short * bodyRatio) / 2;
+  const midS = short / 2;
+  // local coords: L along the long axis, S across the short axis
+  const pts: Array<[number, number]> = [
+    [0, midS - bodyHalf],
+    [long - head, midS - bodyHalf],
+    [long - head, 0],
+    [long, midS],
+    [long - head, short],
+    [long - head, midS + bodyHalf],
+    [0, midS + bodyHalf],
+  ];
+  return pts.map(([l, s]) => {
+    switch (dir) {
+      case "left":
+        return [x + (w - l), y + s] as [number, number];
+      case "up":
+        return [x + s, y + (h - l)] as [number, number];
+      case "down":
+        return [x + s, y + l] as [number, number];
+      default:
+        return [x + l, y + s] as [number, number];
+    }
+  });
+}
+
+function chevronPoints(x: number, y: number, w: number, h: number, dir: string, notch: number): Array<[number, number]> {
+  const long = dir === "up" || dir === "down" ? h : w;
+  const short = dir === "up" || dir === "down" ? w : h;
+  const n = Math.min(long * 0.49, Math.max(0, long * notch));
+  const pts: Array<[number, number]> = [
+    [0, 0],
+    [long - n, 0],
+    [long, short / 2],
+    [long - n, short],
+    [0, short],
+    [n, short / 2],
+  ];
+  return pts.map(([l, s]) => {
+    switch (dir) {
+      case "left":
+        return [x + (w - l), y + s] as [number, number];
+      case "up":
+        return [x + s, y + (h - l)] as [number, number];
+      case "down":
+        return [x + s, y + l] as [number, number];
+      default:
+        return [x + l, y + s] as [number, number];
+    }
+  });
+}
+
+/**
  * Draw a node body and return a <g> ready to append. Never returns text.
+ * `data` carries parametric geometry for the data-driven primitives (see
+ * ShapeData) — undefined for the classic shapes.
  */
 export function renderShapeBody(
   rc: RoughSVG,
   shape: ShapeKind,
   rect: ShapeRect,
   style: NodeStyle,
+  data?: Record<string, unknown>,
 ): SVGGElement {
   const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
   const { x, y, w, h } = rect;
   const filledOpts = nodeRoughOptions(style, true);
   const strokeOpts = nodeRoughOptions(style, false);
+  const sd = (data ?? {}) as ShapeData;
 
   const add = (el: SVGGElement) => g.appendChild(el);
 
@@ -281,11 +404,67 @@ export function renderShapeBody(
       // no body
       break;
     }
+    // ---- data-driven primitives (viz building blocks) ----------------------
+    case "polygon": {
+      const pts = (sd.points ?? []).map(([u, v]) => [x + u * w, y + v * h] as [number, number]);
+      if (pts.length >= 3) add(rc.polygon(pts, filledOpts));
+      break;
+    }
+    case "polyline": {
+      const pts = (sd.points ?? []).map(([u, v]) => [x + u * w, y + v * h] as [number, number]);
+      if (pts.length >= 2) {
+        if (sd.closed) add(rc.polygon(pts, filledOpts));
+        else add(rc.linearPath(pts, strokeOpts));
+      }
+      break;
+    }
+    case "path": {
+      if (sd.d) {
+        const vw = sd.vw ?? w;
+        const vh = sd.vh ?? h;
+        const el = rc.path(sd.d, filledOpts);
+        const inner = document.createElementNS(SVG_NS, "g") as SVGGElement;
+        inner.setAttribute("transform", `translate(${x} ${y}) scale(${w / vw} ${h / vh})`);
+        inner.appendChild(el);
+        add(inner as SVGGElement);
+      }
+      break;
+    }
+    case "sector": {
+      add(rc.path(sectorPath(x, y, w, h, sd.start ?? 0, sd.end ?? 90, sd.inner ?? 0), filledOpts));
+      break;
+    }
+    case "ring": {
+      add(rc.path(sectorPath(x, y, w, h, 0, 359.999, sd.inner ?? 0.6), filledOpts));
+      break;
+    }
+    case "arc": {
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const rx = w / 2;
+      const ry = h / 2;
+      const start = sd.start ?? 180;
+      const end = sd.end ?? 360;
+      const sweep = Math.min(359.999, Math.max(0.001, end - start));
+      const large = sweep > 180 ? 1 : 0;
+      const [x1, y1] = polarPoint(cx, cy, rx, ry, start);
+      const [x2, y2] = polarPoint(cx, cy, rx, ry, start + sweep);
+      add(rc.path(`M${x1},${y1} A${rx},${ry} 0 ${large} 1 ${x2},${y2}`, strokeOpts));
+      break;
+    }
+    case "block-arrow": {
+      add(rc.polygon(blockArrowPoints(x, y, w, h, sd.dir ?? "right", sd.headRatio ?? 0.35, sd.bodyRatio ?? 0.55), filledOpts));
+      break;
+    }
+    case "chevron": {
+      add(rc.polygon(chevronPoints(x, y, w, h, sd.dir ?? "right", sd.notch ?? 0.22), filledOpts));
+      break;
+    }
     default: {
       // Plugin-registered shape?
       const plugin = getShapePlugin(shape);
       if (plugin) {
-        return plugin(rc, rect, style);
+        return plugin(rc, rect, style, data);
       }
       // Unknown shape -> fall back to a rounded rectangle so nothing
       // silently disappears.
@@ -297,7 +476,12 @@ export function renderShapeBody(
   return g;
 }
 
-/** Shapes whose label should render above (not centered inside) the body. */
+/**
+ * Shapes whose label hangs below the body instead of centering inside it.
+ * Only `actor` (stick figure) qualifies — a `text` node's label IS its content
+ * and must render inside its box, otherwise every text block sits half a block
+ * lower than its scene geometry (which broke viz label placement).
+ */
 export function labelBelow(shape: ShapeKind): boolean {
-  return shape === "actor" || shape === "text";
+  return shape === "actor";
 }

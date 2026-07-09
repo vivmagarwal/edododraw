@@ -14,6 +14,7 @@ export const FONT_FAMILY = {
   hand: '"Excalifont", "Virgil", "Segoe Print", "Comic Sans MS", cursive',
   normal: '"Nunito", "Assistant", system-ui, -apple-system, sans-serif',
   code: '"Cascadia Code", "Cascadia", ui-monospace, "SF Mono", Menlo, monospace',
+  serif: 'Georgia, "Iowan Old Style", "Times New Roman", serif',
 } as const;
 
 const CSS = `

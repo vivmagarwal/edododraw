@@ -134,6 +134,40 @@ export interface MermaidDecl {
   span: Span;
 }
 
+// ---- visualizations ---------------------------------------------------------
+
+/**
+ * One data entry inside a `viz` block: `item "Label" 40 { color: red }`,
+ * `flow a -> b 30`, `row ["Q1", 10, 12]`, `series "2024" [4, 8, 15]`, …
+ * The entry keyword set is OPEN — each viz generator validates the kinds it
+ * understands, so new visualization types need no grammar change.
+ */
+export interface VizEntry {
+  kind: string; // item | row | series | flow | set | task | …
+  /** Optional bare-ident id (`item apples "Apples"`). */
+  id?: string;
+  /** Quoted display label. */
+  label?: string;
+  /** Arrow target for connection-like entries (`flow a -> b`). */
+  to?: string;
+  /** Positional values after the label: numbers, strings, idents, lists. */
+  values: Value[];
+  attrs: AttrBlock;
+  children: VizEntry[];
+  span: Span;
+}
+
+/** `viz funnel "Title" { orientation: down; item "A" 40; … }` */
+export interface VizDecl {
+  type: "viz";
+  vizType: string;
+  id?: string;
+  title?: string;
+  attrs: AttrBlock; // options (key: value pairs)
+  entries: VizEntry[];
+  span: Span;
+}
+
 export type SceneStmt =
   | NodeDecl
   | EdgeDecl
@@ -144,6 +178,7 @@ export type SceneStmt =
   | StyleDecl
   | AnnotateDecl
   | MermaidDecl
+  | VizDecl
   | ClassApplyStmt;
 
 // ---- annotations -----------------------------------------------------------
@@ -306,6 +341,7 @@ export type TopStmt =
   | TimelineDecl
   | AnnotateDecl
   | MermaidDecl
+  | VizDecl
   | OverridesDecl;
 
 export interface Program {

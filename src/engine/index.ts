@@ -37,3 +37,6 @@ export type { Diagnostic } from "./dsl/diagnostics.js";
 export { downloadSVG, downloadPNG, downloadJSON, exportSVGString, exportPNGBlob } from "./export.js";
 export { registerShape, getShapePlugin, listShapePlugins } from "./plugins/registry.js";
 export type { ShapePluginFn } from "./plugins/registry.js";
+export * from "./style/color.js";
+export * from "./style/presets.js";
+export * from "./viz/index.js";

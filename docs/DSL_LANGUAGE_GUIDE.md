@@ -32,11 +32,12 @@ Everything else is optional layering on top.
 | Statement | Purpose |
 |---|---|
 | `edd 1.0` | Optional version marker (first line). |
-| `meta { title: "…", background: "#…" }` | Diagram metadata. |
+| `meta { title: "…", background: "#…", style: bold-canvas }` | Diagram metadata; `style:` applies a [style preset](STYLES_GUIDE.md). |
 | `theme name { tokens { $x: #hex, … } }` | Named theme + reusable `$tokens`. |
 | `style .name { … }` / `style .name extends .other { … }` | Reusable style class. |
 | `defaults { node { … } edge { … } }` | Defaults applied to every node/edge. |
 | `scene [name] { … }` | Structure. Multiple `scene` blocks merge. |
+| `viz <type> [id] ["Title"] { … }` | A data-driven visualization template — 62 built-in types (see §12 and VISUALIZATIONS_GUIDE.md). |
 | `annotate ["label"] { … }` | Always-on annotations (outside the timeline). |
 | `timeline [name] { … }` | Choreography (beats). |
 | `overrides { id at (x, y) [size (w, h)] … }` | Pinned positions/sizes (usually machine-written by direct editing — see §11). |
@@ -333,13 +334,36 @@ overrides {
 
 ---
 
-## 12. Diagnostics
+## 12. Visualizations (`viz`) & style presets
+
+Declare a chart or diagram template with data instead of drawing it:
+
+```edd
+meta { style: glowful-breeze }        // optional: one of the built-in style presets
+
+viz funnel sales "Sales Funnel" {
+  input: "Potential customers"        // template option
+  item "Awareness" 5000               // data entry: label + value
+  item "Interest" 1800 "Warm leads"   // + trailing string = description
+  item "Won" 38 { icon: trophy }      // + icon / color / detail attributes
+}
+```
+
+62 templates ship built-in — funnel, pyramid, venn, pie, bar/line/area, waterfall, sankey, gantt, timeline, mindmap, swot, quadrant, journey, iceberg, and many more. Entries are `<kind> [id] ["Label"] [-> target] [values…] [{ attrs }] [{ nested entries }]`; every template accepts `item` plus natural synonyms (`stage`, `flow "A" -> "B" 25`, `task "Design" 0 3`, `set`, `pro`/`con`, …).
+
+Viz output is ordinary scene structure: elements get ids like `sales.won`, so annotations, camera beats, `reveal`, and direct editing all target them. `meta { style: <name> }` restyles the *whole* document — viz templates and classic scenes alike — through one of the named presets (`bold-canvas`, `sketch-notes`, `corporate-clean`, …).
+
+Full catalog + per-template options: [VISUALIZATIONS_GUIDE.md](VISUALIZATIONS_GUIDE.md). Preset reference: [STYLES_GUIDE.md](STYLES_GUIDE.md).
+
+---
+
+## 13. Diagnostics
 
 The compiler recovers from errors and reports many at once, each with `line:col`, a stable code (`E-EDGE-NOOP`, `E-STMT`, `E-ATTR`, `W-MERMAID-SYNC`, …), and a hint. A bad statement never blanks the diagram — valid statements still render.
 
 ---
 
-## 13. LLM authoring tips
+## 14. LLM authoring tips
 
 - Prefer the **keyword node form** (`cylinder db "…"`) and the **block form** for camera/annotations — they're unambiguous.
 - One statement per line. Attributes are `{ key: value, … }` (commas or newlines both separate).

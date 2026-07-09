@@ -14,7 +14,7 @@ import type { ShapeRect } from "../render/shapes.js";
 
 type RoughSVG = ReturnType<(typeof rough)["svg"]>;
 
-export type ShapePluginFn = (rc: RoughSVG, rect: ShapeRect, style: NodeStyle) => SVGGElement;
+export type ShapePluginFn = (rc: RoughSVG, rect: ShapeRect, style: NodeStyle, data?: Record<string, unknown>) => SVGGElement;
 
 const shapePlugins = new Map<string, ShapePluginFn>();
 

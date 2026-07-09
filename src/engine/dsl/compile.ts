@@ -8,6 +8,10 @@ import { applyLayout } from "../layout/index.js";
 import { applyOverrides } from "../scene/overrides.js";
 import { emptyScene, makeEdge, makeNode } from "../scene/defaults.js";
 import { isLightColor, resolveMarker } from "../scene/palette.js";
+import { effectivePreset, getStylePreset, presetEdgeDefaults, presetNodeDefaults, presetTheme, roleStyle } from "../style/presets.js";
+import { runViz } from "../viz/registry.js";
+import "../viz/generators/index.js"; // register the built-in viz templates
+import { lowerViz } from "./vizLower.js";
 import type {
   Annotation,
   AnnotationTarget,
@@ -31,6 +35,7 @@ import type {
   Program,
   SceneStmt,
   Value,
+  VizDecl,
 } from "./ast.js";
 import { attr } from "./ast.js";
 import { DiagnosticBag } from "./diagnostics.js";
@@ -57,6 +62,11 @@ export interface CompileOptions {
    * viewed dark without editing its source. `undefined` = derive from the DSL.
    */
   mode?: "light" | "dark";
+  /**
+   * Force a style preset by name, overriding `meta { style: … }`. Lets a host
+   * app offer a style switcher without editing the source.
+   */
+  stylePreset?: string;
 }
 
 export interface CompileResult {
@@ -70,6 +80,7 @@ const FONT_MAP: Record<string, NodeStyle["fontFamily"]> = {
   sans: "normal",
   mono: "code",
   code: "code",
+  serif: "serif",
 };
 
 export function compileProgram(program: Program, opts: CompileOptions = {}): CompileResult {
@@ -85,11 +96,15 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
   let timelineProps: Record<string, Value> = {};
   const metaAttrs: AttrBlock = [];
   const overrideEntries: Scene["overrides"] = [];
+  const vizDecls: VizDecl[] = [];
   let activeTheme: string | undefined;
   let hasMermaid = false;
 
   for (const s of program.statements) {
     switch (s.type) {
+      case "viz":
+        vizDecls.push(s);
+        break;
       case "overrides":
         overrideEntries!.push(...s.entries);
         break;
@@ -187,6 +202,9 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
         case "anchor":
           // scene-level anchor: attach to its node as a synthetic attr later (skipped in M2 render)
           break;
+        case "viz":
+          vizDecls.push(st);
+          break;
         case "mermaid":
           hasMermaid = true;
           break;
@@ -212,8 +230,18 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
       for (const t of themes.get(name)!.tokens) tokenMap.set(t.name, t.value);
     }
   }
+  // ---- style preset --------------------------------------------------------
+  // `meta { style: <name> }`, overridable per-compile (host style switcher).
+  const metaStyleAttr = attr(metaAttrs, "style");
+  const metaStyleName = metaStyleAttr && (metaStyleAttr.t === "str" || metaStyleAttr.t === "ident") ? metaStyleAttr.v : undefined;
+  const presetName = opts.stylePreset ?? metaStyleName;
+  const preset = getStylePreset(presetName);
+  if (presetName && !preset) {
+    diags.warn("W-STYLE-PRESET", `unknown style preset '${presetName}'`, { line: 1, col: 1, start: 0, end: 0 }, { hint: "see docs/STYLES_GUIDE for the built-in preset names" });
+  }
+
   const derivedMode: "light" | "dark" = themeName?.toLowerCase().includes("dark") ? "dark" : "light";
-  const mode: "light" | "dark" = opts.mode ?? derivedMode;
+  const mode: "light" | "dark" = opts.mode ?? preset?.mode ?? derivedMode;
 
   // ---- class chain resolution --------------------------------------------
   const classAttrs = (name: string, seen = new Set<string>()): { attrs: AttrBlock } => {
@@ -226,6 +254,11 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
 
   // ---- build scene --------------------------------------------------------
   const scene = emptyScene(mode);
+  if (preset) {
+    scene.theme = presetTheme(preset);
+    scene.theme.mode = mode;
+    scene.meta.style = preset.name;
+  }
   applyMeta(scene, metaAttrs, tokenMap);
 
   // node styling
@@ -237,10 +270,25 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
     return layered;
   };
 
+  const COLORISH = new Set(["fill", "bg", "bgColor", "background", "stroke", "color"]);
+  const hasOwnColor = (layered: AttrBlock): boolean => layered.some((a) => COLORISH.has(a.key));
+
   const ensureNode = (id: string, label?: string) => {
     if (scene.nodes.some((n) => n.id === id)) return;
-    scene.nodes.push(makeNode({ id, label: label ?? id, mode }));
+    const style = preset ? { ...presetNodeDefaults(preset) } : undefined;
+    scene.nodes.push(makeNode({ id, label: label ?? id, mode, style }));
   };
+
+  // Pre-pass for preset auto-coloring: nodes that declare no color of their own
+  // cycle through the preset palette (opacity-ramp presets need the total).
+  const autoColorIdx = new Map<string, number>();
+  if (preset?.autoColorNodes) {
+    let idx = 0;
+    for (const id of nodeOrder) {
+      const nd = nodeDecls.get(id)!;
+      if (!hasOwnColor(styleFor("node", collectClasses(nd), nd.attrs))) autoColorIdx.set(id, idx++);
+    }
+  }
 
   // create nodes
   for (const id of nodeOrder) {
@@ -248,14 +296,27 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
     const classes = collectClasses(nd);
     const layered = styleFor("node", classes, nd.attrs);
     const built = buildNodeStyle(layered, tokenMap, mode);
-    applyDarkInk(built.style, mode);
+    if (!preset) applyDarkInk(built.style, mode);
+    let style = built.style;
+    if (preset) {
+      const base = presetNodeDefaults(preset);
+      const autoIdx = autoColorIdx.get(id);
+      if (autoIdx !== undefined) {
+        const role = roleStyle(preset, autoIdx, { n: autoColorIdx.size });
+        base.stroke = role.stroke;
+        base.fill = role.fill;
+        base.fillStyle = role.fillStyle;
+        base.textColor = role.textColor;
+      }
+      style = { ...base, ...style };
+    }
     const shape = mapShape(built.shape ?? nd.shape);
     const label = built.label ?? nd.label ?? prettyId(id);
     const node = makeNode({
       id,
       shape,
       label,
-      style: built.style,
+      style,
       x: built.x,
       y: built.y,
       w: built.w,
@@ -304,7 +365,7 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
             fromAnchor: endpointAnchor(from),
             toAnchor: endpointAnchor(to),
             label,
-            style: built.style,
+            style: preset ? { ...presetEdgeDefaults(preset), ...built.style } : built.style,
             routing: built.routing ?? gl.routing ?? "straight",
             mode,
           });
@@ -336,9 +397,6 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
     if (a) scene.annotations.push(a);
   }
 
-  // ---- timeline -> steps --------------------------------------------------
-  scene.steps = timeline.map((b, idx) => beatToStep(b, idx, scene, tokenMap, timelineProps));
-
   // ---- layout -------------------------------------------------------------
   scene.meta.layout = resolveLayoutKind(layoutKind, scene);
   const dir = layoutAttrs.length ? attr(layoutAttrs, "direction") : undefined;
@@ -358,7 +416,46 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
 
   applyLayout(scene);
 
+  // ---- viz templates -------------------------------------------------------
+  // Generated AFTER layout so each block stacks below existing graph content
+  // (viz output is pinned Scene IR — camera/annotations/editing work as usual).
+  if (vizDecls.length) {
+    const vizPreset = preset ?? effectivePreset(undefined, mode);
+    let cursorY = contentMaxY(scene) + (scene.nodes.length ? 100 : 40);
+    for (let i = 0; i < vizDecls.length; i++) {
+      const spec = lowerViz(vizDecls[i], i, tokenMap);
+      const result = runViz(spec, vizPreset, mode, diags);
+      if (!result) continue;
+      const dx = 40 - result.bounds.x;
+      const dy = cursorY - result.bounds.y;
+      for (const n of result.nodes) {
+        n.x += dx;
+        n.y += dy;
+        scene.nodes.push(n);
+      }
+      for (const e of result.edges) {
+        if (e.from.point) e.from = { ...e.from, point: { x: e.from.point.x + dx, y: e.from.point.y + dy } };
+        if (e.to.point) e.to = { ...e.to, point: { x: e.to.point.x + dx, y: e.to.point.y + dy } };
+        if (e.points) e.points = e.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+        scene.edges.push(e);
+      }
+      for (const a of result.annotations) scene.annotations.push(a);
+      cursorY += result.bounds.h + 100;
+    }
+  }
+
+  // ---- timeline -> steps ----------------------------------------------------
+  // After viz generation so `reveal all` (etc.) covers viz-emitted elements.
+  scene.steps = timeline.map((b, idx) => beatToStep(b, idx, scene, tokenMap, timelineProps));
+
   return { scene, diagnostics: diags };
+}
+
+/** Bottom edge (max y) of the scene's current content, 0 when empty. */
+function contentMaxY(scene: Scene): number {
+  let maxY = 0;
+  for (const n of scene.nodes) maxY = Math.max(maxY, n.y + n.h);
+  return maxY;
 }
 
 // ---- helpers ---------------------------------------------------------------

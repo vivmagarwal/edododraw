@@ -192,3 +192,21 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); -webk
   .docs-layout { grid-template-columns: 1fr; }
   .docs-nav { position: static; }
 }
+
+/* ---- Visualizations catalog ------------------------------------------- */
+.viz-style-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--muted, #667085);
+}
+.viz-style-picker select {
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #d0d5dd);
+  background: var(--card, #fff);
+  color: inherit;
+}

@@ -35,10 +35,12 @@ There are two flavours of extension:
 | Flavour | Mechanism | Needs a repo edit? | Example |
 |---|---|---|---|
 | **Registry** (runtime) | `registerShape(name, fn)` | No — callable from any app | Custom shapes |
+| **Registry** (runtime) | `registerViz(def)` | No — callable from any app | Visualization templates (`viz my-viz { … }`) |
+| **Registry** (runtime) | `registerStylePreset(preset)` | No — callable from any app | Style presets (`meta { style: my-brand }`) |
 | **Switch** (compile-time) | add a `case` to a `switch` | Yes — you edit engine source | Animations, annotations, layouts |
 
-Shapes are the only fully-runtime seam today; the rest are small, well-isolated
-`switch` additions.
+Shapes, viz templates, and style presets are fully-runtime seams; the rest are
+small, well-isolated `switch` additions.
 
 ---
 
@@ -410,7 +412,50 @@ scene {
 
 ---
 
-## 6. Add a DSL construct
+## 6. Add a visualization template
+
+`viz <name> { … }` blocks resolve through the viz registry, so a new template is
+a pure runtime registration — same pattern as shapes:
+
+```ts
+import { registerViz, type VizSpec, type VizContext } from "edododraw";
+
+registerViz({
+  name: "medals",
+  category: "Custom",
+  summary: "A row of medals sized by value.",
+  generate(spec: VizSpec, ctx: VizContext) {
+    spec.items.forEach((item, i) => {
+      const role = ctx.role(i, { n: spec.items.length, color: item.color });
+      const d = 40 + (item.value ?? 1) * 8;
+      ctx.shape("circle", i * 130, 60 - d / 2, d, d, role, { id: ctx.uid(item.id) });
+      ctx.labelBlock(item.label, item.detail, i * 130 + d / 2, 60 + d / 2 + 16, { color: role.color, align: "center", vAnchor: "top" });
+    });
+  },
+});
+```
+
+- `spec` is plain data (`VizSpec`): the block's options + entries, already lowered
+  (labels, values, `detail`, `icon`, `color`, nested `children`).
+- `ctx` (`VizContext`) is the drawing toolkit: preset-aware role colors
+  (`ctx.role`), measured/wrapped text (`ctx.label`, `ctx.labelBlock`),
+  primitives (`ctx.poly`, `ctx.line`, `ctx.path`, `sector`, `block-arrow`, …),
+  icons (`ctx.icon`) and stable ids (`ctx.uid`). Emit nothing but Scene IR — the
+  camera, annotations, editing and export then work automatically.
+- Follow the golden rule: **never hardcode colors** — derive everything from
+  `ctx.role` / `ctx.ink` / `ctx.preset` so all style presets keep working. See
+  `src/engine/viz/generators/*.ts` for 62 worked examples and
+  [VISUALIZATIONS_GUIDE.md](VISUALIZATIONS_GUIDE.md) for the authoring surface.
+
+## 7. Add a style preset
+
+Also a pure runtime registration — see the worked example in
+[STYLES_GUIDE.md §4](STYLES_GUIDE.md) and the `StylePreset` interface in
+`src/engine/style/presets.ts`. The preset supplies the scene theme, node/edge
+defaults, and the `roleStyle` color system that viz templates and auto-colored
+nodes share.
+
+## 8. Add a DSL construct
 
 The DSL is a hand-written recursive-descent parser (`src/engine/dsl/parser.ts`)
 lowered to Scene IR by the compiler (`src/engine/dsl/compile.ts`). Grammar changes
@@ -451,7 +496,7 @@ For the full user-facing grammar, see
 
 ---
 
-## 7. Testing your extension
+## 9. Testing your extension
 
 Follow the two-stage rule from [DEVELOPMENT_STANDARDS.md](DEVELOPMENT_STANDARDS.md).
 

@@ -1,0 +1,39 @@
+edd 1.0
+meta { title: "Visualizations", style: glowful-breeze }
+
+// 62 chart & diagram templates ship built-in — declare DATA, get a diagram.
+// Change `style:` above to restyle everything: bold-canvas, sketch-notes,
+// carefree-mist, corporate-clean, monochrome-pro, artistic-flair, …
+// Full catalog: Docs → Visualizations.
+
+viz funnel sales "Sales Funnel" {
+  input: "Potential customers"
+  output: "Closed deals"
+  item "Awareness" 5000
+  item "Interest" 1800 "Warm leads in the CRM"
+  item "Evaluation" 420
+  item "Won" 38 { icon: trophy }
+}
+
+viz venn "Product Sweet Spot" {
+  set "Desirable" "What users want" { icon: heart }
+  set "Feasible" "What we can build" { icon: gear }
+  set "Viable" "What sustains us" { icon: dollar }
+  overlap all "Great products"
+}
+
+viz cycle "Build-Measure-Learn" {
+  item "Build" "Ship the smallest useful slice" { icon: gear }
+  item "Measure" "Watch real usage, not opinions" { icon: chart }
+  item "Learn" "Decide: persevere or pivot" { icon: bulb }
+}
+
+// Viz elements are ordinary scene elements: annotate them, focus them, edit them.
+annotate {
+  circle-mark sales.won "the goal"
+}
+
+timeline {
+  beat all "Everything" { camera fit-all }
+  beat funnel "The funnel" { camera focus sales.won zoom 1.6 }
+}

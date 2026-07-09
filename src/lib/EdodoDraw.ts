@@ -76,6 +76,7 @@ export class EdodoDraw {
   private textInput: HTMLInputElement | null = null;
   private closeInput: ((commit: boolean) => void) | null = null;
   private colorScheme: "light" | "dark" | null = null;
+  private stylePreset: string | null = null;
   private hasRendered = false;
   private cleanup: Array<() => void> = [];
 
@@ -149,7 +150,7 @@ export class EdodoDraw {
   async render(source: string): Promise<RenderResult> {
     this.source = source;
     const seq = ++this.renderSeq;
-    const { scene, diagnostics } = compileEdd(source, { mode: this.colorScheme ?? undefined });
+    const { scene, diagnostics } = compileEdd(source, { mode: this.colorScheme ?? undefined, stylePreset: this.stylePreset ?? undefined });
     let diags = diagnostics.items;
 
     const blocks = extractMermaidBlocks(source);
@@ -209,6 +210,21 @@ export class EdodoDraw {
   }
   getColorScheme(): "light" | "dark" | null {
     return this.colorScheme;
+  }
+
+  /**
+   * Force a style preset by name (see docs/STYLES_GUIDE), overriding the
+   * diagram's `meta { style: … }`. Pass `null` to fall back to the source's own
+   * declaration. Re-renders the current source; unknown names warn and keep the
+   * classic look.
+   */
+  setStylePreset(name: string | null): void {
+    if (this.stylePreset === name) return;
+    this.stylePreset = name;
+    if (this.hasRendered) void this.render(this.source);
+  }
+  getStylePreset(): string | null {
+    return this.stylePreset;
   }
 
   // ---- camera -------------------------------------------------------------

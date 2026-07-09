@@ -102,6 +102,19 @@ export default function App() {
     return () => window.clearTimeout(debounce.current);
   }, [source]);
 
+  // Scriptable source injection for automated visual testing (Playwright et al.)
+  // — SPA hash navigation doesn't remount, and StrictMode double-mount consumes
+  // the sessionStorage handoff, so tests set code through this hook instead.
+  useEffect(() => {
+    (window as unknown as { __eddSetSource?: (s: string) => void }).__eddSetSource = (s: string) => {
+      setSource(s);
+      setDebounced(s);
+    };
+    return () => {
+      delete (window as unknown as { __eddSetSource?: (s: string) => void }).__eddSetSource;
+    };
+  }, []);
+
   useEffect(() => lsSet("edd.codeCollapsed", codeCollapsed ? "1" : "0"), [codeCollapsed]);
   useEffect(() => lsSet("edd.inspectorSide", inspectorSide), [inspectorSide]);
   useEffect(() => lsSet("edd.editorBasis", editorBasis == null ? "" : String(Math.round(editorBasis))), [editorBasis]);

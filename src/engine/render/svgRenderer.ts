@@ -235,6 +235,43 @@ export class SvgRenderer {
     }
   }
 
+  /** Cache of gradient-fill defs created this mount: spec -> def id. */
+  private gradientIds = new Map<string, string>();
+
+  /**
+   * Turn a `linear-gradient(#from,#to)` fill (emitted by gradient style
+   * presets) into an SVG <linearGradient> def and return a url() reference.
+   * Plain fills pass through untouched.
+   */
+  private resolveGradientFill(fill: string | null): string | null {
+    if (!fill || !fill.startsWith("linear-gradient(")) return fill;
+    const cached = this.gradientIds.get(fill);
+    if (cached) return `url(#${cached})`;
+    const inner = fill.slice("linear-gradient(".length, -1);
+    const parts = inner.split(",").map((s) => s.trim());
+    const [from, to] = parts.length >= 2 ? [parts[parts.length - 2], parts[parts.length - 1]] : [parts[0], parts[0]];
+    const id = `eddGrad${this.gradientIds.size}`;
+    const doc = this.container.ownerDocument;
+    const grad = doc.createElementNS(SVG_NS, "linearGradient");
+    grad.setAttribute("id", id);
+    grad.setAttribute("x1", "0");
+    grad.setAttribute("y1", "0");
+    grad.setAttribute("x2", "0");
+    grad.setAttribute("y2", "1");
+    for (const [offset, color] of [
+      ["0", from],
+      ["1", to],
+    ] as const) {
+      const stop = doc.createElementNS(SVG_NS, "stop");
+      stop.setAttribute("offset", offset);
+      stop.setAttribute("stop-color", color);
+      grad.appendChild(stop);
+    }
+    this.defs.appendChild(grad);
+    this.gradientIds.set(fill, id);
+    return `url(#${id})`;
+  }
+
   private renderNode(_scene: Scene, node: SceneNode): SVGGElement {
     const doc = this.container.ownerDocument;
     const g = doc.createElementNS(SVG_NS, "g") as SVGGElement;
@@ -242,14 +279,25 @@ export class SvgRenderer {
     g.setAttribute("class", "edd-node");
     g.style.opacity = String(node.style.opacity / 100);
 
-    const body = renderShapeBody(this.rc, node.shape, { x: node.x, y: node.y, w: node.w, h: node.h }, node.style);
+    const fill = this.resolveGradientFill(node.style.fill);
+    const style = fill === node.style.fill ? node.style : { ...node.style, fill };
+    const body = renderShapeBody(this.rc, node.shape, { x: node.x, y: node.y, w: node.w, h: node.h }, style, node.data);
     g.appendChild(body);
 
     if (node.label) {
-      const cx = node.x + node.w / 2;
+      const align = node.style.textAlign;
+      const cx = align === "left" ? node.x : align === "right" ? node.x + node.w : node.x + node.w / 2;
       const below = labelBelow(node.shape);
-      const cy = below ? node.y + node.h + node.style.fontSize : node.y + node.h / 2;
-      g.appendChild(this.textBlock(node.label, cx, cy, node.style.fontSize, node.style.textColor, node.style.fontFamily, node.style.textAlign));
+      const lines = node.label.split("\n").length;
+      const lineHeight = node.style.fontSize * 1.25;
+      const blockHalf = ((lines - 1) * lineHeight) / 2;
+      const vAlign = node.style.verticalAlign;
+      let cy: number;
+      if (below) cy = node.y + node.h + node.style.fontSize;
+      else if (vAlign === "top") cy = node.y + node.style.fontSize * 0.75 + blockHalf;
+      else if (vAlign === "bottom") cy = node.y + node.h - node.style.fontSize * 0.75 - blockHalf;
+      else cy = node.y + node.h / 2;
+      g.appendChild(this.textBlock(node.label, cx, cy, node.style.fontSize, node.style.textColor, node.style.fontFamily, align, node.style.fontWeight));
     }
     return g;
   }
@@ -262,6 +310,7 @@ export class SvgRenderer {
     color: string,
     family: SceneNode["style"]["fontFamily"],
     align: SceneNode["style"]["textAlign"] = "center",
+    weight?: number,
   ): SVGTextElement {
     const doc = this.container.ownerDocument;
     const t = doc.createElementNS(SVG_NS, "text") as SVGTextElement;
@@ -269,8 +318,10 @@ export class SvgRenderer {
     const lineHeight = fontSize * 1.25;
     const anchor = align === "left" ? "start" : align === "right" ? "end" : "middle";
     t.setAttribute("text-anchor", anchor);
-    t.setAttribute("font-family", FONT_FAMILY[family]);
+    // Named kinds map through FONT_FAMILY; presets may pass a raw CSS stack.
+    t.setAttribute("font-family", FONT_FAMILY[family as keyof typeof FONT_FAMILY] ?? family);
     t.setAttribute("font-size", String(fontSize));
+    if (weight) t.setAttribute("font-weight", String(weight));
     t.setAttribute("fill", color);
     t.setAttribute("dominant-baseline", "middle");
     t.style.whiteSpace = "pre";
