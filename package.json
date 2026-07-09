@@ -41,7 +41,9 @@
   },
   "sideEffects": [
     "**/builtins.js",
-    "**/builtins.ts"
+    "**/builtins.ts",
+    "**/viz/generators/*.js",
+    "**/viz/generators/*.ts"
   ],
   "files": [
     "dist-lib",
