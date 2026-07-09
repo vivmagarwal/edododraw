@@ -7,11 +7,13 @@ import { useState } from "react";
 import { EdodoDrawView, type EdodoDraw } from "../lib/react.js";
 import type { Demo } from "./demos.js";
 import { openInPlayground } from "./router.js";
+import { useResolvedTheme } from "./useTheme.js";
 
 export function DemoCard({ demo }: { demo: Demo }) {
   const [edd, setEdd] = useState<EdodoDraw | null>(null);
   const [showCode, setShowCode] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const theme = useResolvedTheme();
 
   return (
     <article className="demo-card">
@@ -20,7 +22,7 @@ export function DemoCard({ demo }: { demo: Demo }) {
         <p>{demo.description}</p>
       </header>
       <div className="demo-canvas" style={{ height: demo.height ?? 280 }}>
-        <EdodoDrawView source={demo.code} interactive grid onReady={setEdd} />
+        <EdodoDrawView source={demo.code} interactive grid colorScheme={theme} onReady={setEdd} />
       </div>
       <footer className="demo-card-foot">
         <button className="demo-btn" onClick={() => setShowCode((s) => !s)}>

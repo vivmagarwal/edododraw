@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { CanvasView, type CanvasEngine } from "./CanvasView.js";
 import type { Diagnostic, EditState, LiveState, PlayerState } from "../lib/index.js";
 import { CodeEditor, type CodeEditorDiagnostic } from "../site/CodeEditor.js";
@@ -55,6 +56,13 @@ const lsSet = (key: string, value: string): void => {
   try { localStorage.setItem(key, value); } catch { /* ignore quota / privacy mode */ }
 };
 const cssEscape = (s: string): string => (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(s) : s.replace(/["\\]/g, "\\$&"));
+const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+
+type ThemePref = "system" | "light" | "dark";
+const prefersDark = (): boolean => typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: dark)").matches;
+// Splitter geometry: how narrow the code pane / canvas may get while dragging.
+const MIN_EDITOR = 280;
+const MIN_CANVAS = 360;
 
 export default function App() {
   const initial = useMemo(() => takePlaygroundSource() ?? EXAMPLES[0].source, []);
@@ -68,8 +76,23 @@ export default function App() {
   const [codeCollapsed, setCodeCollapsed] = useState<boolean>(() => lsGet("edd.codeCollapsed", "0") === "1");
   const [inspectorCollapsed, setInspectorCollapsed] = useState<boolean>(false);
   const [inspectorSide, setInspectorSide] = useState<Side>(() => (lsGet("edd.inspectorSide", "left") === "right" ? "right" : "left"));
+  // Draggable splitter: editor pane width in px (null = use the CSS default 42%).
+  const [editorBasis, setEditorBasis] = useState<number | null>(() => {
+    const v = lsGet("edd.editorBasis", "");
+    const n = Number(v);
+    return v !== "" && Number.isFinite(n) && n > 0 ? n : null;
+  });
+  // Theme: persisted preference + live system value -> resolved light/dark.
+  const [themePref, setThemePref] = useState<ThemePref>(() => {
+    const v = lsGet("edd.theme", "system");
+    return v === "light" || v === "dark" ? v : "system";
+  });
+  const [systemDark, setSystemDark] = useState<boolean>(() => prefersDark());
+  const [editorPct, setEditorPct] = useState<number>(42); // for the splitter's aria-valuenow
+  const resolvedTheme: "light" | "dark" = themePref === "system" ? (systemDark ? "dark" : "light") : themePref;
   const engineRef = useRef<CanvasEngine | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
   const dockPinned = useRef(false); // user manually chose a side for this selection
   const debounce = useRef<number | undefined>(undefined);
 
@@ -81,6 +104,47 @@ export default function App() {
 
   useEffect(() => lsSet("edd.codeCollapsed", codeCollapsed ? "1" : "0"), [codeCollapsed]);
   useEffect(() => lsSet("edd.inspectorSide", inspectorSide), [inspectorSide]);
+  useEffect(() => lsSet("edd.editorBasis", editorBasis == null ? "" : String(Math.round(editorBasis))), [editorBasis]);
+
+  // Keep the editor basis sane as the window resizes: a wide basis saved on a big
+  // monitor (or dragged, then the window shrunk) must be re-clamped so the canvas
+  // never collapses. Also tracks the pane's width % for the splitter's aria-valuenow.
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main || codeCollapsed) return;
+    const recompute = () => {
+      const w = main.getBoundingClientRect().width;
+      if (w <= 0) return;
+      if (editorBasis != null) {
+        const max = Math.max(MIN_EDITOR, w - MIN_CANVAS);
+        if (editorBasis > max) { setEditorBasis(max); return; }
+      }
+      const basisPx = editorBasis ?? w * 0.42;
+      setEditorPct(Math.round(clamp((basisPx / w) * 100, 0, 100)));
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(main);
+    return () => ro.disconnect();
+  }, [editorBasis, codeCollapsed]);
+
+  // Theme preference -> persist + drive the CSS chrome (data-theme on <html>).
+  useEffect(() => {
+    lsSet("edd.theme", themePref);
+    document.documentElement.dataset.theme = themePref;
+  }, [themePref]);
+  // Track the OS theme so "system" stays live.
+  useEffect(() => {
+    if (typeof matchMedia === "undefined") return;
+    const mq = matchMedia("(prefers-color-scheme: dark)");
+    const on = () => setSystemDark(mq.matches);
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
+  }, []);
+  // Resolved theme drives the canvas (bg, grid, diagram ink) so chrome + canvas stay in sync.
+  useEffect(() => {
+    engineRef.current?.setColorScheme(resolvedTheme);
+  }, [resolvedTheme]);
 
   // Keyboard shortcuts: tools (V/H/R/O/D/T/A) + ⌘B code pane + ⌘I inspector.
   // Guarded so typing in the code editor / any field never retools the canvas.
@@ -191,17 +255,32 @@ export default function App() {
           <button title="Download scene JSON" onClick={() => eng?.downloadJSON()}>JSON</button>
           <button title="Copy code" onClick={() => navigator.clipboard?.writeText(source)}>⧉ Copy</button>
         </nav>
-        <button
-          className="edd-topbar-hint"
-          onClick={() => setCodeCollapsed((c) => !c)}
-          title="Toggle the code panel (⌘B)"
-        >
-          {codeCollapsed ? "⟩ Show code" : "⟨ Focus mode"} <kbd>⌘B</kbd>
-        </button>
+        <div className="edd-topbar-right">
+          <button
+            className="edd-theme-toggle"
+            onClick={(e) => setThemePref(e.shiftKey ? "system" : resolvedTheme === "dark" ? "light" : "dark")}
+            title={`Theme: ${themePref}${themePref === "system" ? ` (${resolvedTheme})` : ""} — click to toggle, ⇧-click for system`}
+            aria-label="Toggle color theme"
+            data-testid="theme-toggle"
+          >
+            <span className="edd-theme-glyph">{resolvedTheme === "dark" ? "☾" : "☀"}</span>
+            {themePref === "system" && <span className="edd-theme-auto">auto</span>}
+          </button>
+          <button
+            className="edd-topbar-hint"
+            onClick={() => setCodeCollapsed((c) => !c)}
+            title="Toggle the code panel (⌘B)"
+          >
+            {codeCollapsed ? "⟩ Show code" : "⟨ Focus mode"} <kbd>⌘B</kbd>
+          </button>
+        </div>
       </header>
 
-      <main className="edd-main edd-split">
-        <section className={`edd-editor-pane${codeCollapsed ? " edd-editor-pane--collapsed" : ""}`}>
+      <main className="edd-main edd-split" ref={mainRef}>
+        <section
+          className={`edd-editor-pane${codeCollapsed ? " edd-editor-pane--collapsed" : ""}`}
+          style={editorBasis != null && !codeCollapsed ? { flexBasis: `${editorBasis}px`, maxWidth: "none", minWidth: 0, flexShrink: 1 } : undefined}
+        >
           <div className="edd-editor-head">
             <span className="edd-editor-title">EDodoDraw code</span>
             <div className="edd-editor-head-right">
@@ -223,10 +302,22 @@ export default function App() {
           <DiagnosticsStrip diags={diags} errorCount={errorCount} warnCount={warnCount} />
         </section>
 
+        {!codeCollapsed && (
+          <Splitter
+            mainRef={mainRef}
+            pct={editorPct}
+            onResize={setEditorBasis}
+            onReset={() => setEditorBasis(null)}
+          />
+        )}
+
         <section className="edd-stage" data-testid="stage" ref={stageRef}>
           <CanvasView
             source={debounced}
-            onEngine={(e) => (engineRef.current = e)}
+            onEngine={(e) => {
+              engineRef.current = e;
+              e?.setColorScheme(resolvedTheme);
+            }}
             onState={setPlayerState}
             onLiveState={setLiveState}
             onEditState={setEditState}
@@ -264,6 +355,82 @@ export default function App() {
           <PlayerBar state={playerState} engine={eng} />
         </section>
       </main>
+    </div>
+  );
+}
+
+/**
+ * Draggable divider between the code pane and the canvas. Drives the editor's
+ * flex-basis in px (clamped so neither side collapses); double-click resets to
+ * the default. Keyboard-resizable for accessibility (role="separator").
+ */
+function Splitter({
+  mainRef, pct, onResize, onReset,
+}: {
+  mainRef: RefObject<HTMLElement | null>;
+  pct: number;
+  onResize: (basis: number) => void;
+  onReset: () => void;
+}) {
+  const dragging = useRef(false);
+  const clampToMain = (px: number): number => {
+    const main = mainRef.current;
+    const w = main ? main.getBoundingClientRect().width : 1200;
+    return clamp(px, MIN_EDITOR, Math.max(MIN_EDITOR, w - MIN_CANVAS));
+  };
+  const basisFromClientX = (clientX: number): number => {
+    const main = mainRef.current;
+    const left = main ? main.getBoundingClientRect().left : 0;
+    return clampToMain(clientX - left);
+  };
+  const onPointerDown = (e: ReactPointerEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    (e.currentTarget as HTMLElement).classList.add("is-dragging");
+  };
+  const onPointerMove = (e: ReactPointerEvent) => {
+    if (!dragging.current) return;
+    onResize(basisFromClientX(e.clientX));
+  };
+  const onPointerUp = (e: ReactPointerEvent) => {
+    dragging.current = false;
+    (e.currentTarget as HTMLElement).classList.remove("is-dragging");
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+  const onKeyDown = (e: ReactKeyboardEvent) => {
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      const pane = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement | null;
+      const cur = pane ? pane.getBoundingClientRect().width : MIN_EDITOR;
+      const step = (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 64 : 24);
+      onResize(clampToMain(cur + step));
+    } else if (e.key === "Enter" || e.key === "Backspace") {
+      e.preventDefault();
+      onReset();
+    }
+  };
+  return (
+    <div
+      className="edd-splitter"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize code and canvas panes"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={pct}
+      tabIndex={0}
+      data-testid="splitter"
+      title="Drag to resize · double-click to reset"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onLostPointerCapture={onPointerUp}
+      onDoubleClick={onReset}
+      onKeyDown={onKeyDown}
+    >
+      <span className="edd-splitter-grip" />
     </div>
   );
 }

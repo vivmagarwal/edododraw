@@ -15,9 +15,14 @@ export interface CompileEddResult {
   report: string[];
 }
 
-export function compileEdd(source: string): CompileEddResult {
+export interface CompileEddOptions {
+  /** Force light/dark render mode, overriding the DSL's declared theme. */
+  mode?: "light" | "dark";
+}
+
+export function compileEdd(source: string, opts: CompileEddOptions = {}): CompileEddResult {
   const { program, diagnostics } = parse(source);
-  const { scene } = compileProgram(program, { diagnostics });
+  const { scene } = compileProgram(program, { diagnostics, mode: opts.mode });
   const report = diagnostics.items.map((d) => formatDiagnostic(d, source));
   return { scene, diagnostics, report };
 }

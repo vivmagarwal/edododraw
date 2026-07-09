@@ -75,6 +75,8 @@ export class EdodoDraw {
   private listeners = new Map<EdodoEvent, Set<(payload: unknown) => void>>();
   private textInput: HTMLInputElement | null = null;
   private closeInput: ((commit: boolean) => void) | null = null;
+  private colorScheme: "light" | "dark" | null = null;
+  private hasRendered = false;
   private cleanup: Array<() => void> = [];
 
   constructor(container: HTMLElement, options: EdodoDrawOptions = {}) {
@@ -147,7 +149,7 @@ export class EdodoDraw {
   async render(source: string): Promise<RenderResult> {
     this.source = source;
     const seq = ++this.renderSeq;
-    const { scene, diagnostics } = compileEdd(source);
+    const { scene, diagnostics } = compileEdd(source, { mode: this.colorScheme ?? undefined });
     let diags = diagnostics.items;
 
     const blocks = extractMermaidBlocks(source);
@@ -166,6 +168,7 @@ export class EdodoDraw {
     if (seq !== this.renderSeq) return { scene, diagnostics: diags };
 
     this.scene = scene;
+    this.hasRendered = true;
     this.renderer.render(scene);
     this.player.load(scene);
     this.renderer.measure();
@@ -188,6 +191,24 @@ export class EdodoDraw {
   }
   getSource(): string {
     return this.source;
+  }
+
+  /**
+   * Force light/dark rendering, overriding the diagram's declared theme. Affects
+   * the canvas background, the dotted grid, and the diagram's default ink
+   * (strokes/text adapt for contrast on the dark canvas; explicit colors are
+   * kept). Pass `null` to fall back to the DSL's own theme. Re-renders the
+   * current source. Cheap and idempotent — no-ops if the scheme is unchanged.
+   */
+  setColorScheme(mode: "light" | "dark" | null): void {
+    if (this.colorScheme === mode) return;
+    this.colorScheme = mode;
+    // Re-render if we've rendered at all — including an empty ("") diagram, whose
+    // canvas background + grid still need re-theming.
+    if (this.hasRendered) void this.render(this.source);
+  }
+  getColorScheme(): "light" | "dark" | null {
+    return this.colorScheme;
   }
 
   // ---- camera -------------------------------------------------------------
@@ -335,7 +356,8 @@ export class EdodoDraw {
       c.style.backgroundImage = "none";
       return;
     }
-    c.style.backgroundImage = "radial-gradient(circle, #d5d9e0 1px, transparent 1px)";
+    const dot = this.scene.theme.gridColor;
+    c.style.backgroundImage = `radial-gradient(circle, ${dot} 1px, transparent 1px)`;
     c.style.backgroundSize = `${cell}px ${cell}px`;
     c.style.backgroundPosition = `${-cam.cx * cam.zoom + w / 2}px ${-cam.cy * cam.zoom + h / 2}px`;
   }
@@ -429,11 +451,18 @@ export class EdodoDraw {
 
   /** Inline text editor for renaming a node (double-click / new node). */
   private showRenameInput(id: string, current: string, screen: Point): void {
+    const dark = this.scene.theme.mode === "dark";
     this.openInlineInput({
       value: current,
       placeholder: "label…",
       screen,
-      style: { background: "#ffffff", color: "#1e1e1e", textAlign: "center", zIndex: "30", minWidth: "80px" },
+      style: {
+        background: dark ? "#23262d" : "#ffffff",
+        color: dark ? "#e6e7ea" : "#1e1e1e",
+        textAlign: "center",
+        zIndex: "30",
+        minWidth: "80px",
+      },
       onCommit: (v) => this.edit.applyRename(id, v),
     });
   }

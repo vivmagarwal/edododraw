@@ -42,6 +42,8 @@ Everything else is optional layering on top.
 | `overrides { id at (x, y) [size (w, h)] … }` | Pinned positions/sizes (usually machine-written by direct editing — see §11). |
 | `mermaid """ … """` | Import a raw Mermaid diagram (see IMPORT_AND_EXPORT_GUIDE.md). |
 
+A theme whose **name contains `dark`** renders in dark mode (near‑black canvas, light default ink, dark grid). An embedder can override the diagram's declared theme at the view level — `EdodoDraw.setColorScheme("dark")`, `<EdodoDrawView colorScheme>`, or `compileEdd(src, { mode })` — so the same source follows a host app's light/dark toggle (see INTEGRATION_GUIDE.md). Colors you set explicitly are always kept; only *default* ink adapts for contrast.
+
 Comments: `// line`, `%% line` (Mermaid-style), `/* block */` (nestable).
 
 ---

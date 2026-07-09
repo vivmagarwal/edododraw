@@ -98,6 +98,10 @@ new EdodoDraw(container: HTMLElement, options?: EdodoDrawOptions)
 | `render` | `(source: string) => Promise<RenderResult>` | Compile + render. `RenderResult = { scene: Scene; diagnostics: Diagnostic[] }`. |
 | `getScene` | `() => Scene` | The current rendered scene (Scene IR). |
 | `getSource` | `() => string` | The last source string passed to `render`. |
+| `setColorScheme` | `(mode: "light" \| "dark" \| null) => void` | Force light/dark rendering, overriding the diagram's declared theme. Re-themes the canvas background, the dotted grid, and the diagram's default ink (strokes/text adapt for contrast on the dark canvas; **explicit** colors are kept). `null` falls back to the DSL's own theme. Idempotent + re-renders the current source. |
+| `getColorScheme` | `() => "light" \| "dark" \| null` | The current forced scheme (`null` = follow the DSL). |
+
+**Light / dark theming.** A diagram's theme comes from the DSL (`theme dark { … }` / `use theme …`); `setColorScheme` / the `colorScheme` prop *override* it for the view, so you can wire EDodoDraw straight to your app's theme toggle. In dark mode the canvas goes near‑black, the dotted grid follows `theme.gridColor`, and **default** ink flips to light for contrast — but any color **you** set (`fill: green`, `stroke: red`, `textColor:`) is preserved. One nuance: because the default fill style is hand‑drawn *hachure* (the dark canvas shows through), labels on unfilled and hachure‑filled nodes use light ink; only a **solid** light fill (`fillStyle: solid`) keeps dark ink. Forcing a scheme also re‑themes exports (`downloadSVG`/`PNG`) — you export what you see.
 
 ### Camera
 
@@ -247,14 +251,20 @@ export function Diagram() {
 | `source` | `string` (required) | EDodoDraw source. Re-renders whenever it changes. |
 | `className` | `string` | On the host `<div>`. |
 | `style` | `CSSProperties` | Merged onto the host (which defaults to `width/height: 100%`). |
+| `colorScheme` | `"light" \| "dark" \| null` | Force light/dark rendering (see `setColorScheme`). Reactive — flip it to follow your app's theme. Omit/`null` follows the DSL's own theme. |
 | `onReady` | `(edd: EdodoDraw) => void` | Called **once** after mount with the imperative instance — use it to subscribe to events or grab a ref for camera/export. |
 | `onDiagnostics` | `(diags: Diagnostic[]) => void` | Wired to the `"diagnostics"` event. |
 | `onState` | `(state: PlayerState) => void` | Wired to the `"state"` event. |
 
 The host `<div>` fills its parent (`width/height: 100%`), so wrap it in a **sized**
 element. Note the `EdodoDrawOptions` props (`interactive`, `grid`, …) are read
-**once at mount**; only `source` is reactive. To change options at runtime, remount
-(e.g. via a React `key`).
+**once at mount**; `source` and `colorScheme` are reactive. To change other options
+at runtime, remount (e.g. via a React `key`).
+
+```tsx
+// follow the host app's theme (e.g. a "dark" boolean from your own toggle)
+<EdodoDrawView source={code} colorScheme={dark ? "dark" : "light"} />
+```
 
 ---
 
@@ -272,6 +282,11 @@ const { scene, diagnostics, report } = compileEdd(`scene { a -> b -> c }`);
 // report      : string[] — human-readable, source-annotated diagnostic blocks
 
 if (diagnostics.hasErrors) throw new Error(report.join("\n\n"));
+
+// Force a render mode (overrides the DSL's declared theme). Same knob the
+// facade's setColorScheme / <EdodoDrawView colorScheme> use under the hood:
+const dark = compileEdd(`scene { a -> b }`, { mode: "dark" });
+// dark.scene.theme.mode === "dark"; background + gridColor + default ink adapt.
 ```
 
 > `compileEdd` returns `diagnostics` as a **`DiagnosticBag`** (use `.items`,

@@ -287,22 +287,24 @@ const eddLanguage = StreamLanguage.define<EddTokState>({
 });
 
 // ---------------------------------------------------------------------------
-// Light highlight style + theme (soft, to match the site).
+// Highlight style + theme. Colors are driven by CSS custom properties (defined
+// in app.css via light-dark()), so the editor follows the app's light/dark
+// theme purely through the CSS cascade — no CodeMirror reconfiguration.
 // ---------------------------------------------------------------------------
 
 const eddHighlightStyle = HighlightStyle.define([
-  { tag: t.comment, color: "#8a8f98", fontStyle: "italic" },
-  { tag: t.string, color: "#2f9e44" },
-  { tag: t.number, color: "#e8590c" },
-  { tag: t.bool, color: "#e8590c" },
-  { tag: t.color, color: "#0c8599" },
-  { tag: t.variableName, color: "#6741d9" },
-  { tag: t.className, color: "#9c36b5" },
-  { tag: t.labelName, color: "#c2255c" },
-  { tag: t.operator, color: "#1971c2", fontWeight: "600" },
-  { tag: t.keyword, color: "#5f3dc4", fontWeight: "600" },
-  { tag: t.bracket, color: "#495057" },
-  { tag: t.punctuation, color: "#868e96" },
+  { tag: t.comment, color: "var(--cm-comment)", fontStyle: "italic" },
+  { tag: t.string, color: "var(--cm-str)" },
+  { tag: t.number, color: "var(--cm-num)" },
+  { tag: t.bool, color: "var(--cm-num)" },
+  { tag: t.color, color: "var(--cm-color)" },
+  { tag: t.variableName, color: "var(--cm-var)" },
+  { tag: t.className, color: "var(--cm-class)" },
+  { tag: t.labelName, color: "var(--cm-label)" },
+  { tag: t.operator, color: "var(--cm-op)", fontWeight: "600" },
+  { tag: t.keyword, color: "var(--cm-kw)", fontWeight: "600" },
+  { tag: t.bracket, color: "var(--cm-bracket)" },
+  { tag: t.punctuation, color: "var(--cm-punct)" },
 ]);
 
 const eddTheme = EditorView.theme(
@@ -310,8 +312,8 @@ const eddTheme = EditorView.theme(
     "&": {
       height: "100%",
       width: "100%",
-      backgroundColor: "#fbfbfd",
-      color: "#1f2430",
+      backgroundColor: "var(--cm-bg)",
+      color: "var(--cm-fg)",
       fontSize: '13.5px',
     },
     ".cm-scroller": {
@@ -320,43 +322,45 @@ const eddTheme = EditorView.theme(
       overflow: "auto",
     },
     ".cm-content": {
-      caretColor: "#6741d9",
+      caretColor: "var(--cm-caret)",
       padding: "8px 0",
     },
     ".cm-cursor, .cm-dropCursor": {
-      borderLeftColor: "#6741d9",
+      borderLeftColor: "var(--cm-caret)",
       borderLeftWidth: "2px",
     },
     "&.cm-focused": {
       outline: "none",
     },
     ".cm-gutters": {
-      backgroundColor: "#f2f3f7",
-      color: "#a0a6b0",
+      backgroundColor: "var(--cm-gutter-bg)",
+      color: "var(--cm-gutter-fg)",
       border: "none",
     },
     ".cm-activeLine": {
-      backgroundColor: "#f0eefc",
+      backgroundColor: "var(--cm-active)",
     },
     ".cm-activeLineGutter": {
-      backgroundColor: "#e7e2fb",
-      color: "#6741d9",
+      backgroundColor: "var(--cm-active-gutter-bg)",
+      color: "var(--cm-active-gutter-fg)",
     },
     ".cm-lineNumbers .cm-gutterElement": {
       padding: "0 12px 0 8px",
     },
     "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
       {
-        backgroundColor: "rgba(103, 65, 217, 0.18)",
+        backgroundColor: "var(--cm-sel)",
       },
     ".cm-matchingBracket, &.cm-focused .cm-matchingBracket": {
-      backgroundColor: "rgba(103, 65, 217, 0.16)",
-      outline: "1px solid rgba(103, 65, 217, 0.45)",
+      backgroundColor: "var(--cm-match-bg)",
+      outline: "1px solid var(--cm-match-outline)",
     },
     ".cm-nonmatchingBracket": {
       backgroundColor: "rgba(224, 49, 49, 0.14)",
     },
   },
+  // The chrome colors are theme-reactive via CSS vars; leave dark:false so
+  // CodeMirror doesn't inject its own dark-mode assumptions.
   { dark: false },
 );
 

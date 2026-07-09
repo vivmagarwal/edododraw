@@ -21,7 +21,7 @@ export const LIGHT_THEME: Theme = {
   background: "#ffffff",
   defaultStroke: STROKE_PALETTE.black,
   defaultText: STROKE_PALETTE.black,
-  gridColor: "#eceff3",
+  gridColor: "#d5d9e0",
   mode: "light",
 };
 
@@ -30,7 +30,7 @@ export const DARK_THEME: Theme = {
   background: "#121212",
   defaultStroke: "#e3e3e3",
   defaultText: "#e3e3e3",
-  gridColor: "#22262c",
+  gridColor: "#2c313a",
   mode: "dark",
 };
 

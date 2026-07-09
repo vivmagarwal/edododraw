@@ -192,7 +192,14 @@ export class SvgRenderer {
 
   render(scene: Scene): void {
     this.scene = scene;
-    this.bg.setAttribute("fill", scene.meta.background || scene.theme.background);
+    // Paint the background on the mount container, not the SVG rect: the host's
+    // dotted-grid background sits *behind* the SVG, so an opaque bg rect would
+    // occlude it. Keeping the on-screen rect transparent lets the grid show
+    // through. Export re-fills its own cloned rect (see export.ts), so exported
+    // SVG/PNG still get a solid background.
+    const bgColor = scene.meta.background || scene.theme.background;
+    this.bg.setAttribute("fill", "transparent");
+    this.container.style.backgroundColor = bgColor;
 
     // clear dynamic layers
     for (const name of ["groups", "edges", "nodes"]) this.layers[name].replaceChildren();

@@ -7,7 +7,7 @@
 import { applyLayout } from "../layout/index.js";
 import { applyOverrides } from "../scene/overrides.js";
 import { emptyScene, makeEdge, makeNode } from "../scene/defaults.js";
-import { resolveMarker } from "../scene/palette.js";
+import { isLightColor, resolveMarker } from "../scene/palette.js";
 import type {
   Annotation,
   AnnotationTarget,
@@ -51,6 +51,12 @@ import {
 
 export interface CompileOptions {
   diagnostics?: DiagnosticBag;
+  /**
+   * Force the render mode, overriding the mode derived from the active theme
+   * name. Used by the app/embedder's light/dark toggle so any diagram can be
+   * viewed dark without editing its source. `undefined` = derive from the DSL.
+   */
+  mode?: "light" | "dark";
 }
 
 export interface CompileResult {
@@ -206,7 +212,8 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
       for (const t of themes.get(name)!.tokens) tokenMap.set(t.name, t.value);
     }
   }
-  const mode: "light" | "dark" = themeName?.toLowerCase().includes("dark") ? "dark" : "light";
+  const derivedMode: "light" | "dark" = themeName?.toLowerCase().includes("dark") ? "dark" : "light";
+  const mode: "light" | "dark" = opts.mode ?? derivedMode;
 
   // ---- class chain resolution --------------------------------------------
   const classAttrs = (name: string, seen = new Set<string>()): { attrs: AttrBlock } => {
@@ -241,6 +248,7 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
     const classes = collectClasses(nd);
     const layered = styleFor("node", classes, nd.attrs);
     const built = buildNodeStyle(layered, tokenMap, mode);
+    applyDarkInk(built.style, mode);
     const shape = mapShape(built.shape ?? nd.shape);
     const label = built.label ?? nd.label ?? prettyId(id);
     const node = makeNode({
@@ -387,6 +395,31 @@ interface BuiltNode {
   w?: number;
   h?: number;
   pinned?: boolean;
+}
+
+/**
+ * Dark-mode contrast pass. In dark mode the canvas is near-black, but the fill
+ * palette stays the light Excalidraw pastels — so ink can't be a single color.
+ * The subtlety is fill *style*: the default is `hachure` (sketchy lines that
+ * don't cover the interior), so the dark canvas shows through and text/outline
+ * must be LIGHT to read. Only a **solid** light fill actually backs the label,
+ * and there DARK ink reads best (exactly as in light mode).
+ *
+ * Rule: solid + light fill → dark ink; everything else (hachure, no fill, dark
+ * fill) → light ink. Only fills gaps the author left unset — explicit
+ * stroke/textColor always win. A no-op in light mode. Also runs for
+ * DSL-declared `theme dark` diagrams, fixing their contrast too.
+ */
+const DARK_INK = "#1e1e1e";
+const LIGHT_INK = "#e3e3e3";
+function applyDarkInk(style: Partial<NodeStyle>, mode: "light" | "dark"): void {
+  if (mode !== "dark") return;
+  const solidLightFill = style.fillStyle === "solid" && isLightColor(style.fill ?? null);
+  const ink = solidLightFill ? DARK_INK : LIGHT_INK;
+  if (style.textColor === undefined) style.textColor = ink;
+  // Stroke: keep the light default (visible on the dark canvas); only darken it
+  // when the outline sits on a solid light fill.
+  if (style.stroke === undefined && solidLightFill) style.stroke = DARK_INK;
 }
 
 function buildNodeStyle(attrs: AttrBlock, tokens: Map<string, Value>, _mode: "light" | "dark"): BuiltNode {
@@ -606,6 +639,7 @@ function ensureInline(
   if (scene.nodes.some((n) => n.id === nd.id)) return;
   const layered = styleFor("node", nd.classes, nd.attrs);
   const built = buildNodeStyle(layered, tokens, mode);
+  applyDarkInk(built.style, mode);
   scene.nodes.push(
     makeNode({
       id: nd.id,

@@ -47,6 +47,26 @@ export const FILL_PALETTE = {
 export type ColorName = keyof typeof STROKE_PALETTE;
 
 /**
+ * Perceived-luminance test for a color, used to pick a contrasting "ink"
+ * (stroke/text) in dark mode: a light fill wants dark ink, a dark (or absent)
+ * fill wants light ink. Only hex is measured precisely; named/rgb() colors —
+ * which in this engine are almost always the light Open-Colors pastels — default
+ * to "light" so their ink stays dark and readable.
+ */
+export function isLightColor(color: string | null | undefined): boolean {
+  if (!color) return false; // no fill → sits on the (dark) canvas → wants light ink
+  const c = color.trim().toLowerCase();
+  let hex = c.startsWith("#") ? c.slice(1) : "";
+  if (hex.length === 3) hex = hex.replace(/./g, (ch) => ch + ch);
+  if (hex.length !== 6 || /[^0-9a-f]/.test(hex)) return true; // unparseable → assume light
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  // ITU-R BT.601 luma (0–255); ~150 splits the Excalidraw pastels from ink tones.
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150;
+}
+
+/**
  * Resolve a color token to a hex string.
  * - Named strokes: "green" -> #2f9e44
  * - Hex passthrough: "#ff0000" -> "#ff0000"

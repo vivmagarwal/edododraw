@@ -17,13 +17,18 @@ export interface EdodoDrawViewProps extends EdodoDrawOptions {
   source: string;
   className?: string;
   style?: CSSProperties;
+  /**
+   * Force light/dark rendering, overriding the diagram's declared theme.
+   * `null`/omitted follows the DSL's own theme. See `EdodoDraw.setColorScheme`.
+   */
+  colorScheme?: "light" | "dark" | null;
   /** Called once with the imperative instance after mount. */
   onReady?: (edd: EdodoDraw) => void;
   onDiagnostics?: (diags: Diagnostic[]) => void;
   onState?: (state: PlayerState) => void;
 }
 
-export function EdodoDrawView({ source, className, style, onReady, onDiagnostics, onState, ...opts }: EdodoDrawViewProps) {
+export function EdodoDrawView({ source, className, style, colorScheme, onReady, onDiagnostics, onState, ...opts }: EdodoDrawViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const eddRef = useRef<EdodoDraw | null>(null);
 
@@ -32,6 +37,7 @@ export function EdodoDrawView({ source, className, style, onReady, onDiagnostics
     if (!host) return;
     const edd = new EdodoDraw(host, opts);
     eddRef.current = edd;
+    if (colorScheme !== undefined) edd.setColorScheme(colorScheme); // before first render → no flash
     if (onDiagnostics) edd.on("diagnostics", onDiagnostics);
     if (onState) edd.on("state", onState);
     onReady?.(edd);
@@ -45,6 +51,11 @@ export function EdodoDrawView({ source, className, style, onReady, onDiagnostics
   useEffect(() => {
     void eddRef.current?.render(source);
   }, [source]);
+
+  useEffect(() => {
+    // `undefined` and `null` both mean "follow the DSL theme" — revert either way.
+    eddRef.current?.setColorScheme(colorScheme ?? null);
+  }, [colorScheme]);
 
   return <div ref={hostRef} className={className} style={{ width: "100%", height: "100%", ...style }} />;
 }

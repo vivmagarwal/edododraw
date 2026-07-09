@@ -1,5 +1,6 @@
 import { EdodoDrawView } from "../../lib/react.js";
 import { navigate, openInPlayground } from "../router.js";
+import { useResolvedTheme } from "../useTheme.js";
 
 const HERO = `scene {
   layout dag { direction: right, gap: 70 }
@@ -20,6 +21,7 @@ const FEATURES = [
 ];
 
 export function Home() {
+  const theme = useResolvedTheme();
   return (
     <div className="page home">
       <section className="hero">
@@ -46,7 +48,7 @@ export function Home() {
         </div>
         <div className="hero-demo">
           <div className="hero-demo-canvas">
-            <EdodoDrawView source={HERO} interactive grid />
+            <EdodoDrawView source={HERO} interactive grid colorScheme={theme} />
           </div>
           <button className="hero-demo-edit" onClick={() => openInPlayground(HERO)}>Edit this ↗</button>
         </div>
