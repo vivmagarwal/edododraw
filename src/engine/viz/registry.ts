@@ -10,14 +10,41 @@ import { VizContext } from "./context.js";
 import type { VizDef, VizResult, VizSpec } from "./types.js";
 
 const generators = new Map<string, VizDef>();
+/** alias -> canonical name (for docs/introspection; resolution uses `generators`). */
+const aliasIndex = new Map<string, string>();
 
 export function registerViz(def: VizDef): void {
   generators.set(def.name, def);
-  for (const alias of def.aliases ?? []) generators.set(alias, def);
+  for (const alias of def.aliases ?? []) {
+    generators.set(alias, def);
+    aliasIndex.set(alias, def.name);
+  }
+}
+
+/**
+ * Register an extra LLM-friendly alias for an already-registered template.
+ * Silently skips (and warns in dev) on a name/alias collision so one careless
+ * synonym can never shadow a real template.
+ */
+export function registerVizAlias(alias: string, canonical: string): void {
+  const def = generators.get(canonical);
+  if (!def) return;
+  const existing = generators.get(alias);
+  if (existing) {
+    if (existing !== def && typeof console !== "undefined") console.warn(`viz alias '${alias}' already resolves elsewhere — skipped`);
+    return;
+  }
+  generators.set(alias, def);
+  aliasIndex.set(alias, def.name);
 }
 
 export function getViz(name: string): VizDef | undefined {
   return generators.get(name);
+}
+
+/** Every alias -> canonical-name mapping (for docs + the language spec). */
+export function listVizAliases(): Array<{ alias: string; canonical: string }> {
+  return [...aliasIndex.entries()].map(([alias, canonical]) => ({ alias, canonical }));
 }
 
 /** Unique defs (aliases deduped), sorted by category then name. */

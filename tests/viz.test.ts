@@ -8,7 +8,8 @@
 
 import { describe, expect, it } from "vitest";
 import { compileEdd } from "../src/engine/dsl/index.js";
-import { getViz, listViz } from "../src/engine/viz/registry.js";
+import { getViz, listViz, listVizAliases } from "../src/engine/viz/registry.js";
+import { VIZ_ALIASES } from "../src/engine/viz/aliases.js";
 import { listStylePresets, listReferencePresets, roleStyle, getStylePreset } from "../src/engine/style/presets.js";
 import { luma } from "../src/engine/style/color.js";
 import { VIZ_DEMOS } from "../src/site/vizDemos.js";
@@ -43,6 +44,53 @@ describe("viz registry", () => {
       expect(def.category.length, def.name).toBeGreaterThan(0);
       expect(def.summary.length, def.name).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("viz aliases (LLM-friendly synonyms)", () => {
+  it("every alias resolves to its canonical template", () => {
+    const problems: string[] = [];
+    for (const [canonical, aliases] of Object.entries(VIZ_ALIASES)) {
+      if (!getViz(canonical)) problems.push(`missing canonical ${canonical}`);
+      for (const a of aliases) {
+        const def = getViz(a);
+        if (!def) problems.push(`unregistered alias ${a}`);
+        else if (def.name !== canonical) problems.push(`${a} -> ${def.name}, expected ${canonical}`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it("no alias shadows a canonical template name", () => {
+    const canonicals = new Set(listViz().map((d) => d.name));
+    const clashes = Object.values(VIZ_ALIASES).flat().filter((a) => canonicals.has(a));
+    expect(clashes).toEqual([]);
+  });
+
+  it("no duplicate aliases across templates", () => {
+    const all = Object.values(VIZ_ALIASES).flat();
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it("natural-language synonyms compile", () => {
+    const cases: Record<string, string> = {
+      leaderboard: `viz leaderboard "Top" { item "A"; item "B"; item "C" }`,
+      "conversion-funnel": `viz conversion-funnel "F" { item "Leads" 100; item "Won" 10 }`,
+      "cause-effect": `viz cause-effect "Why" { item "A" "x"; item "B" "y" }`,
+      constraint: `viz constraint "Neck" { in: "30"; out: "8" }`,
+      "mind-map": `viz mind-map "M" { item "A" { item "x" } }`,
+      "venn-diagram": `viz venn-diagram "V" { set "A"; set "B" }`,
+    };
+    for (const [alias, src] of Object.entries(cases)) {
+      const { scene, diagnostics } = compileEdd(src);
+      const errors = diagnostics.items.filter((d) => d.severity === "error");
+      expect(errors, `${alias}: ${errors.map((e) => e.message).join("; ")}`).toEqual([]);
+      expect(scene.nodes.length, alias).toBeGreaterThan(0);
+    }
+  });
+
+  it("exposes the alias index for docs", () => {
+    expect(listVizAliases().length).toBeGreaterThanOrEqual(Object.values(VIZ_ALIASES).flat().length);
   });
 });
 

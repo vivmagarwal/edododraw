@@ -41,6 +41,25 @@ Entry attributes understood everywhere: `icon:` (glyph name, §5), `color:`/`fil
 
 Multiple `viz` blocks in one document stack vertically; a `viz` block after a `scene` graph is placed below it.
 
+### Reaching a template by name
+
+Each template has a canonical `<type>` (the catalog below) **plus a generous set of natural-language aliases**, so you can write the intent however you'd phrase it — an unknown type produces a diagnostic listing every canonical name. A few examples:
+
+| you can write… | you get |
+|---|---|
+| `viz leaderboard` / `ranking` / `winners` | `podium` |
+| `viz conversion-funnel` / `sales-funnel` / `pipeline` | `funnel` |
+| `viz cause-effect` / `why` / `causes` | `root-causes` |
+| `viz constraint` / `chokepoint` / `throughput` | `bottleneck` |
+| `viz mind-map` / `brainstorm` / `topics` | `mindmap` |
+| `viz scorecard` / `dashboard` / `kpis` | `performance` |
+| `viz venn-diagram` / `overlap` / `sets` | `venn` |
+| `viz dial` / `meter` / `speedometer` | `gauge` |
+| `viz five-forces` / `porters-five-forces` | `porters` |
+| `viz gap` / `migration` / `span` | `bridge` |
+
+The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ_ALIASES` / `listVizAliases()`).
+
 ---
 
 ## 2. Catalog
