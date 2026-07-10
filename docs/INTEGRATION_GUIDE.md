@@ -140,25 +140,47 @@ interactive **modes**. All of this requires `interactive: true`.
 diagram and every change is patched back into the source (emitted as the `"edit"`
 event — see below), keeping the code the single source of truth:
 
-- **select / move** — click a node to select (8-handle box); drag to move.
-- **resize** — drag a handle. Move/resize write an `overrides { … }` block (see DSL_LANGUAGE_GUIDE §11).
+- **select** — click a node to select it (dashed box). **Shift-click** adds/removes a
+  node from the selection; **drag on empty canvas** rubber-bands a marquee over several
+  nodes; **⌘/Ctrl-A** selects all. Clicking one node in a multi-selection collapses to it.
+- **move** — drag any selected node; the whole selection moves together.
+- **resize** — drag a handle (shown only for a single selection). The cursor reflects
+  the gesture: `move` over a node, directional resize over a handle.
+- **nudge** — arrow keys move the selection 1px (**Shift** = 10px).
 - **rename** — double-click a node, type, `Enter`.
+- **duplicate / copy / paste** — **⌘/Ctrl-D** duplicates in place; **⌘/Ctrl-C** then
+  **⌘/Ctrl-V** copies and pastes (offset so copies don't stack).
 - **add** — pick `rect`/`ellipse`/`diamond`/`text` and drag on empty canvas; `arrow` drags between two nodes to connect them.
-- **delete** — `Delete`/`Backspace` on the selection.
+- **edit an arrow** — click an arrow to select it (highlighted, with a handle at each
+  end). **Drag an endpoint** onto another node to reconnect it; **double-click** the
+  arrow to edit its label; `Delete` removes it. Deleting an arrow keeps its nodes.
+  (Canvas-drawn arrows are simple two-node edges; for a fan/chain edge written in code
+  — `a, b -> c` or `a -> b -> c` — deleting on canvas removes the whole statement.)
+- **delete** — `Delete`/`Backspace` removes the whole selection (nodes or the arrow).
+- **undo / redo** — **⌘/Ctrl-Z** and **⇧⌘/Ctrl-Z** (or **Ctrl-Y**) step through the
+  diagram-edit history. History is per-document: typing in your own code editor, or
+  loading a new document, resets it (your editor owns text undo).
+
+Move/resize/nudge write an `overrides { … }` block (see DSL_LANGUAGE_GUIDE §11); the
+other ops surgically patch declarations. All of it round-trips to the `.edd` source.
 
 | Method | Signature | Notes |
 |---|---|---|
 | `applyStyle` | `(id, { fill?, stroke?, shape? }) => void` | Upsert style attrs on a node's declaration (e.g. `{ fill: green }`). |
-| `renameSelected` | `() => void` | Open the rename field for the current selection. |
-| `deleteSelected` | `() => void` | Delete the selection (node decl + its edges + its override). |
+| `applyStyleMany` | `(ids, { fill?, stroke?, shape? }) => void` | Same, across several nodes in **one** undo step (drives multi-select restyle). |
+| `duplicateSelected` | `() => void` | Clone the selection in place (fresh ids, small offset). |
+| `renameSelected` | `() => void` | Open the rename field for the current selection's primary node. |
+| `deleteSelected` | `() => void` | Delete the whole selection (node decls + their edges + overrides). |
+| `undo` / `redo` | `() => void` | Step the active mode's history — **diagram edits** in `edit` mode, annotations in `annotate` mode. |
+| `editUndo` / `editRedo` | `() => boolean` | Explicitly step the diagram-edit history (returns `false` when the stack is empty). |
+| `clearEditHistory` | `() => void` | Drop the diagram-edit undo/redo stacks (e.g. after loading a document). |
 | `fitNext` | `() => void` | Fit the whole diagram on the next render (e.g. after loading a new document). |
-| `editor` | `get editor(): EditController` | The underlying edit controller (`clearSelection`, `getTool`, …). |
+| `editor` | `get editor(): EditController` | The underlying edit controller (`clearSelection`, `getSelected`, `getTool`, …). |
 
 ### Live annotations
 
 | Method | Signature | Notes |
 |---|---|---|
-| `undo` / `redo` | `() => void` | Undo/redo live annotation edits. |
 | `clearAnnotations` | `() => void` | Remove all live annotations. |
 | `annotationsToCode` | `() => string` | Serialize live annotations back to an `annotate { … }` DSL block. |
 | `annotator` | `get annotator(): LiveAnnotationController` | The underlying controller. |
@@ -191,7 +213,7 @@ event — see below), keeping the code the single source of truth:
 | `"state"` | `PlayerState` `{ index, total, caption, playing, stepName }` | Timeline position/playing changes. `index === -1` is the home/overview state (before any beat; `stepName` is `"Overview"`). |
 | `"live"` | `LiveState` `{ tool, count, canUndo, canRedo, selected }` | Live-annotation tool/selection/undo state changes. |
 | `"edit"` | `source: string` | A direct-manipulation edit patched the source. Re-render with this new source (and mirror it into your code editor). |
-| `"editstate"` | `EditState` `{ tool, selected }` | Edit-mode tool or node selection changes (drive a property panel / toolbar highlight). |
+| `"editstate"` | `EditState` `{ tool, selected: string[], selectedEdge, canUndo, canRedo }` | Edit-mode tool, node selection (an array — supports multi-select), selected edge id, or undo/redo availability changes (drive a property panel / toolbar). |
 
 A `Diagnostic` has `{ severity: "error"|"warning"|"info", code, message, line, col,
 start, end, expected?, found?, hint? }` (see `src/engine/dsl/diagnostics.ts`).

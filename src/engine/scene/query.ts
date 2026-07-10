@@ -3,7 +3,7 @@
  * space. Used by the camera (fit/focus), layout, and annotation anchoring.
  */
 
-import type { BBox, Rect } from "../geometry.js";
+import type { BBox, Point, Rect } from "../geometry.js";
 import { bboxOfPoints, bboxUnion, emptyBBox, rectToBBox } from "../geometry.js";
 import { nodeRect } from "./anchors.js";
 import type { Scene, SceneEdge, SceneGroup, SceneNode } from "./types.js";
@@ -83,6 +83,35 @@ export function hitTestNode(scene: Scene, p: { x: number; y: number }): SceneNod
   for (const n of scene.nodes) {
     if (p.x >= n.x && p.x <= n.x + n.w && p.y >= n.y && p.y <= n.y + n.h) {
       if (!best || n.z >= best.z) best = n;
+    }
+  }
+  return best;
+}
+
+/** Distance from a point to a segment [a,b]. */
+function distToSegment(p: { x: number; y: number }, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/** Nearest routed edge within `tol` world units of the point, or null. */
+export function hitTestEdge(scene: Scene, p: { x: number; y: number }, tol: number): SceneEdge | null {
+  let best: SceneEdge | null = null;
+  let bestD = tol;
+  for (const e of scene.edges) {
+    const pts = e.points;
+    if (!pts || pts.length < 2) continue;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const d = distToSegment(p, pts[i], pts[i + 1]);
+      if (d <= bestD) {
+        bestD = d;
+        best = e;
+      }
     }
   }
   return best;

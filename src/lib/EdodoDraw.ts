@@ -79,6 +79,10 @@ export class EdodoDraw {
   private stylePreset: string | null = null;
   private hasRendered = false;
   private cleanup: Array<() => void> = [];
+  // Diagram-edit history (source snapshots). Every direct-manipulation edit
+  // rounds through the source, so undo/redo is just a stack of past sources.
+  private editUndoStack: string[] = [];
+  private editRedoStack: string[] = [];
 
   constructor(container: HTMLElement, options: EdodoDrawOptions = {}) {
     this.container = container;
@@ -102,8 +106,9 @@ export class EdodoDraw {
       getScene: () => this.scene,
       getSource: () => this.source,
       onSource: (next) => this.applyEdit(next),
-      onState: (s) => this.emit("editstate", s),
+      onState: (s) => this.emitEditState(s),
       onRequestRename: (id, current, screen) => this.showRenameInput(id, current, screen),
+      onCursor: (c) => { this.container.style.cursor = c; },
     });
 
     this.player.onChange = (s) => this.emit("state", s);
@@ -118,11 +123,48 @@ export class EdodoDraw {
     this.edit.render();
   }
 
-  /** Apply a source edit from direct manipulation. Keeps `source` fresh for
-   *  chained edits and notifies the host, which re-renders (single render). */
+  /** Apply a source edit from direct manipulation. Records the pre-edit source
+   *  on the undo stack, keeps `source` fresh for chained edits, and notifies the
+   *  host, which re-renders (single render). */
   private applyEdit(next: string): void {
+    if (next === this.source) return;
+    this.editUndoStack.push(this.source);
+    if (this.editUndoStack.length > 200) this.editUndoStack.shift();
+    this.editRedoStack = [];
     this.source = next;
     this.emit("edit", next);
+    this.emitEditState();
+  }
+
+  /** Undo the last diagram edit (move/resize/add/delete/rename/style/…). */
+  editUndo(): boolean {
+    const prev = this.editUndoStack.pop();
+    if (prev === undefined) return false;
+    this.editRedoStack.push(this.source);
+    this.source = prev;
+    this.emit("edit", prev);
+    this.emitEditState();
+    return true;
+  }
+  /** Redo the last undone diagram edit. */
+  editRedo(): boolean {
+    const next = this.editRedoStack.pop();
+    if (next === undefined) return false;
+    this.editUndoStack.push(this.source);
+    this.source = next;
+    this.emit("edit", next);
+    this.emitEditState();
+    return true;
+  }
+  /** Clear the diagram-edit history (e.g. when loading a fresh document). */
+  clearEditHistory(): void {
+    this.editUndoStack = [];
+    this.editRedoStack = [];
+    this.emitEditState();
+  }
+  private emitEditState(s?: EditState): void {
+    const base = s ?? this.edit.state();
+    this.emit("editstate", { ...base, canUndo: this.editUndoStack.length > 0, canRedo: this.editRedoStack.length > 0 });
   }
 
   // ---- events -------------------------------------------------------------
@@ -148,6 +190,14 @@ export class EdodoDraw {
    * runs are discarded.
    */
   async render(source: string): Promise<RenderResult> {
+    // A source that didn't come from a direct-manipulation edit / undo / redo
+    // (i.e. typing in the code editor or loading a document) invalidates the
+    // diagram-edit history — the code editor owns its own text undo.
+    if (source !== this.source && (this.editUndoStack.length || this.editRedoStack.length)) {
+      this.editUndoStack = [];
+      this.editRedoStack = [];
+      this.emitEditState();
+    }
     this.source = source;
     const seq = ++this.renderSeq;
     const { scene, diagnostics } = compileEdd(source, { mode: this.colorScheme ?? undefined, stylePreset: this.stylePreset ?? undefined });
@@ -278,13 +328,20 @@ export class EdodoDraw {
     if (EDIT_TOOLS.has(tool)) {
       this.mode = "edit";
       this.edit.setTool(tool as EditTool);
-      this.container.style.cursor = tool === "select" || tool === "hand" ? "grab" : "crosshair";
+      this.container.style.cursor = this.baseCursor();
     } else if (tool in ANNOT_MAP) {
       this.mode = "annotate";
       this.edit.clearSelection();
       this.live.setTool(ANNOT_MAP[tool]);
       this.container.style.cursor = "crosshair";
     }
+  }
+  /** Resting cursor for the active edit tool (hover overrides it live). */
+  private baseCursor(): string {
+    const t = this.edit.getTool();
+    if (t === "hand") return "grab";
+    if (t === "select") return "default";
+    return "crosshair";
   }
   /** Fit the whole diagram on the next render (used when loading an example). */
   fitNext(): void {
@@ -296,6 +353,13 @@ export class EdodoDraw {
   applyStyle(id: string, style: { fill?: string; stroke?: string; shape?: string }): void {
     this.edit.applyStyle(id, style);
   }
+  /** Apply a style to several nodes in one undo step. */
+  applyStyleMany(ids: string[], style: { fill?: string; stroke?: string; shape?: string }): void {
+    this.edit.applyStyleMany(ids, style);
+  }
+  duplicateSelected(): void {
+    this.edit.duplicateSelected();
+  }
   deleteSelected(): void {
     this.edit.deleteSelected();
   }
@@ -303,12 +367,15 @@ export class EdodoDraw {
     this.edit.requestRenameSelected();
   }
 
-  // ---- live annotations ---------------------------------------------------
+  // ---- undo / redo --------------------------------------------------------
+  /** Undo the current mode's last action (diagram edit, or annotation). */
   undo(): void {
-    this.live.undo();
+    if (this.mode === "edit") this.editUndo();
+    else this.live.undo();
   }
   redo(): void {
-    this.live.redo();
+    if (this.mode === "edit") this.editRedo();
+    else this.live.redo();
   }
   clearAnnotations(): void {
     this.live.clear();
@@ -408,7 +475,7 @@ export class EdodoDraw {
       if (e.button !== 0) return;
       const local = this.localPoint(e);
       const world = this.renderer.screenToWorld(local);
-      const handled = this.mode === "edit" ? this.edit.pointerDown(world, local) : this.live.pointerDown(world, local);
+      const handled = this.mode === "edit" ? this.edit.pointerDown(world, local, { shift: e.shiftKey }) : this.live.pointerDown(world, local);
       if (handled) {
         host.setPointerCapture(e.pointerId);
         return;
@@ -420,8 +487,9 @@ export class EdodoDraw {
       host.style.cursor = "grabbing";
     });
     add("pointermove", (e) => {
-      const world = this.renderer.screenToWorld(this.localPoint(e));
-      if (this.mode === "edit") this.edit.pointerMove(world);
+      const local = this.localPoint(e);
+      const world = this.renderer.screenToWorld(local);
+      if (this.mode === "edit") this.edit.pointerMove(world, local);
       else this.live.pointerMove(world);
       if (!dragging) return;
       this.player.pause();
@@ -441,7 +509,7 @@ export class EdodoDraw {
       } catch {
         /* ignore */
       }
-      host.style.cursor = this.mode === "edit" && (this.edit.getTool() === "select" || this.edit.getTool() === "hand") ? "grab" : "crosshair";
+      host.style.cursor = this.mode === "edit" ? this.baseCursor() : "crosshair";
     });
     add("dblclick", (e) => {
       if (this.mode !== "edit") return;
@@ -454,6 +522,26 @@ export class EdodoDraw {
       const t = e.target as HTMLElement | null;
       const tag = t?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable || t?.closest?.("[contenteditable='true'], .cm-editor")) return;
+
+      // ⌘/Ctrl chords: undo/redo/duplicate/copy/paste/select-all.
+      const meta = (e.metaKey || e.ctrlKey) && !e.altKey;
+      if (meta) {
+        const k = e.key.toLowerCase();
+        if (k === "z") {
+          if (this.mode === "annotate") { if (this.live.handleKey(e)) e.preventDefault(); return; }
+          if (e.shiftKey ? this.editRedo() : this.editUndo()) e.preventDefault();
+          return;
+        }
+        if (k === "y") { if (this.mode === "edit" && this.editRedo()) e.preventDefault(); return; }
+        if (this.mode === "edit") {
+          if (k === "d") { if (this.edit.duplicateSelected()) e.preventDefault(); return; }
+          if (k === "c") { if (this.edit.copySelected()) e.preventDefault(); return; }
+          if (k === "v") { if (this.edit.paste()) e.preventDefault(); return; }
+          if (k === "a") { this.edit.selectAll(); e.preventDefault(); return; }
+        }
+        return; // leave other ⌘ chords (⌘B/⌘I handled by the app) alone
+      }
+
       if (this.mode === "edit" && this.edit.handleKey(e)) {
         e.preventDefault();
         return;

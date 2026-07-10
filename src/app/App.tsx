@@ -180,7 +180,8 @@ export default function App() {
   }, []);
 
   // Reset per-selection inspector state whenever the selected node changes.
-  const selectedId = editState?.selected ?? null;
+  const selectedIds = editState?.selected ?? [];
+  const selectedId = selectedIds.length ? selectedIds[selectedIds.length - 1] : null;
   useEffect(() => {
     setInspectorCollapsed(false);
     dockPinned.current = false;
@@ -349,10 +350,11 @@ export default function App() {
               <span className="edd-code-reveal-text">CODE</span>
             </button>
           )}
-          <Toolbar activeTool={activeTool} engine={eng} liveState={liveState} onCommit={commitAnnotations} />
+          <Toolbar activeTool={activeTool} engine={eng} editState={editState} liveState={liveState} onCommit={commitAnnotations} />
           {selectedNode && (
             <PropertyPanel
               node={selectedNode}
+              selectedIds={selectedIds}
               engine={eng}
               side={inspectorSide}
               collapsed={inspectorCollapsed}
@@ -361,6 +363,15 @@ export default function App() {
                 dockPinned.current = true;
                 setInspectorSide((s) => (s === "left" ? "right" : "left"));
               }}
+              onDelete={() => eng?.deleteSelected()}
+              onRename={() => eng?.renameSelected()}
+              onDuplicate={() => eng?.duplicateSelected()}
+            />
+          )}
+          {editState?.selectedEdge && !selectedNode && (
+            <EdgePanel
+              engine={eng}
+              side={inspectorSide}
               onDelete={() => eng?.deleteSelected()}
               onRename={() => eng?.renameSelected()}
             />
@@ -448,8 +459,10 @@ function Splitter({
   );
 }
 
-function Toolbar({ activeTool, engine, liveState, onCommit }: { activeTool: string; engine: CanvasEngine | null; liveState: LiveState | null; onCommit: () => void }) {
+function Toolbar({ activeTool, engine, editState, liveState, onCommit }: { activeTool: string; engine: CanvasEngine | null; editState: EditState | null; liveState: LiveState | null; onCommit: () => void }) {
   const annCount = liveState?.count ?? 0;
+  const canUndo = !!editState?.canUndo || !!liveState?.canUndo;
+  const canRedo = !!editState?.canRedo || !!liveState?.canRedo;
   return (
     <div className="edd-toolbar" data-testid="toolbar" role="toolbar" aria-label="Editing tools">
       <div className="edd-tool-group" title="Edit tools">
@@ -468,17 +481,18 @@ function Toolbar({ activeTool, engine, liveState, onCommit }: { activeTool: stri
         ))}
       </div>
       <span className="edd-toolbar-sep" />
-      <button title="Undo annotation (⌘Z)" disabled={!liveState?.canUndo} onClick={() => engine?.undo()}>↶</button>
-      <button title="Redo annotation" disabled={!liveState?.canRedo} onClick={() => engine?.redo()}>↷</button>
+      <button title="Undo (⌘Z)" disabled={!canUndo} onClick={() => engine?.undo()}>↶</button>
+      <button title="Redo (⇧⌘Z)" disabled={!canRedo} onClick={() => engine?.redo()}>↷</button>
       <button title="Commit annotations to code" className="commit" disabled={annCount === 0} onClick={onCommit} data-testid="commit-btn">⤓</button>
     </div>
   );
 }
 
 function PropertyPanel({
-  node, engine, side, collapsed, onToggleCollapsed, onToggleSide, onDelete, onRename,
+  node, selectedIds, engine, side, collapsed, onToggleCollapsed, onToggleSide, onDelete, onRename, onDuplicate,
 }: {
   node: { id: string; shape: string; style: { fill: string | null; stroke: string } };
+  selectedIds: string[];
   engine: CanvasEngine | null;
   side: Side;
   collapsed: boolean;
@@ -486,9 +500,14 @@ function PropertyPanel({
   onToggleSide: () => void;
   onDelete: () => void;
   onRename: () => void;
+  onDuplicate: () => void;
 }) {
   const fill = node.style.fill;
   const stroke = node.style.stroke;
+  const multi = selectedIds.length > 1;
+  // Style edits apply to the whole selection; the swatches reflect the primary.
+  const ids = selectedIds.length ? selectedIds : [node.id];
+  const style = (s: { fill?: string; stroke?: string; shape?: string }) => engine?.applyStyleMany(ids, s);
   // A swatch is "active" if its palette name OR its hex matches the node's value.
   const isFill = (c: string) => c === fill || SWATCH_HEX[c] === fill;
   const isStroke = (c: string) => c === stroke || STROKE_HEX[c] === stroke;
@@ -500,7 +519,7 @@ function PropertyPanel({
       data-side={side}
     >
       <div className="edd-props-head">
-        <span className="edd-props-title">Selection</span>
+        <span className="edd-props-title">{multi ? `${selectedIds.length} selected` : "Selection"}</span>
         <div className="edd-props-head-actions">
           <button className="edd-props-dock" title={`Dock ${side === "left" ? "right" : "left"}`} aria-label="Move inspector to the other side" onClick={onToggleSide}>⇄</button>
           <button className="edd-props-collapse" title="Collapse inspector (⌘I)" aria-label="Collapse inspector" aria-expanded={!collapsed} onClick={onToggleCollapsed}>{collapsed ? "⌄" : "⌃"}</button>
@@ -519,7 +538,7 @@ function PropertyPanel({
             <span className="edd-props-label">Stroke</span>
             <div className="edd-swatches">
               {STROKE_SWATCHES.map((c) => (
-                <button key={c} className={`edd-swatch${isStroke(c) ? " is-active" : ""}`} style={{ background: STROKE_HEX[c] }} title={c} aria-label={`Stroke ${c}`} onClick={() => engine?.applyStyle(node.id, { stroke: c })} />
+                <button key={c} className={`edd-swatch${isStroke(c) ? " is-active" : ""}`} style={{ background: STROKE_HEX[c] }} title={c} aria-label={`Stroke ${c}`} onClick={() => style({ stroke: c })} />
               ))}
             </div>
           </div>
@@ -533,25 +552,43 @@ function PropertyPanel({
                   style={{ background: SWATCH_HEX[c] }}
                   title={c}
                   aria-label={`Fill ${c}`}
-                  onClick={() => engine?.applyStyle(node.id, { fill: c })}
+                  onClick={() => style({ fill: c })}
                 />
               ))}
             </div>
           </div>
           <div className="edd-props-row edd-props-row--shape">
             <span className="edd-props-label">Shape</span>
-            <select className="edd-shape-select" value={SHAPES.includes(node.shape) ? node.shape : ""} onChange={(e) => engine?.applyStyle(node.id, { shape: e.target.value })}>
+            <select className="edd-shape-select" value={SHAPES.includes(node.shape) ? node.shape : ""} onChange={(e) => style({ shape: e.target.value })}>
               {SHAPES.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </div>
           <div className="edd-props-actions">
-            <button onClick={onRename} title="Rename (double-click the shape)">✎ Rename</button>
+            {!multi && <button onClick={onRename} title="Rename (double-click the shape)">✎ Rename</button>}
+            <button onClick={onDuplicate} title="Duplicate (⌘D)">⧉ Duplicate</button>
             <button onClick={onDelete} className="danger" title="Delete (Del)" data-testid="del-btn">🗑 Delete</button>
           </div>
         </div>
       )}
+    </aside>
+  );
+}
+
+function EdgePanel({ engine, side, onDelete, onRename }: { engine: CanvasEngine | null; side: Side; onDelete: () => void; onRename: () => void }) {
+  return (
+    <aside className={`edd-props${side === "right" ? " edd-props--right" : ""}`} data-testid="edge-props" data-side={side}>
+      <div className="edd-props-head">
+        <span className="edd-props-title">Arrow</span>
+      </div>
+      <div className="edd-props-body">
+        <p className="edd-props-hint">Drag either end to reconnect it. Double-click to edit the label.</p>
+        <div className="edd-props-actions">
+          <button onClick={onRename} title="Edit the arrow's label">✎ Label</button>
+          <button onClick={onDelete} className="danger" title="Delete (Del)" data-testid="edge-del-btn">🗑 Delete</button>
+        </div>
+      </div>
     </aside>
   );
 }

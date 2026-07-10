@@ -13,7 +13,7 @@
  */
 
 import { parse } from "./parser.js";
-import type { NodeDecl, Program, SceneDecl, SceneStmt } from "./ast.js";
+import type { EdgeDecl, Endpoint, NodeDecl, Program, SceneDecl, SceneStmt } from "./ast.js";
 
 export interface OverrideEntry {
   id: string;
@@ -44,6 +44,22 @@ function findNodeDecl(program: Program, id: string): NodeDecl | undefined {
     if (s.type === "scene") walkNodes(s.statements, (n) => { if (n.id === id && !found) found = n; });
   }
   return found;
+}
+
+/** Locate the edge statement (and the hop) that produces the `from -> to` pair. */
+function findEdgeStmt(program: Program, from: string, to: string): { edge: EdgeDecl; hop: number } | undefined {
+  for (const s of program.statements) {
+    if (s.type !== "scene") continue;
+    for (const st of s.statements) {
+      if (st.type !== "edge") continue;
+      for (let h = 0; h < st.ops.length; h++) {
+        const a = st.groups[h]?.some((e) => e.id === from);
+        const b = st.groups[h + 1]?.some((e) => e.id === to);
+        if (a && b) return { edge: st, hop: h };
+      }
+    }
+  }
+  return undefined;
 }
 
 // ---- string helpers ---------------------------------------------------------
@@ -176,6 +192,48 @@ export function addEdge(source: string, edge: { from: string; to: string; glyph?
   const glyph = edge.glyph ?? "-->";
   const label = edge.label ? ` "${edge.label.replace(/"/g, '\\"')}"` : "";
   return insertIntoScene(source, program, `${edge.from} ${glyph} ${edge.to}${label}`);
+}
+
+/**
+ * Delete the edge producing the `from -> to` pair. A simple two-node edge is
+ * removed whole; for a fan/chain statement the whole statement is removed
+ * (safe, no partial rewrite) — canvas-drawn arrows are always simple, so this
+ * matches "delete this arrow" exactly.
+ */
+export function deleteEdge(source: string, from: string, to: string): string {
+  const { program } = parse(source);
+  const hit = findEdgeStmt(program, from, to);
+  if (!hit) return source;
+  return removeLines(source, hit.edge.span.start, hit.edge.span.end).replace(/\n{3,}/g, "\n\n");
+}
+
+/** Re-point one end of a simple edge to a different node (drag an endpoint). */
+export function reconnectEdge(source: string, from: string, to: string, which: "from" | "to", newId: string): string {
+  const { program } = parse(source);
+  const hit = findEdgeStmt(program, from, to);
+  if (!hit) return source;
+  const group = which === "from" ? hit.edge.groups[hit.hop] : hit.edge.groups[hit.hop + 1];
+  const ep: Endpoint | undefined = group?.find((e) => e.id === (which === "from" ? from : to));
+  if (!ep) return source;
+  // Replace the whole endpoint span (id + any .anchor/@uv) with the plain new id.
+  return splice(source, ep.span.start, ep.span.end, newId);
+}
+
+/** Set / replace the trailing label of a simple edge (no attr block). */
+export function setEdgeLabel(source: string, from: string, to: string, label: string): string {
+  const { program } = parse(source);
+  const hit = findEdgeStmt(program, from, to);
+  if (!hit || hit.edge.attrs.length) return source; // skip edges carrying an attr block
+  const quoted = `"${label.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  const text = source.slice(hit.edge.span.start, hit.edge.span.end);
+  // replace the LAST quoted string (the label) in the statement, if any
+  const matches = [...text.matchAll(/(['"])(?:\\.|(?!\1).)*\1/g)];
+  const last = matches[matches.length - 1];
+  if (hit.edge.label != null && last && last.index != null) {
+    const start = hit.edge.span.start + last.index;
+    return splice(source, start, start + last[0].length, quoted);
+  }
+  return splice(source, hit.edge.span.end, hit.edge.span.end, ` ${quoted}`);
 }
 
 /** Delete a node: remove its decl, any edges mentioning it, and its override. */

@@ -424,6 +424,7 @@ body {
 .edd-props-dock:hover, .edd-props-collapse:hover { background: var(--edd-panel); color: var(--edd-ink); border-color: var(--edd-border); }
 
 .edd-props-body { display: flex; flex-direction: column; gap: 13px; padding: 13px; }
+.edd-props-hint { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--edd-muted); }
 .edd-props-row { display: flex; flex-direction: column; gap: 7px; }
 .edd-props-label { font-size: 10.5px; font-weight: 800; color: var(--edd-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .edd-swatches { display: flex; flex-wrap: wrap; gap: 5px; }
