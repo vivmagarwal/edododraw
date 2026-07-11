@@ -12,7 +12,7 @@ import type { DiagnosticBag } from "../dsl/diagnostics.js";
 import { roleStyle, type RoleOptions, type RoleStyle, type StylePreset } from "../style/presets.js";
 import { measureBlock, measureText, wrapText } from "./text.js";
 import { iconPath, ICON_VIEWBOX } from "./icons.js";
-import type { VizBounds, VizResult } from "./types.js";
+import type { VizBounds, VizItem, VizResult } from "./types.js";
 
 export interface LabelOptions {
   size?: number;
@@ -29,6 +29,8 @@ export interface LabelOptions {
   id?: string;
   z?: number;
   opacity?: number;
+  /** Semantic tag ("label" | "value" | "detail" | …) — see VizContext.item(). */
+  role?: string;
 }
 
 export interface ShapeOptions {
@@ -37,6 +39,8 @@ export interface ShapeOptions {
   z?: number;
   data?: Record<string, unknown>;
   style?: Partial<NodeStyle>;
+  /** Semantic tag ("shape" | "icon" | …) — see VizContext.item(). */
+  role?: string;
 }
 
 export interface LineOptions {
@@ -59,13 +63,49 @@ export class VizContext {
 
   private seq = 0;
   private usedIds = new Set<string>();
+  private currentItem: string | null = null;
 
   constructor(
     readonly vizId: string,
     readonly preset: StylePreset,
     readonly mode: "light" | "dark",
     readonly diags: DiagnosticBag,
+    /** From the block's `showValues:` option — generators consult showValue(). */
+    readonly showValues: boolean = true,
   ) {}
+
+  // ---- data-item scoping -----------------------------------------------------
+
+  /**
+   * Run `fn` with every emitted element tagged as belonging to data item
+   * `itemId`: members carry `data.vizItem = "<vizId>.<itemId>"` (plus a
+   * `data.vizRole` semantic tag) and surface in the DOM as
+   * `data-viz-item`/`data-viz-role` attributes, so hosts can select or
+   * choreograph one item's elements as a unit. Query members with
+   * vizItemMembers(); `<vizId>.<itemId>` also works as an annotation/camera/
+   * reveal target.
+   */
+  item<T>(itemId: string, fn: () => T): T {
+    const prev = this.currentItem;
+    this.currentItem = itemId;
+    try {
+      return fn();
+    } finally {
+      this.currentItem = prev;
+    }
+  }
+
+  /** The `data` payload for an element emitted under the current item scope. */
+  private tagged(data: Record<string, unknown> | undefined, role: string): Record<string, unknown> | undefined {
+    if (!this.currentItem) return data;
+    return { ...data, vizItem: `${this.vizId}.${this.currentItem}`, vizRole: role };
+  }
+
+  /** Should this item's numeric value be printed? (block `showValues:` +
+   *  per-item `showValue:` — values still drive geometry either way). */
+  showValue(item: VizItem): boolean {
+    return this.showValues && item.opts.showValue !== false;
+  }
 
   // ---- style ---------------------------------------------------------------
 
@@ -129,7 +169,7 @@ export class VizContext {
       style: { ...style, ...opts.style },
       z: opts.z ?? 0,
       pinned: true,
-      data: opts.data,
+      data: this.tagged(opts.data, opts.role ?? "shape"),
       mode: this.mode,
     });
     this.nodes.push(node);
@@ -160,7 +200,7 @@ export class VizContext {
         roughness: this.preset.roughness,
         strokeStyle: opts.dash ? "dashed" : opts.dotted ? "dotted" : "solid",
       },
-      { id: opts.id, z: opts.z, data: { points: norm } },
+      { id: opts.id, z: opts.z, data: { points: norm }, role: "line" },
     );
     if (opts.arrow && points.length >= 2) {
       const [x2, y2] = points[points.length - 1];
@@ -183,7 +223,7 @@ export class VizContext {
       Math.max(w, 0.01),
       Math.max(h, 0.01),
       { stroke: color, fill: null, fillStyle: "none", strokeWidth: width, roughness: this.preset.roughness },
-      { z, data: { points: norm } },
+      { z, data: { points: norm }, role: "line" },
     );
   }
 
@@ -219,7 +259,7 @@ export class VizContext {
       size,
       size,
       { stroke: color, fill: null, fillStyle: "none", strokeWidth, roughness: Math.min(0.8, this.preset.roughness) },
-      { z: z ?? 3, data: { d, vw: ICON_VIEWBOX, vh: ICON_VIEWBOX } },
+      { z: z ?? 3, data: { d, vw: ICON_VIEWBOX, vh: ICON_VIEWBOX }, role: "icon" },
     );
   }
 
@@ -236,6 +276,7 @@ export class VizContext {
       label: opts.label,
       style: { stroke: this.preset.edge, strokeWidth: Math.min(2, this.preset.strokeWidth), roughness: this.preset.roughness, ...opts.style },
       routing: opts.routing,
+      data: this.tagged(undefined, "edge"),
       mode: this.mode,
     });
     if (typeof from !== "string") edge.from = { node: null, point: from };
@@ -289,6 +330,7 @@ export class VizContext {
       },
       z: opts.z ?? 2,
       pinned: true,
+      data: this.tagged(undefined, opts.role ?? "label"),
       mode: this.mode,
     });
     this.nodes.push(node);
@@ -320,7 +362,7 @@ export class VizContext {
     const anchor = opts.vAnchor ?? "middle";
     const top = anchor === "top" ? y : anchor === "bottom" ? y - totalH : y - totalH / 2;
     this.label(labelText, x, top + lm.h / 2, { color: opts.color ?? this.ink, align, font: "heading", weight: this.preset.fonts.headingWeight, size });
-    if (detailText) this.label(detailText, x, top + lm.h + 6 + dm.h / 2, { color: this.mutedInk, align, size: 15 });
+    if (detailText) this.label(detailText, x, top + lm.h + 6 + dm.h / 2, { color: this.mutedInk, align, size: 15, role: "detail" });
     const w = Math.max(lm.w, dm.w);
     const bx = align === "left" ? x : align === "right" ? x - w : x - w / 2;
     return { x: bx, y: top, w, h: totalH };
@@ -335,6 +377,7 @@ export class VizContext {
       font: "title",
       weight: 700,
       z: 3,
+      role: "title",
     });
   }
 

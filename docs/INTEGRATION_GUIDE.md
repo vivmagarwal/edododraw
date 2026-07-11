@@ -21,7 +21,7 @@ npm i edododraw
 - **Mermaid import** (`@excalidraw/mermaid-to-excalidraw`) ships as an
   _optionalDependency_: it's installed by default, but install won't fail if it's
   unavailable, and it's **lazy-loaded** only when a `mermaid` block is actually
-  rendered. See [§6](#6-mermaid-note).
+  rendered. See [§7](#7-mermaid-note).
 - **React is optional.** It's a _peer_ dependency needed only for the
   `edododraw/react` entry. For the core `edododraw` entry you don't need React at
   all.
@@ -90,6 +90,8 @@ new EdodoDraw(container: HTMLElement, options?: EdodoDrawOptions)
 | `grid` | `boolean` | `true` | Draw a dotted grid that pans/zooms with the camera (a CSS background on the container). |
 | `autoFit` | `boolean` | `true` | Fit the whole diagram into view after each `render()`. |
 | `padding` | `number` | `80` | Screen-px padding used when fitting. |
+| `static` | `boolean` | `false` | **Deterministic frame rendering**: disables ALL wall-clock CSS (visibility transitions, animated arrows — the overlay isn't even emitted —, reveal animations) so screenshot/video consumers never capture a frame mid-transition. See [Frame-driven / video integration](#6-frame-driven--video-integration-remotion-capture-pipelines). |
+| `startHidden` | `boolean` | `false` | Mount with every node/edge hidden and no annotations, so choreographed embeds never flash the full diagram before the host applies its first state. |
 
 ### Render / scene
 
@@ -360,7 +362,96 @@ facade in `src/lib/EdodoDraw.ts` is the reference for how these compose.
 
 ---
 
-## 6. Mermaid note
+## 6. Frame-driven / video integration (Remotion, capture pipelines)
+
+Hosts that own time — video renderers (Remotion), Puppeteer capture, scrubbers,
+bake pipelines — should not rely on the interactive player's rAF tweens or the
+engine's wall-clock CSS: a frame screenshot can catch a 0.45 s opacity
+transition or an arrow animation mid-flight. The engine has a first-class mode
+for this:
+
+```ts
+const edd = new EdodoDraw(el, {
+  static: true,       // no wall-clock CSS at all — every frame is final
+  startHidden: true,  // nothing flashes before your first applied state
+  interactive: false,
+  autoFit: false,
+});
+await edd.render(source);
+```
+
+**What `static: true` guarantees**
+
+- No `transition:` on nodes/edges (visibility changes are instant).
+- Animated-arrow overlays (`flow`, `draw-on`, `comet`, …) are **not emitted**;
+  the hand-drawn base stroke + arrowheads still render fully.
+- Annotation/beat reveal animations are disabled.
+- Rendering is fully deterministic: node/edge/annotation strokes all use
+  id-hash/fixed rough.js seeds, so the same scene renders stroke-identical
+  across re-renders and worker processes.
+
+**Driving the timeline frame-by-frame.** `timeline { … }` compiles to pure data
+(`scene.steps`); resolve it per frame with the pure helpers (no clock, no DOM):
+
+```ts
+import { stepStateAt, resolveCameraDirective, mixCameras, easingByName } from "edododraw";
+
+// beat index + progress come from YOUR clock (e.g. VO word timestamps)
+const state = edd.stepState(beatIndex);       // = stepStateAt(edd.getScene(), i)
+edd.applyStepState(state);                    // visibility + annotations + sticky camera, instantly
+
+// or by hand, for interpolated magic-move between beats:
+const vp = { w: 1920, h: 1080 };
+const from = resolveCameraDirective(scene, stepStateAt(scene, i - 1).effectiveCamera, vp);
+const to   = resolveCameraDirective(scene, stepStateAt(scene, i).effectiveCamera, vp);
+const cam  = mixCameras(from, to, easingByName("ease-in-out")(progress01)); // zoom mixes in log space
+edd.camera.setImmediate(cam);
+```
+
+`StepState` gives you `hidden` (sticky visibility through this step),
+`annotations` (always-on + beat-scoped), `revealFx`, `caption`,
+`autoAdvanceMs`, and `effectiveCamera` (the directive in force — camera is
+sticky). The interactive `TimelinePlayer` is built on the same functions, so
+one `.edd` file powers docs, playground and video identically.
+
+**Draw-on progress.** Sweep any element on like it's being hand-drawn — strokes
+first (stroke-dashoffset in draw order), then labels fade:
+
+```ts
+edd.setRevealProgress("api", p);              // node or edge id, p = 0..1
+edd.setRevealProgress("loads.intrinsic", p);  // a whole viz item as one drawing
+// p ≥ 1 restores the untouched rendering (original dash patterns included)
+```
+
+**Choreographing viz internals.** Every element a viz template emits for one
+data entry is tagged with its item — in the Scene IR (`node.data.vizItem =
+"loads.intrinsic"`, plus `data.vizRole`: `"shape" | "label" | "detail" |
+"icon" | "value" | "line" | "edge"`) and in the DOM:
+
+```html
+<g data-node="loads.rectangle_5" data-viz-item="loads.intrinsic" data-viz-role="shape">…</g>
+```
+
+```ts
+import { vizItemMembers, listVizItems } from "edododraw";
+vizItemMembers(scene, "loads.intrinsic");  // -> all member element ids
+listVizItems(scene);                        // -> every "block.item" key in the scene
+```
+
+`block.item` keys work everywhere ids do: annotation targets
+(`strike loads.intrinsic`), timeline `reveal`/`hide`, camera `focus`, and
+`setRevealProgress`. `applyVisibility` is exposed on the facade for direct
+show/hide control (`edd.applyVisibility(hiddenIds)`).
+
+**Validating `.edd` before rendering.** `listVizTemplates()` returns the
+machine-readable template catalog — `{ name, aliases, category, summary,
+entryKinds, options, sweetSpot }` — so tooling can lint viz blocks without a
+browser. Unresolvable annotation or timeline targets surface as
+`W-ANNOT-TARGET` / `W-STEP-TARGET` diagnostics instead of silently no-oping.
+
+---
+
+## 7. Mermaid note
 
 You can embed raw Mermaid inside EDodoDraw source:
 
@@ -392,7 +483,7 @@ exported from `edododraw` if you want to drive the import yourself. See
 
 ---
 
-## 7. SSR / bundler notes
+## 8. SSR / bundler notes
 
 - **The facade needs a DOM.** `new EdodoDraw(el)` and its methods use browser globals
   — `document`, `window`, `getComputedStyle`, `ResizeObserver`, `requestAnimationFrame`
@@ -401,6 +492,11 @@ exported from `edododraw` if you want to drive the import yourself. See
   (which is exactly what `EdodoDrawView` does), never during render or on the server.
 - **`compileEdd` is DOM-free.** Use it for server-side validation, computing a scene
   ahead of time, or CI checks — no browser or jsdom required.
+- **Headless SVG rendering works under jsdom.** `SvgRenderer` needs a DOM but not a
+  *browser*: give it a jsdom document (set the `document`/`window` globals, mount into
+  a div, render, serialize `renderer.svg.outerHTML`) and you can bake SVGs in Node/CI.
+  This repo's visual-QA harness (`scripts/qa/render-viz.mts`) is a working reference —
+  it renders all 62 viz templates headlessly this way. Pair with `{ static: true }`.
 - **Fonts are self-contained.** The hand-drawn font (Excalifont/Virgil) is embedded
   as a base64 `@font-face` in the engine's injected CSS and in every exported SVG —
   **no external font file or CDN is needed**. The live canvas injects this CSS once
@@ -419,7 +515,7 @@ exported from `edododraw` if you want to drive the import yourself. See
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom | Likely cause & fix |
 |---|---|

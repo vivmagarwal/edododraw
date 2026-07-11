@@ -36,3 +36,17 @@ export function cameraForBBox(bbox: BBox, viewport: Size, opts: FitOptions = {})
 export function cameraForCenter(center: { x: number; y: number }, zoom: number): CameraTransform {
   return { cx: center.x, cy: center.y, zoom };
 }
+
+/**
+ * Interpolate between two cameras exactly like the animated CameraController
+ * does (zoom in log space, position linear). `t` is 0..1, already eased —
+ * frame-driven hosts pair this with easingByName() + resolveCameraDirective()
+ * to reproduce the magic-move deterministically.
+ */
+export function mixCameras(a: CameraTransform, b: CameraTransform, t: number): CameraTransform {
+  return {
+    cx: a.cx + (b.cx - a.cx) * t,
+    cy: a.cy + (b.cy - a.cy) * t,
+    zoom: a.zoom * Math.pow(b.zoom / a.zoom, t),
+  };
+}

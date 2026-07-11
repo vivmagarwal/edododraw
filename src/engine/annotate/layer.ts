@@ -43,7 +43,8 @@ export class AnnotationLayer {
       try {
         const g = this.draw(scene, an);
         if (g) {
-          if (animate) g.classList.add(revealClass(an.kind));
+          // static renderers never animate reveals (frame determinism)
+          if (animate && !this.renderer.isStatic) g.classList.add(revealClass(an.kind));
           this.root.appendChild(g);
         }
       } catch (err) {

@@ -30,6 +30,9 @@ interface BulletOpts {
   maxW: number;
   size?: number;
   pitch?: number;
+  /** Tag each entry's dot+text via ctx.item(entry.id) — for lists whose entries
+   *  are the template's own data items (not children of an enclosing item). */
+  scopeItems?: boolean;
 }
 
 /** Bullet list (dot + wrapped text); returns the height consumed. */
@@ -38,17 +41,27 @@ function bulletList(ctx: VizContext, entries: VizItem[], x: number, y: number, o
   const size = opts.size ?? 15;
   const pitch = opts.pitch ?? 42;
   entries.forEach((entry, i) => {
-    const cy = y + i * pitch + pitch / 2;
-    ctx.shape("circle", x, cy - dotD / 2, dotD, dotD, {
-      stroke: opts.dotColor,
-      fill: opts.dotColor,
-      fillStyle: "solid",
-      strokeWidth: 1,
-      roughness: ctx.preset.roughness,
-    });
-    ctx.label(ctx.wrap(entry.label, opts.maxW, size, undefined, 2), x + dotD + 12, cy, { size, color: opts.textColor, align: "left" });
+    const draw = (): void => {
+      const cy = y + i * pitch + pitch / 2;
+      ctx.shape("circle", x, cy - dotD / 2, dotD, dotD, {
+        stroke: opts.dotColor,
+        fill: opts.dotColor,
+        fillStyle: "solid",
+        strokeWidth: 1,
+        roughness: ctx.preset.roughness,
+      });
+      ctx.label(ctx.wrap(entry.label, opts.maxW, size, undefined, 2), x + dotD + 12, cy, { size, color: opts.textColor, align: "left" });
+    };
+    if (opts.scopeItems) ctx.item(entry.id, draw);
+    else draw();
   });
   return entries.length * pitch;
+}
+
+/** Run `fn` scoped to `item` when it exists; fallback-only parts stay untagged. */
+function inItem(ctx: VizContext, item: VizItem | undefined, fn: () => void): void {
+  if (item) ctx.item(item.id, fn);
+  else fn();
 }
 
 const lineCount = (wrapped: string): number => wrapped.split("\n").length;
@@ -59,6 +72,8 @@ registerViz({
   name: "swot",
   category: "Business Frameworks",
   summary: "Stacked S/W/O/T panels with a big display letter, title and bullets.",
+  entryKinds: ["item", "section"],
+  sweetSpot: { min: 4, max: 4 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "section");
     const n = Math.max(items.length, 1);
@@ -77,33 +92,35 @@ registerViz({
       panelH = Math.max(panelH, need);
     }
 
-    items.forEach((item, i) => {
-      const role = ctx.role(i, { n, color: item.color });
-      const y = i * (panelH + 18);
-      ctx.shape("rectangle", 0, y, W, panelH, role, { id: ctx.uid(item.id), style: { roundness: role.roundness ?? 8 } });
-      const accent = onPanel(role);
-      const body = inPanel(ctx, role);
-      // big display letter in the left third
-      const letter = (item.label.trim()[0] ?? "?").toUpperCase();
-      ctx.label(letter, 95, y + panelH / 2, { size: 110, color: accent, weight: 700, font: "heading" });
-      if (item.icon) ctx.icon(item.icon, 95, y + panelH - 34, 30, accent);
-      let cy = y + pad + 12;
-      ctx.label(ctx.wrap(item.label, contentW, 20, "heading", 2), contentX, cy, {
-        size: 20,
-        color: accent,
-        align: "left",
-        vAnchor: "top",
-        font: "heading",
-        weight: ctx.preset.fonts.headingWeight,
-      });
-      cy += 36;
-      if (item.detail) {
-        const text = ctx.wrap(item.detail, contentW, 15);
-        ctx.label(text, contentX, cy, { size: 15, color: body, align: "left", vAnchor: "top" });
-        cy += lineCount(text) * 19 + 10;
-      }
-      bulletList(ctx, item.children, contentX, cy, { dotColor: accent, textColor: body, maxW: contentW - 24, pitch });
-    });
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n, color: item.color });
+        const y = i * (panelH + 18);
+        ctx.shape("rectangle", 0, y, W, panelH, role, { id: ctx.uid(item.id), style: { roundness: role.roundness ?? 8 } });
+        const accent = onPanel(role);
+        const body = inPanel(ctx, role);
+        // big display letter in the left third
+        const letter = (item.label.trim()[0] ?? "?").toUpperCase();
+        ctx.label(letter, 95, y + panelH / 2, { size: 110, color: accent, weight: 700, font: "heading" });
+        if (item.icon) ctx.icon(item.icon, 95, y + panelH - 34, 30, accent);
+        let cy = y + pad + 12;
+        ctx.label(ctx.wrap(item.label, contentW, 20, "heading", 2), contentX, cy, {
+          size: 20,
+          color: accent,
+          align: "left",
+          vAnchor: "top",
+          font: "heading",
+          weight: ctx.preset.fonts.headingWeight,
+        });
+        cy += 36;
+        if (item.detail) {
+          const text = ctx.wrap(item.detail, contentW, 15);
+          ctx.label(text, contentX, cy, { size: 15, color: body, align: "left", vAnchor: "top" });
+          cy += lineCount(text) * 19 + 10;
+        }
+        bulletList(ctx, item.children, contentX, cy, { dotColor: accent, textColor: body, maxW: contentW - 24, pitch });
+      }),
+    );
   },
 });
 
@@ -113,6 +130,8 @@ registerViz({
   name: "pestel",
   category: "Business Frameworks",
   summary: "Vertical category cards — big letter, title, summary, bullets.",
+  entryKinds: ["item", "card", "category", "factor"],
+  sweetSpot: { min: 4, max: 6 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "card", "category", "factor");
     const n = Math.max(items.length, 1);
@@ -130,27 +149,29 @@ registerViz({
       cardH = Math.max(cardH, need);
     }
 
-    items.forEach((item, i) => {
-      const role = ctx.role(i, { n, color: item.color });
-      const x = i * (W + gap);
-      ctx.shape("rectangle", x, 0, W, cardH, role, { id: ctx.uid(item.id), style: { roundness: role.roundness ?? 8 } });
-      const accent = onPanel(role);
-      const body = inPanel(ctx, role);
-      const cx = x + W / 2;
-      const letter = (item.label.trim()[0] ?? "?").toUpperCase();
-      ctx.label(letter, cx, 52, { size: 64, color: accent, weight: 700, font: "heading" });
-      if (item.icon) ctx.icon(item.icon, cx, 52, 30, accent);
-      let cy = 96;
-      const title = ctx.wrap(item.label, contentW, 20, "heading", 3);
-      ctx.label(title, cx, cy, { size: 20, color: accent, vAnchor: "top", font: "heading", weight: ctx.preset.fonts.headingWeight });
-      cy += lineCount(title) * 25 + 14;
-      if (item.detail) {
-        const text = ctx.wrap(item.detail, contentW, 15);
-        ctx.label(text, x + pad, cy, { size: 15, color: body, align: "left", vAnchor: "top" });
-        cy += lineCount(text) * 19 + 14;
-      }
-      bulletList(ctx, item.children, x + pad, cy, { dotD: 7, dotColor: accent, textColor: body, maxW: contentW - 22, pitch: 54 });
-    });
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n, color: item.color });
+        const x = i * (W + gap);
+        ctx.shape("rectangle", x, 0, W, cardH, role, { id: ctx.uid(item.id), style: { roundness: role.roundness ?? 8 } });
+        const accent = onPanel(role);
+        const body = inPanel(ctx, role);
+        const cx = x + W / 2;
+        const letter = (item.label.trim()[0] ?? "?").toUpperCase();
+        ctx.label(letter, cx, 52, { size: 64, color: accent, weight: 700, font: "heading" });
+        if (item.icon) ctx.icon(item.icon, cx, 52, 30, accent);
+        let cy = 96;
+        const title = ctx.wrap(item.label, contentW, 20, "heading", 3);
+        ctx.label(title, cx, cy, { size: 20, color: accent, vAnchor: "top", font: "heading", weight: ctx.preset.fonts.headingWeight });
+        cy += lineCount(title) * 25 + 14;
+        if (item.detail) {
+          const text = ctx.wrap(item.detail, contentW, 15);
+          ctx.label(text, x + pad, cy, { size: 15, color: body, align: "left", vAnchor: "top" });
+          cy += lineCount(text) * 19 + 14;
+        }
+        bulletList(ctx, item.children, x + pad, cy, { dotD: 7, dotColor: accent, textColor: body, maxW: contentW - 22, pitch: 54 });
+      }),
+    );
   },
 });
 
@@ -161,6 +182,12 @@ registerViz({
   aliases: ["2x2", "matrix"],
   category: "Comparison",
   summary: "2×2 matrix on double-headed axes; items in TL/TR/BL/BR order.",
+  entryKinds: ["item", "quadrant"],
+  options: [
+    { name: "xLabels", type: "string[]", description: "x-axis end captions as [negative, positive]" },
+    { name: "yLabels", type: "string[]", description: "y-axis end captions as [negative, positive]" },
+  ],
+  sweetSpot: { min: 4, max: 4 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "quadrant").slice(0, 4);
     const W = 720;
@@ -208,32 +235,34 @@ registerViz({
       [W * 0.25, H * 0.75],
       [W * 0.75, H * 0.75],
     ];
-    items.forEach((item, i) => {
-      const role = ctx.role(i, { n: 4, color: item.color });
-      const [qx, qy] = centers[i];
-      const maxW = W / 2 - 80;
-      const bullets = item.children.slice(0, 3);
-      const detailText = !bullets.length && item.detail ? ctx.wrap(item.detail, maxW, 15) : undefined;
-      const blockH = (item.icon ? 58 : 0) + 30 + (bullets.length ? bullets.length * 38 : detailText ? lineCount(detailText) * 19 + 8 : 0);
-      let y = qy - blockH / 2;
-      if (item.icon) {
-        ctx.icon(item.icon, qx, y + 23, 44, role.color);
-        y += 58;
-      }
-      ctx.label(ctx.wrap(item.label, maxW, 20, "heading", 2), qx, y + 12, {
-        size: 20,
-        color: role.color,
-        font: "heading",
-        weight: ctx.preset.fonts.headingWeight,
-        id: ctx.uid(item.id),
-      });
-      y += 34;
-      if (bullets.length) {
-        bulletList(ctx, bullets, qx - maxW / 2, y, { dotD: 8, dotColor: role.color, textColor: ctx.ink, maxW: maxW - 24, pitch: 38 });
-      } else if (detailText) {
-        ctx.label(detailText, qx, y, { size: 15, color: ctx.mutedInk, vAnchor: "top" });
-      }
-    });
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n: 4, color: item.color });
+        const [qx, qy] = centers[i];
+        const maxW = W / 2 - 80;
+        const bullets = item.children.slice(0, 3);
+        const detailText = !bullets.length && item.detail ? ctx.wrap(item.detail, maxW, 15) : undefined;
+        const blockH = (item.icon ? 58 : 0) + 30 + (bullets.length ? bullets.length * 38 : detailText ? lineCount(detailText) * 19 + 8 : 0);
+        let y = qy - blockH / 2;
+        if (item.icon) {
+          ctx.icon(item.icon, qx, y + 23, 44, role.color);
+          y += 58;
+        }
+        ctx.label(ctx.wrap(item.label, maxW, 20, "heading", 2), qx, y + 12, {
+          size: 20,
+          color: role.color,
+          font: "heading",
+          weight: ctx.preset.fonts.headingWeight,
+          id: ctx.uid(item.id),
+        });
+        y += 34;
+        if (bullets.length) {
+          bulletList(ctx, bullets, qx - maxW / 2, y, { dotD: 8, dotColor: role.color, textColor: ctx.ink, maxW: maxW - 24, pitch: 38 });
+        } else if (detailText) {
+          ctx.label(detailText, qx, y, { size: 15, color: ctx.mutedInk, vAnchor: "top" });
+        }
+      }),
+    );
   },
 });
 
@@ -243,6 +272,7 @@ registerViz({
   name: "table",
   category: "Comparison",
   summary: "Grid of individually drawn cells; each column stroked its own color.",
+  entryKinds: ["row", "item", "header"],
   generate(spec: VizSpec, ctx: VizContext) {
     const rows = spec.items.filter((i) => i.kind === "row" || i.kind === "item" || i.kind === "header");
     let header: VizItem | undefined;
@@ -294,11 +324,13 @@ registerViz({
       y += headerH + 5;
     }
     body.forEach((row) => {
-      for (let j = 0; j < cols; j++) {
-        const text = cellsOf(row)[j] ?? "";
-        ctx.shape("rectangle", colX[j], y, colW[j], bodyH, cellStyle(j), { id: j === 0 ? ctx.uid(row.id) : undefined, style: { roundness: 6 } });
-        if (text) ctx.label(ctx.wrap(text, colW[j] - 14, 15, undefined, 2), colX[j] + colW[j] / 2, y + bodyH / 2, { size: 15, color: ctx.ink });
-      }
+      ctx.item(row.id, () => {
+        for (let j = 0; j < cols; j++) {
+          const text = cellsOf(row)[j] ?? "";
+          ctx.shape("rectangle", colX[j], y, colW[j], bodyH, cellStyle(j), { id: j === 0 ? ctx.uid(row.id) : undefined, style: { roundness: 6 } });
+          if (text) ctx.label(ctx.wrap(text, colW[j] - 14, 15, undefined, 2), colX[j] + colW[j] / 2, y + bodyH / 2, { size: 15, color: ctx.ink });
+        }
+      });
       y += bodyH + 5;
     });
   },
@@ -311,6 +343,11 @@ registerViz({
   aliases: ["pros-cons"],
   category: "Comparison",
   summary: "Two panels — pros with a check, cons with a cross — as bullet lists.",
+  entryKinds: ["pro", "con", "item"],
+  options: [
+    { name: "proColor", type: "string", description: "override the pros panel color" },
+    { name: "conColor", type: "string", description: "override the cons panel color" },
+  ],
   generate(spec: VizSpec, ctx: VizContext) {
     let pros = spec.items.filter((i) => i.kind === "pro");
     let cons = spec.items.filter((i) => i.kind === "con");
@@ -353,7 +390,7 @@ registerViz({
         ],
         { color: accent, width: 1.6 },
       );
-      bulletList(ctx, entries, x + pad, 82, { dotColor: accent, textColor: body, maxW: panelW - pad * 2 - 24 });
+      bulletList(ctx, entries, x + pad, 82, { dotColor: accent, textColor: body, maxW: panelW - pad * 2 - 24, scopeItems: true });
     };
     panel(0, proTitle, proRole, pros, "check", "pros");
     panel(panelW + gap, conTitle, conRole, cons, "x", "cons");
@@ -367,6 +404,7 @@ registerViz({
   aliases: ["vs"],
   category: "Comparison",
   summary: "Two contenders compared criterion by criterion around a center gutter.",
+  entryKinds: ["left", "right", "item", "contender", "criterion", "row"],
   generate(spec: VizSpec, ctx: VizContext) {
     let left = spec.items.find((i) => i.kind === "left");
     let right = spec.items.find((i) => i.kind === "right");
@@ -387,29 +425,39 @@ registerViz({
     const rowsH = Math.max(criteria.length, 1) * pitch;
 
     // contender header bars
-    ctx.shape("rectangle", 0, 0, sideW, headerH, lRole, { id: ctx.uid(left?.id ?? "left"), style: { roundness: lRole.roundness ?? 8 } });
-    ctx.label(left?.label ?? "A", sideW / 2, headerH / 2, { size: 26, color: onPanel(lRole), font: "heading", weight: 700, maxW: sideW - 30 });
-    ctx.shape("rectangle", W - sideW, 0, sideW, headerH, rRole, { id: ctx.uid(right?.id ?? "right"), style: { roundness: rRole.roundness ?? 8 } });
-    ctx.label(right?.label ?? "B", W - sideW / 2, headerH / 2, { size: 26, color: onPanel(rRole), font: "heading", weight: 700, maxW: sideW - 30 });
-
-    // tall inner spine bars framing the criteria gutter
-    ctx.shape("rectangle", gutterCx - 130, startY, 54, rowsH, lRole, { style: { roundness: lRole.roundness ?? 8 } });
-    ctx.shape("rectangle", gutterCx + 76, startY, 54, rowsH, rRole, { style: { roundness: rRole.roundness ?? 8 } });
-
-    criteria.forEach((c, k) => {
-      const cy = startY + k * pitch + pitch / 2;
-      // center gutter: icon + criterion name
-      let nameY = cy;
-      if (c.icon && ctx.icon(c.icon, gutterCx, cy - 26, 42, ctx.ink)) nameY = cy + 12;
-      ctx.label(ctx.wrap(c.label, 130, 18, "heading", 2), gutterCx, nameY, { size: 18, color: ctx.ink, font: "heading", weight: ctx.preset.fonts.headingWeight });
-      // per-side claims: `left:`/`right:` opts, or the first/second child
-      const lChild = c.children[0];
-      const rChild = c.children[1];
-      const lClaim = optStr(c.opts, "left") ?? lChild?.label;
-      const rClaim = optStr(c.opts, "right") ?? rChild?.label;
-      if (lClaim) ctx.labelBlock(lClaim, lChild?.detail, gutterCx - 160, cy, { color: lRole.color, align: "right", maxW: 290, size: 18 });
-      if (rClaim) ctx.labelBlock(rClaim, rChild?.detail, gutterCx + 160, cy, { color: rRole.color, align: "left", maxW: 290, size: 18 });
+    inItem(ctx, left, () => {
+      ctx.shape("rectangle", 0, 0, sideW, headerH, lRole, { id: ctx.uid(left?.id ?? "left"), style: { roundness: lRole.roundness ?? 8 } });
+      ctx.label(left?.label ?? "A", sideW / 2, headerH / 2, { size: 26, color: onPanel(lRole), font: "heading", weight: 700, maxW: sideW - 30 });
     });
+    inItem(ctx, right, () => {
+      ctx.shape("rectangle", W - sideW, 0, sideW, headerH, rRole, { id: ctx.uid(right?.id ?? "right"), style: { roundness: rRole.roundness ?? 8 } });
+      ctx.label(right?.label ?? "B", W - sideW / 2, headerH / 2, { size: 26, color: onPanel(rRole), font: "heading", weight: 700, maxW: sideW - 30 });
+    });
+
+    // tall inner spine bars framing the criteria gutter (one per contender)
+    inItem(ctx, left, () => {
+      ctx.shape("rectangle", gutterCx - 130, startY, 54, rowsH, lRole, { style: { roundness: lRole.roundness ?? 8 } });
+    });
+    inItem(ctx, right, () => {
+      ctx.shape("rectangle", gutterCx + 76, startY, 54, rowsH, rRole, { style: { roundness: rRole.roundness ?? 8 } });
+    });
+
+    criteria.forEach((c, k) =>
+      ctx.item(c.id, () => {
+        const cy = startY + k * pitch + pitch / 2;
+        // center gutter: icon + criterion name
+        let nameY = cy;
+        if (c.icon && ctx.icon(c.icon, gutterCx, cy - 26, 42, ctx.ink)) nameY = cy + 12;
+        ctx.label(ctx.wrap(c.label, 130, 18, "heading", 2), gutterCx, nameY, { size: 18, color: ctx.ink, font: "heading", weight: ctx.preset.fonts.headingWeight });
+        // per-side claims: `left:`/`right:` opts, or the first/second child
+        const lChild = c.children[0];
+        const rChild = c.children[1];
+        const lClaim = optStr(c.opts, "left") ?? lChild?.label;
+        const rClaim = optStr(c.opts, "right") ?? rChild?.label;
+        if (lClaim) ctx.labelBlock(lClaim, lChild?.detail, gutterCx - 160, cy, { color: lRole.color, align: "right", maxW: 290, size: 18 });
+        if (rClaim) ctx.labelBlock(rClaim, rChild?.detail, gutterCx + 160, cy, { color: rRole.color, align: "left", maxW: 290, size: 18 });
+      }),
+    );
   },
 });
 
@@ -419,6 +467,7 @@ registerViz({
   name: "problem-solution",
   category: "Problems and Solutions",
   summary: "Problem → central solution circle → outcome, with support captions.",
+  entryKinds: ["item", "problem", "solution", "outcome", "support"],
   generate(spec: VizSpec, ctx: VizContext) {
     const generic = itemsOf(spec, "item");
     const problem = spec.items.find((i) => i.kind === "problem") ?? generic[0];
@@ -433,30 +482,34 @@ registerViz({
     const D = 180;
 
     // central solution circle (ink outline)
-    ctx.shape(
-      "circle",
-      cx - D / 2,
-      ccy - D / 2,
-      D,
-      D,
-      { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: ctx.preset.strokeWidth, roughness: ctx.preset.roughness },
-      { id: ctx.uid(solution?.id ?? "solution") },
-    );
-    if (solution) {
-      const text = ctx.wrap(solution.label, D - 44, 18, "heading", 3);
-      const detail = solution.detail ? ctx.wrap(solution.detail, D - 44, 13, undefined, 3) : undefined;
-      const th = lineCount(text) * 23;
-      const dh = detail ? lineCount(detail) * 16 + 8 : 0;
-      ctx.label(text, cx, ccy - dh / 2, { size: 18, color: ctx.ink, font: "heading", weight: ctx.preset.fonts.headingWeight });
-      if (detail) ctx.label(detail, cx, ccy + th / 2 + 8, { size: 13, color: ctx.mutedInk });
-    }
+    inItem(ctx, solution, () => {
+      ctx.shape(
+        "circle",
+        cx - D / 2,
+        ccy - D / 2,
+        D,
+        D,
+        { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: ctx.preset.strokeWidth, roughness: ctx.preset.roughness },
+        { id: ctx.uid(solution?.id ?? "solution") },
+      );
+      if (solution) {
+        const text = ctx.wrap(solution.label, D - 44, 18, "heading", 3);
+        const detail = solution.detail ? ctx.wrap(solution.detail, D - 44, 13, undefined, 3) : undefined;
+        const th = lineCount(text) * 23;
+        const dh = detail ? lineCount(detail) * 16 + 8 : 0;
+        ctx.label(text, cx, ccy - dh / 2, { size: 18, color: ctx.ink, font: "heading", weight: ctx.preset.fonts.headingWeight });
+        if (detail) ctx.label(detail, cx, ccy + th / 2 + 8, { size: 13, color: ctx.mutedInk });
+      }
+    });
 
     // side tile + label block (problem left, outcome right)
     const tile = (item: VizItem | undefined, role: RoleStyle, tx: number, fallbackIcon: string, hint: string): void => {
       if (!item) return;
-      ctx.shape("rectangle", tx, ccy - 98, 84, 84, role, { id: ctx.uid(item.id ?? hint), style: { roundness: role.roundness ?? 10 } });
-      ctx.icon(item.icon ?? fallbackIcon, tx + 42, ccy - 56, 44, onPanel(role));
-      ctx.labelBlock(item.label, item.detail, tx + 42, ccy + 2, { color: role.color, align: "center", maxW: 220, vAnchor: "top" });
+      ctx.item(item.id, () => {
+        ctx.shape("rectangle", tx, ccy - 98, 84, 84, role, { id: ctx.uid(item.id ?? hint), style: { roundness: role.roundness ?? 10 } });
+        ctx.icon(item.icon ?? fallbackIcon, tx + 42, ccy - 56, 44, onPanel(role));
+        ctx.labelBlock(item.label, item.detail, tx + 42, ccy + 2, { color: role.color, align: "center", maxW: 220, vAnchor: "top" });
+      });
     };
     tile(problem, pRole, 60, "trend-down", "problem");
     tile(outcome, oRole, 656, "trend-up", "outcome");
@@ -487,17 +540,19 @@ registerViz({
           { color: ctx.preset.edge, width: 1.4 },
         );
       }
-      supports.forEach((s, i) => {
-        const sx = first + i * spread;
-        ctx.line(
-          [
-            [sx, busY],
-            [sx, busY + 16],
-          ],
-          { color: ctx.preset.edge, width: 1.4 },
-        );
-        ctx.label(ctx.wrap(s.label, spread - 24, 15), sx, busY + 30, { size: 15, color: ctx.mutedInk, vAnchor: "top" });
-      });
+      supports.forEach((s, i) =>
+        ctx.item(s.id, () => {
+          const sx = first + i * spread;
+          ctx.line(
+            [
+              [sx, busY],
+              [sx, busY + 16],
+            ],
+            { color: ctx.preset.edge, width: 1.4 },
+          );
+          ctx.label(ctx.wrap(s.label, spread - 24, 15), sx, busY + 30, { size: 15, color: ctx.mutedInk, vAnchor: "top" });
+        }),
+      );
     }
   },
 });
@@ -509,6 +564,8 @@ registerViz({
   aliases: ["before-after"],
   category: "Problems and Solutions",
   summary: "A suspension bridge carrying you from before to after (reference design).",
+  entryKinds: ["item", "before", "after"],
+  sweetSpot: { min: 2, max: 2 },
   generate(spec: VizSpec, ctx: VizContext) {
     const generic = itemsOf(spec, "item");
     const before = spec.items.find((i) => i.kind === "before") ?? generic[0];
@@ -590,8 +647,8 @@ registerViz({
     }
 
     // flanking state labels at deck level
-    if (before) ctx.labelBlock(before.label, undefined, x0 - 26, deckY - 10, { color: bRole.color, align: "right", maxW: 150 });
-    if (after) ctx.labelBlock(after.label, undefined, x0 + bandW + 26, deckY - 10, { color: aRole.color, align: "left", maxW: 150 });
+    if (before) ctx.item(before.id, () => ctx.labelBlock(before.label, undefined, x0 - 26, deckY - 10, { color: bRole.color, align: "right", maxW: 150 }));
+    if (after) ctx.item(after.id, () => ctx.labelBlock(after.label, undefined, x0 + bandW + 26, deckY - 10, { color: aRole.color, align: "left", maxW: 150 }));
     const top = 30; // kept for the box block below
 
     // two description boxes below, arrow between
@@ -600,14 +657,16 @@ registerViz({
     const boxY = top + 226;
     const box = (item: VizItem | undefined, role: RoleStyle, bx: number, hint: string): void => {
       if (!item) return;
-      ctx.shape("rectangle", bx, boxY, boxW, boxH, role, { id: ctx.uid(item.id ?? hint), style: { roundness: role.roundness ?? 8 } });
-      const accent = onPanel(role);
-      if (item.detail) {
-        ctx.label(item.label, bx + boxW / 2, boxY + 24, { size: 17, color: accent, weight: 700, font: "heading", maxW: boxW - 28, maxLines: 1 });
-        ctx.label(ctx.wrap(item.detail, boxW - 28, 13, undefined, 2), bx + boxW / 2, boxY + 54, { size: 13, color: inPanel(ctx, role) });
-      } else {
-        ctx.label(item.label, bx + boxW / 2, boxY + boxH / 2, { size: 17, color: accent, weight: 700, font: "heading", maxW: boxW - 28, maxLines: 2 });
-      }
+      ctx.item(item.id, () => {
+        ctx.shape("rectangle", bx, boxY, boxW, boxH, role, { id: ctx.uid(item.id ?? hint), style: { roundness: role.roundness ?? 8 } });
+        const accent = onPanel(role);
+        if (item.detail) {
+          ctx.label(item.label, bx + boxW / 2, boxY + 24, { size: 17, color: accent, weight: 700, font: "heading", maxW: boxW - 28, maxLines: 1 });
+          ctx.label(ctx.wrap(item.detail, boxW - 28, 13, undefined, 2), bx + boxW / 2, boxY + 54, { size: 13, color: inPanel(ctx, role) });
+        } else {
+          ctx.label(item.label, bx + boxW / 2, boxY + boxH / 2, { size: 17, color: accent, weight: 700, font: "heading", maxW: boxW - 28, maxLines: 2 });
+        }
+      });
     };
     box(before, bRole, t1 - boxW / 2, "before");
     box(after, aRole, t2 - boxW / 2, "after");

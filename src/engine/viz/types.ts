@@ -62,11 +62,25 @@ export interface VizResult {
 
 export type VizGenerate = (spec: VizSpec, ctx: VizContext) => void;
 
+/** One documented block-level option (for listVizTemplates / tooling). */
+export interface VizOptionDoc {
+  name: string;
+  /** "string" | "number" | "boolean" | an enum like "horizontal|vertical". */
+  type: string;
+  description?: string;
+}
+
 export interface VizDef {
   name: string;
   aliases?: string[];
   category: string;
   summary: string;
+  /** Entry keywords the template reads (["item", "stage"], …). */
+  entryKinds?: string[];
+  /** Block-level options the template understands (machine-readable). */
+  options?: VizOptionDoc[];
+  /** Item-count range where the layout reads best. */
+  sweetSpot?: { min: number; max: number };
   generate: VizGenerate;
 }
 

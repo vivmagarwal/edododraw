@@ -385,9 +385,11 @@ export function pathLength(points: Point[]): number {
 
 /**
  * Render one edge into a <g>. `animId` uniquely identifies the animation
- * overlay so we can wire per-edge gradients/keyframes.
+ * overlay so we can wire per-edge gradients/keyframes. `opts.static` skips the
+ * animated overlay entirely (deterministic frame rendering — the hand-drawn
+ * base stroke and arrowheads already depict the edge fully).
  */
-export function renderEdge(rc: RoughSVG, scene: Scene, edge: SceneEdge): RenderedEdge {
+export function renderEdge(rc: RoughSVG, scene: Scene, edge: SceneEdge, opts: { static?: boolean } = {}): RenderedEdge {
   const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
   g.setAttribute("data-edge", edge.id);
   g.setAttribute("class", "edd-edge");
@@ -419,8 +421,9 @@ export function renderEdge(rc: RoughSVG, scene: Scene, edge: SceneEdge): Rendere
   const startHead = drawArrowhead(rc, edge.style.startArrowhead, points[0], startTangent, edge.style);
   if (startHead) g.appendChild(startHead);
 
-  // 3. animated overlay (flow/march/draw-on/comet/gradient/pulse/electric)
-  const overlay = animationOverlay(edge, centerline, len);
+  // 3. animated overlay (flow/march/draw-on/comet/gradient/pulse/electric) —
+  // never emitted in static mode (screenshots would catch it mid-flight)
+  const overlay = opts.static ? null : animationOverlay(edge, centerline, len);
   if (overlay) g.appendChild(overlay);
 
   return { group: g, points, centerline, length: len };

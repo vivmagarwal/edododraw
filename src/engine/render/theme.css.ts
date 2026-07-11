@@ -120,6 +120,12 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) {
   .edd-anim, .edd-reveal-fade, .edd-reveal-sweep, .edd-reveal-pop { animation: none !important; }
 }
+
+/* ---- static (deterministic) mode --------------------------------------
+   SvgRenderer { static: true }: no wall-clock CSS at all, so frame-screenshot
+   consumers (Remotion, Puppeteer, export) never catch a transition or
+   animation mid-flight. Motion is host-driven (setRevealProgress, camera). */
+.edd-static, .edd-static * { transition: none !important; animation: none !important; }
 `;
 
 let injected = false;

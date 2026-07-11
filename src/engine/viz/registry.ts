@@ -7,7 +7,7 @@
 import type { DiagnosticBag } from "../dsl/diagnostics.js";
 import type { StylePreset } from "../style/presets.js";
 import { VizContext } from "./context.js";
-import type { VizDef, VizResult, VizSpec } from "./types.js";
+import type { VizDef, VizOptionDoc, VizResult, VizSpec } from "./types.js";
 
 const generators = new Map<string, VizDef>();
 /** alias -> canonical name (for docs/introspection; resolution uses `generators`). */
@@ -47,6 +47,35 @@ export function listVizAliases(): Array<{ alias: string; canonical: string }> {
   return [...aliasIndex.entries()].map(([alias, canonical]) => ({ alias, canonical }));
 }
 
+/** Machine-readable catalog entry — see listVizTemplates(). */
+export interface VizTemplateInfo {
+  name: string;
+  aliases: string[];
+  category: string;
+  summary: string;
+  entryKinds: string[];
+  options: VizOptionDoc[];
+  sweetSpot?: { min: number; max: number };
+}
+
+/**
+ * Machine-readable template catalog (name, aliases, entry kinds, options,
+ * sweet-spot item counts) so tooling can validate `.edd` viz blocks before
+ * rendering. Every template also accepts `showValues: false` (suppress printed
+ * numbers) and per-item `color:` / `icon:` / `detail:` attributes.
+ */
+export function listVizTemplates(): VizTemplateInfo[] {
+  return listViz().map((def) => ({
+    name: def.name,
+    aliases: [...aliasIndex.entries()].filter(([, canonical]) => canonical === def.name).map(([alias]) => alias),
+    category: def.category,
+    summary: def.summary,
+    entryKinds: def.entryKinds ?? ["item"],
+    options: def.options ?? [],
+    sweetSpot: def.sweetSpot,
+  }));
+}
+
 /** Unique defs (aliases deduped), sorted by category then name. */
 export function listViz(): VizDef[] {
   const seen = new Set<VizDef>();
@@ -73,7 +102,8 @@ export function runViz(spec: VizSpec, preset: StylePreset, mode: "light" | "dark
     diags.error("E-VIZ-TYPE", `unknown viz type '${spec.type}'`, { line: 1, col: 1, start: 0, end: 0 }, { hint: `known types: ${known}` });
     return null;
   }
-  const ctx = new VizContext(spec.id, preset, mode, diags);
+  const showValues = spec.options.showValues !== false && spec.options.showValue !== false;
+  const ctx = new VizContext(spec.id, preset, mode, diags, showValues);
   def.generate(spec, ctx);
   if (spec.title && !ctx.titleHandled) {
     const b = ctx.bounds();

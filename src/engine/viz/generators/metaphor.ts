@@ -16,6 +16,12 @@ function roleStroke(ctx: VizContext, role: RoleStyle): string {
   return role.stroke === ctx.preset.background ? role.color : role.stroke;
 }
 
+/** Run `fn` under `item`'s tag scope when the entry exists (shared skeletons stay untagged). */
+function scoped(ctx: VizContext, item: VizItem | undefined, fn: () => void): void {
+  if (item) ctx.item(item.id, fn);
+  else fn();
+}
+
 /** Deterministic jitter (stable re-renders — no Math.random). */
 const jit = (i: number, amp: number): number => Math.sin(i * 7.3) * amp;
 
@@ -42,6 +48,9 @@ registerViz({
   aliases: ["scales"],
   category: "Comparison",
   summary: "A two-pan balance weighing two sides of item rows.",
+  entryKinds: ["item", "side"],
+  options: [{ name: "tilt", type: "left|right|level", description: "which side hangs lower (default level)" }],
+  sweetSpot: { min: 2, max: 2 },
   generate(spec: VizSpec, ctx: VizContext) {
     const sides = itemsOf(spec, "item", "side").slice(0, 2);
     while (sides.length < 2) {
@@ -63,7 +72,8 @@ registerViz({
       ctx.role(0, { neutral: true }),
     );
     dot(ctx, cx, beamY, 24, ctx.ink, 2);
-    sides.forEach((side, s) => {
+    sides.forEach((side, s) =>
+      ctx.item(side.id, () => {
       const dir = s === 0 ? -1 : 1;
       const dy = tilt === "level" ? 0 : (tilt === "left") === (s === 0) ? 16 : -16;
       const role = ctx.role(s, { n: 2, color: side.color });
@@ -105,7 +115,8 @@ registerViz({
       });
       // pan caption (side label) below the pan
       if (side.label) ctx.labelBlock(side.label, side.detail, px, panY + 34, { color: role.color, align: "center", maxW: 190, vAnchor: "top" });
-    });
+      }),
+    );
   },
 });
 
@@ -115,6 +126,8 @@ registerViz({
   name: "podium",
   category: "Comparison",
   summary: "Winners' podium — ranks 1-2-3 in the classic 2-1-3 arrangement.",
+  entryKinds: ["item", "rank"],
+  sweetSpot: { min: 3, max: 3 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "rank").slice(0, 3);
     const blockW = 150;
@@ -125,6 +138,7 @@ registerViz({
     cols.forEach((rank, c) => {
       const item = items[rank];
       if (!item) return;
+      ctx.item(item.id, () => {
       const role = ctx.role(rank, { n: 3, color: item.color });
       const stroke = roleStroke(ctx, role);
       const w = Math.min(2.6, role.strokeWidth);
@@ -158,6 +172,7 @@ registerViz({
       ctx.icon(item.icon ?? (rank === 0 ? "trophy" : "medal"), bx, top - 38, 46, role.color);
       ctx.label(String(rank + 1), bx, top + 26, { size: 30, color: role.color, weight: 700, font: "heading" });
       ctx.label(ctx.wrap(item.label, blockW - 18, 17, "body", 2), bx, top + 58, { size: 17, color: ctx.ink });
+      });
     });
   },
 });
@@ -168,6 +183,8 @@ registerViz({
   name: "spectrum",
   category: "Comparison",
   summary: "Pole-to-pole horizontal spectrum of zones with arrow ends.",
+  entryKinds: ["item", "zone"],
+  sweetSpot: { min: 2, max: 5 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "zone");
     const n = Math.max(items.length, 1);
@@ -175,7 +192,8 @@ registerViz({
     const zoneH = 94;
     const gap = 10;
     const aw = 40; // arrow-tail depth
-    items.forEach((item, i) => {
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
       const role = ctx.role(i, { n, color: item.color });
       const x = i * (zoneW + gap);
       const first = i === 0;
@@ -232,7 +250,8 @@ registerViz({
         maxW: zoneW + 24,
         vAnchor: pole ? "top" : "bottom",
       });
-    });
+      }),
+    );
   },
 });
 
@@ -252,7 +271,8 @@ function gapSpanGenerator(variant: "hurdles" | "planks") {
     // open panels (colored outline, no fill) with gently wavy tops and a
     // concave arch cut into the bottom edge — the negative space under the
     // row reads as bridge arches.
-    items.forEach((item, i) => {
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
       const role = ctx.role(i, { n, color: item.color });
       const stroke = roleStroke(ctx, role);
       const x = i * (archW + gap);
@@ -294,7 +314,8 @@ function gapSpanGenerator(variant: "hurdles" | "planks") {
         ctx.label(ctx.wrap(item.detail, archW - 36, 14, "body", 5), cxA, top + 128, { size: 14, color: ctx.ink, vAnchor: "top" });
       }
       if (item.icon) ctx.icon(item.icon, cxA, base - archDepth - 30, 34, role.color);
-    });
+      }),
+    );
     // gray from/to boxes fully clear below the OUTER panels
     const boxW = archW + 4;
     const boxH = 96;
@@ -303,8 +324,8 @@ function gapSpanGenerator(variant: "hurdles" | "planks") {
       ctx.shape("round-rectangle", cx - boxW / 2, boxY, boxW, boxH, { stroke: ctx.mutedInk, fill: null, fillStyle: "none", strokeWidth: 1.6, roughness: ctx.preset.roughness }, { id: ctx.uid(it.id) });
       ctx.labelBlock(it.label, it.detail, cx, boxY + boxH / 2, { color: ctx.ink, align: "center", maxW: boxW - 28, size: 19 });
     };
-    if (from) placeBox(from, archW / 2);
-    if (to) placeBox(to, W - archW / 2);
+    if (from) ctx.item(from.id, () => placeBox(from, archW / 2));
+    if (to) ctx.item(to.id, () => placeBox(to, W - archW / 2));
     // action caption below the from/to boxes so it's always clear of them
     // (at 2 steps the boxes meet in the middle, so a centered caption collides)
     if (action) ctx.label(ctx.wrap(action, W - 40, 26, "heading", 2), W / 2, boxY + boxH + 30, { size: 26, color: ctx.ink, weight: 700, font: "heading" });
@@ -316,6 +337,9 @@ registerViz({
   aliases: ["hurdles"],
   category: "Problems and Solutions",
   summary: "Hurdles spanning the gap between two cliffs (from → to).",
+  entryKinds: ["item", "step", "challenge", "plank", "from", "to"],
+  options: [{ name: "action", type: "string", description: "call-to-action caption below the from/to boxes" }],
+  sweetSpot: { min: 2, max: 5 },
   generate: gapSpanGenerator("hurdles"),
 });
 
@@ -323,6 +347,9 @@ registerViz({
   name: "bridge",
   category: "Problems and Solutions",
   summary: "Bridge planks spanning the gap between two cliffs (from → to).",
+  entryKinds: ["item", "step", "challenge", "plank", "from", "to"],
+  options: [{ name: "action", type: "string", description: "call-to-action caption below the from/to boxes" }],
+  sweetSpot: { min: 2, max: 5 },
   generate: gapSpanGenerator("planks"),
 });
 
@@ -332,6 +359,8 @@ registerViz({
   name: "vision",
   category: "Visual Metaphors",
   summary: "A staircase rising from today toward an open door (the vision).",
+  entryKinds: ["item", "current", "vision"],
+  sweetSpot: { min: 2, max: 2 },
   generate(spec: VizSpec, ctx: VizContext) {
     const generic = itemsOf(spec, "item");
     const current = spec.items.find((i) => i.kind === "current") ?? generic[0];
@@ -373,26 +402,31 @@ registerViz({
       );
     }
     // door glyph seated on the top step: frame + open leaf (skewed parallelogram) + knob
+    // — the door IS the vision item's shape, so it's tagged as that item
     const doorX = topLeft + 14;
     const doorB = groundY - steps * rise; // door base = top step's upper edge
-    ctx.shape("rectangle", doorX, doorB - doorH, doorW, doorH, vRole, { id: vision ? ctx.uid(vision.id) : undefined });
-    ctx.poly(
-      [
-        [doorX + doorW, doorB - doorH],
-        [doorX + doorW + 52, doorB - doorH - 24],
-        [doorX + doorW + 52, doorB - 30],
-        [doorX + doorW, doorB],
-      ],
-      vRole,
-    );
-    dot(ctx, doorX + doorW + 41, doorB - doorH / 2 - 12, 8, vRole.textColor, 3);
-    if (vision?.icon) ctx.icon(vision.icon, doorX + doorW / 2, doorB - doorH - 40, 36, vRole.color);
+    scoped(ctx, vision, () => {
+      ctx.shape("rectangle", doorX, doorB - doorH, doorW, doorH, vRole, { id: vision ? ctx.uid(vision.id) : undefined });
+      ctx.poly(
+        [
+          [doorX + doorW, doorB - doorH],
+          [doorX + doorW + 52, doorB - doorH - 24],
+          [doorX + doorW + 52, doorB - 30],
+          [doorX + doorW, doorB],
+        ],
+        vRole,
+      );
+      dot(ctx, doorX + doorW + 41, doorB - doorH / 2 - 12, 8, vRole.textColor, 3);
+      if (vision?.icon) ctx.icon(vision.icon, doorX + doorW / 2, doorB - doorH - 40, 36, vRole.color);
+    });
     // current near the ground (left), vision near the door (upper right)
     if (current) {
-      if (current.icon) ctx.icon(current.icon, -14, groundY - 28, 32, cRole.color);
-      ctx.labelBlock(current.label, current.detail, -40, groundY + 30, { color: cRole.color, align: "left", maxW: 220, vAnchor: "top" });
+      ctx.item(current.id, () => {
+        if (current.icon) ctx.icon(current.icon, -14, groundY - 28, 32, cRole.color);
+        ctx.labelBlock(current.label, current.detail, -40, groundY + 30, { color: cRole.color, align: "left", maxW: 220, vAnchor: "top" });
+      });
     }
-    if (vision) ctx.labelBlock(vision.label, vision.detail, doorX + doorW + 72, doorB - doorH + 20, { color: vRole.color, align: "left", maxW: 190, vAnchor: "top" });
+    if (vision) ctx.item(vision.id, () => ctx.labelBlock(vision.label, vision.detail, doorX + doorW + 72, doorB - doorH + 20, { color: vRole.color, align: "left", maxW: 190, vAnchor: "top" }));
   },
 });
 
@@ -403,6 +437,8 @@ registerViz({
   aliases: ["pit"],
   category: "Visual Metaphors",
   summary: "A pit in the ground with a ladder out — the title carries the message.",
+  entryKinds: [],
+  options: [{ name: "caption", type: "string", description: "message line below the pit" }],
   generate(spec: VizSpec, ctx: VizContext) {
     const W = 620;
     const mouthW = 240;
@@ -497,6 +533,8 @@ registerViz({
   name: "trend",
   category: "Visual Metaphors",
   summary: "A rising staircase of progress with labeled levels on leader lines.",
+  entryKinds: ["item", "step", "level"],
+  sweetSpot: { min: 2, max: 5 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "step", "level");
     const n = Math.max(items.length, 1);
@@ -535,7 +573,8 @@ registerViz({
     // The dot sits at the flight's OUTER corner (left corner for left-side
     // labels, right end for right-side ones) and the leader runs 8px below the
     // tread line, so it can never cross the staircase itself.
-    items.forEach((item, i) => {
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
       const role = ctx.role(i, { n, color: item.color });
       const yA = H - (i + 1) * flightRise + 8;
       const rightSide = i % 2 === 0;
@@ -551,7 +590,8 @@ registerViz({
       dot(ctx, sx, yA, 8, role.color, 3);
       if (item.icon) ctx.icon(item.icon, bx + (rightSide ? 22 : -22), yA - 44, 36, role.color);
       ctx.labelBlock(item.label, item.detail, bx, yA, { color: role.color, align: rightSide ? "left" : "right", maxW: 210 });
-    });
+      }),
+    );
   },
 });
 
@@ -565,6 +605,9 @@ registerViz({
   name: "race",
   category: "Visual Metaphors",
   summary: "Karts racing toward the finish line, staggered by rank.",
+  entryKinds: ["item", "racer", "kart"],
+  options: [{ name: "finish", type: "string", description: "banner text over the finish gate (default FINISH)" }],
+  sweetSpot: { min: 2, max: 5 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "racer", "kart");
     const n = Math.max(items.length, 1);
@@ -596,12 +639,14 @@ registerViz({
     ctx.shape("rectangle", gate1 - 14, postTop - 34, gate2 - gate1 + 28, 34, banner);
     ctx.label(optStr(spec.options, "finish") ?? "FINISH", (gate1 + gate2) / 2, postTop - 17, { size: 16, color: banner.textColor, weight: 700, font: "heading" });
     // karts, first at the line
-    items.forEach((item, i) => {
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
       const role = ctx.role(i, { n, color: item.color });
       const front = fronts[i];
       ctx.path(KART_D, 102, 60, front - kw, trackY - kh + 7, kw, kh, role, { id: ctx.uid(item.id) });
       ctx.labelBlock(item.label, item.detail, front - kw / 2, trackY + 28, { color: role.color, align: "center", maxW: 150, vAnchor: "top" });
-    });
+      }),
+    );
   },
 });
 
@@ -614,6 +659,12 @@ registerViz({
   aliases: ["conversation"],
   category: "Visual Metaphors",
   summary: "A chat transcript between two speakers, bubbles alternating sides.",
+  entryKinds: ["item", "msg", "turn", "message", "speaker"],
+  options: [
+    { name: "a", type: "string", description: "left speaker name (default A)" },
+    { name: "b", type: "string", description: "right speaker name (default B)" },
+  ],
+  sweetSpot: { min: 2, max: 6 },
   generate(spec: VizSpec, ctx: VizContext) {
     const msgs = itemsOf(spec, "item", "msg", "turn", "message");
     const speakers = spec.items.filter((i) => i.kind === "speaker");
@@ -624,7 +675,8 @@ registerViz({
     const bubbleW = 300;
     const indent = 140;
     let y = 0;
-    msgs.forEach((m, i) => {
+    msgs.forEach((m, i) =>
+      ctx.item(m.id, () => {
       const sp = (optStr(m.opts, "speaker") ?? (i % 2 === 0 ? "a" : "b")).toLowerCase();
       const isA = sp !== "b";
       const role = isA ? roleA : roleB;
@@ -634,13 +686,19 @@ registerViz({
       ctx.shape("round-rectangle", x, y, bubbleW, h, role, { id: ctx.uid(m.id) });
       ctx.label(text, x + 16, y + h / 2, { size: 15, color: role.textColor, align: "left", z: 3 });
       y += h + 16;
-    });
-    // bust glyphs (head + shoulders) in the bottom corners
+      }),
+    );
+    // bust glyphs (head + shoulders) in the bottom corners — each tagged as its
+    // speaker entry when one exists (names may come from options alone)
     const by = y + 20;
-    ctx.path(BUST_D, 60, 58, -12, by, 64, 62, roleA, { id: ctx.uid("speaker_a") });
-    ctx.label(nameA, 20, by + 84, { size: 17, color: roleA.color, weight: 700, font: "heading" });
-    ctx.path(BUST_D, 60, 58, indent + bubbleW - 52, by, 64, 62, roleB, { id: ctx.uid("speaker_b") });
-    ctx.label(nameB, indent + bubbleW - 20, by + 84, { size: 17, color: roleB.color, weight: 700, font: "heading" });
+    scoped(ctx, speakers[0], () => {
+      ctx.path(BUST_D, 60, 58, -12, by, 64, 62, roleA, { id: ctx.uid("speaker_a") });
+      ctx.label(nameA, 20, by + 84, { size: 17, color: roleA.color, weight: 700, font: "heading" });
+    });
+    scoped(ctx, speakers[1], () => {
+      ctx.path(BUST_D, 60, 58, indent + bubbleW - 52, by, 64, 62, roleB, { id: ctx.uid("speaker_b") });
+      ctx.label(nameB, indent + bubbleW - 20, by + 84, { size: 17, color: roleB.color, weight: 700, font: "heading" });
+    });
   },
 });
 
@@ -651,6 +709,8 @@ registerViz({
   aliases: ["pillars"],
   category: "Visual Metaphors",
   summary: "Classical columns, one per pillar, icon + label in the shaft.",
+  entryKinds: ["item", "pillar"],
+  sweetSpot: { min: 2, max: 5 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "pillar");
     const n = Math.max(items.length, 1);
@@ -659,7 +719,8 @@ registerViz({
     const shaftW = 106;
     const shaftH = 250;
     const shaftY = 38;
-    items.forEach((item, i) => {
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
       const role = ctx.role(i, { n, color: item.color });
       const x = i * pitch;
       const cxC = x + colW / 2;
@@ -690,7 +751,8 @@ registerViz({
       if (item.detail) {
         ctx.label(ctx.wrap(item.detail, colW + 24, 14, "body", 4), cxC, shaftY + shaftH + 52, { size: 14, color: ctx.mutedInk, vAnchor: "top" });
       }
-    });
+      }),
+    );
   },
 });
 
@@ -700,6 +762,12 @@ registerViz({
   name: "bottleneck",
   category: "Visual Metaphors",
   summary: "Flow crowding through a bottle's neck — many in, few out.",
+  entryKinds: ["item"],
+  options: [
+    { name: "count", type: "number", description: "upstream circle count, 6-28 (default 16)" },
+    { name: "in", type: "string", description: "caption over the wide inlet" },
+    { name: "out", type: "string", description: "caption over the outlet" },
+  ],
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item");
     const role = ctx.role(0, { n: 1, color: items[0]?.color });
@@ -770,6 +838,8 @@ registerViz({
   name: "iceberg",
   category: "Parts of Whole",
   summary: "The visible tip vs the hidden mass below the waterline.",
+  entryKinds: ["above", "below", "item"],
+  sweetSpot: { min: 2, max: 5 },
   generate(spec: VizSpec, ctx: VizContext) {
     let aboveItems = spec.items.filter((i) => i.kind === "above");
     let belowItems = spec.items.filter((i) => i.kind === "below");
@@ -785,38 +855,43 @@ registerViz({
     const wl: Array<[number, number]> = [];
     for (let x = -20; x <= W; x += 16) wl.push([x, Math.sin(x / 30) * 5]);
     ctx.line(wl, { color: ctx.mutedInk, width: 1.8 });
-    // peak above water + bigger jagged mass below
+    // peak above water + bigger jagged mass below — each polygon already takes
+    // its id/color from the first above/below entry, so it's tagged as that item
     const aboveRole = roleOf(aboveItems[0], 0);
-    ctx.poly(
-      [
-        [330, -2],
-        [372, -58],
-        [404, -34],
-        [446, -120],
-        [482, -52],
-        [516, -80],
-        [552, -2],
-      ],
-      aboveRole,
-      { id: aboveItems[0] ? ctx.uid(aboveItems[0].id) : ctx.uid("peak") },
+    scoped(ctx, aboveItems[0], () =>
+      ctx.poly(
+        [
+          [330, -2],
+          [372, -58],
+          [404, -34],
+          [446, -120],
+          [482, -52],
+          [516, -80],
+          [552, -2],
+        ],
+        aboveRole,
+        { id: aboveItems[0] ? ctx.uid(aboveItems[0].id) : ctx.uid("peak") },
+      ),
     );
     const belowRole = roleOf(belowItems[0], aboveItems.length || 1);
-    ctx.poly(
-      [
-        [318, 8],
-        [566, 8],
-        [602, 96],
-        [548, 162],
-        [578, 232],
-        [500, 296],
-        [448, 350],
-        [396, 292],
-        [330, 220],
-        [352, 140],
-        [300, 78],
-      ],
-      belowRole,
-      { id: belowItems[0] ? ctx.uid(belowItems[0].id) : ctx.uid("mass") },
+    scoped(ctx, belowItems[0], () =>
+      ctx.poly(
+        [
+          [318, 8],
+          [566, 8],
+          [602, 96],
+          [548, 162],
+          [578, 232],
+          [500, 296],
+          [448, 350],
+          [396, 292],
+          [330, 220],
+          [352, 140],
+          [300, 78],
+        ],
+        belowRole,
+        { id: belowItems[0] ? ctx.uid(belowItems[0].id) : ctx.uid("mass") },
+      ),
     );
     // label+detail blocks on the left with leader lines to their depth
     const entry = (item: VizItem, role: RoleStyle, y: number, endX: number): void => {
@@ -835,10 +910,12 @@ registerViz({
       );
       dot(ctx, endX, y, 7, role.color, 3);
     };
-    aboveItems.forEach((item, j) => entry(item, roleOf(item, j), -46 - j * 52, 355 + j * 18));
-    belowItems.forEach((item, j) => {
-      const y = belowItems.length === 1 ? 160 : 60 + (260 * j) / (belowItems.length - 1);
-      entry(item, roleOf(item, aboveItems.length + j), y, lerp(322, 428, y / 350));
-    });
+    aboveItems.forEach((item, j) => ctx.item(item.id, () => entry(item, roleOf(item, j), -46 - j * 52, 355 + j * 18)));
+    belowItems.forEach((item, j) =>
+      ctx.item(item.id, () => {
+        const y = belowItems.length === 1 ? 160 : 60 + (260 * j) / (belowItems.length - 1);
+        entry(item, roleOf(item, aboveItems.length + j), y, lerp(322, 428, y / 350));
+      }),
+    );
   },
 });

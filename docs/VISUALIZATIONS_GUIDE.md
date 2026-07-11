@@ -37,7 +37,9 @@ item "Root" { item "Child A"; item "Child B" }   // nested children (mindmap, sw
 item "Won" 38 { icon: trophy, color: green, detail: "Signed contracts" }
 ```
 
-Entry attributes understood everywhere: `icon:` (glyph name, §5), `color:`/`fill:` (override this item's palette color), `detail:`/`note:`/`desc:` (description text). Every template accepts the generic `item` keyword plus natural synonyms (`stage`, `step`, `task`, `set`, `flow`, …) noted below.
+Entry attributes understood everywhere: `icon:` (glyph name, §5), `color:`/`fill:` (override this item's palette color), `detail:`/`note:`/`desc:` (description text), `showValue: false` (suppress this item's printed number). Every template accepts the generic `item` keyword plus natural synonyms (`stage`, `step`, `task`, `set`, `flow`, …) noted below.
+
+**`showValues: false`** (block option, every value-printing template): values still drive the geometry — bar heights, funnel proportions, slice angles — but the numbers themselves aren't printed. For hosts with a "no unsourced numbers on screen" rule, or when the shape alone tells the story.
 
 Multiple `viz` blocks in one document stack vertically; a `viz` block after a `scene` graph is placed below it.
 
@@ -249,6 +251,31 @@ timeline {
 - Element ids are `<blockId>.<itemId>` (item id = explicit ident, else a slug of the label).
 - `reveal all` in a beat covers viz elements too.
 - Direct manipulation: viz elements are pinned nodes — drag/restyle writes overrides like any node.
+
+### Addressing one data item as a unit
+
+A template usually emits **several** elements per data entry (shape + label +
+detail + icon). Every one of them is tagged with its item, so the whole entry
+can be addressed with the single key `<blockId>.<itemId>`:
+
+- **Scene IR**: members carry `data.vizItem: "sales.won"` and a semantic
+  `data.vizRole` (`"shape" | "label" | "detail" | "icon" | "value" | "line" |
+  "edge" | "title"`). Query them with `vizItemMembers(scene, "sales.won")` /
+  `listVizItems(scene)`.
+- **DOM**: each member `<g>` gets `data-viz-item="sales.won"` and
+  `data-viz-role="…"` attributes — select
+  `[data-viz-item="sales.won"]` to choreograph the item from host code.
+- **Language**: the key works as an annotation target (`strike sales.won`),
+  in timeline `reveal`/`hide` (all members reveal together), and in `camera
+  focus` (frames the whole item, label included). A target that matches
+  nothing raises `W-ANNOT-TARGET` / `W-STEP-TARGET` instead of silently
+  no-oping.
+
+### Machine-readable catalog
+
+`listVizTemplates()` returns `{ name, aliases, category, summary, entryKinds,
+options, sweetSpot }` for every template — the tables above, as data — so
+tooling can validate `.edd` before rendering.
 
 ## 5. Icons
 

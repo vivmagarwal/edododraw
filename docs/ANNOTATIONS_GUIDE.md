@@ -13,6 +13,8 @@ Both are the same `Annotation` record and both render through `AnnotationLayer` 
 
 `Annotation.target` is a ref to a node/edge/group id (tracks that element), a set (`options.members`), or an absolute world point. When the camera moves or layout changes, the annotation follows because it lives in the transformed world layer and re-resolves its target bbox on render.
 
+**Dotted ids & viz items.** Viz element/item ids contain dots (`sales.won`), which the target syntax parses as id + anchor part. The compiler resolves this after viz generation: when the bare ref matches nothing but the joined id does, the dotted id wins — so `strike sales.won` just works (legitimate parts like `underline a.label` are untouched). An explicit form is also available: `strike { target: "sales.won" }`. A viz **item** key anchors to the union bbox of all the item's elements. Targets that resolve to nothing emit a **`W-ANNOT-TARGET`** diagnostic instead of silently not drawing (timeline reveal/camera targets likewise emit `W-STEP-TARGET`).
+
 ## Kinds
 
 `highlight` (marker) · `underline` (solid/double/wavy) · `strike` · `box` (over a set, labelled) · `circle-mark` · `point-at` (hand-drawn pointer + label) · `callout` (leader + bubble) · `spotlight` (dims everything but the target via an SVG mask) · `note-marker` · `connector` (free arrow) · `sticky` (note). See the table in [DSL_LANGUAGE_GUIDE §9](DSL_LANGUAGE_GUIDE.md).

@@ -7,6 +7,7 @@
 import { applyLayout } from "../layout/index.js";
 import { applyOverrides } from "../scene/overrides.js";
 import { emptyScene, makeEdge, makeNode } from "../scene/defaults.js";
+import { getEdge, getGroup, getNode, vizItemMembers } from "../scene/query.js";
 import { isLightColor, resolveMarker } from "../scene/palette.js";
 import { effectivePreset, getStylePreset, presetEdgeDefaults, presetNodeDefaults, presetTheme, roleStyle } from "../style/presets.js";
 import { runViz } from "../viz/registry.js";
@@ -464,9 +465,51 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
 
   // ---- timeline -> steps ----------------------------------------------------
   // After viz generation so `reveal all` (etc.) covers viz-emitted elements.
-  scene.steps = timeline.map((b, idx) => beatToStep(b, idx, scene, tokenMap, timelineProps));
+  scene.steps = timeline.map((b, idx) => beatToStep(b, idx, scene, tokenMap, timelineProps, diags));
+
+  // Late-bind annotation targets (viz elements exist only now) + diagnostics
+  // for targets that would otherwise silently no-op.
+  resolveAnnotationTargets(scene, diags);
 
   return { scene, diagnostics: diags };
+}
+
+/** Does `id` name something annotatable? (node, edge, group, or viz item) */
+function targetExists(scene: Scene, id: string): boolean {
+  return !!getNode(scene, id) || !!getEdge(scene, id) || !!getGroup(scene, id) || vizItemMembers(scene, id).length > 0;
+}
+
+/**
+ * Resolve annotation targets against the finished scene. A dotted id like
+ * `strike fix.the-busy-slide` parses as ref "fix" + part "the-busy-slide" —
+ * when the ref alone matches nothing but the joined id does (viz items,
+ * literal dotted ids), rewrite it. Anything still unresolved gets a
+ * W-ANNOT-TARGET diagnostic instead of a silent no-op. Legitimate parts on
+ * real elements (`a.label`, anchors) are untouched.
+ */
+function resolveAnnotationTargets(scene: Scene, diags: DiagnosticBag): void {
+  const all = [...scene.annotations, ...scene.steps.flatMap((s) => s.annotations)];
+  for (const a of all) {
+    // annotation ids embed the command's source offset (an_<start>_<kind>)
+    const start = Number(/^an_(\d+)_/.exec(a.id)?.[1] ?? 0);
+    const pos = { line: 1, col: 1, start, end: start };
+    const warn = (what: string) =>
+      diags.warn("W-ANNOT-TARGET", `annotation target '${what}' matches no element`, pos, { hint: "check the id — viz items are addressed as <blockId>.<itemId>" });
+
+    for (const t of [a.target, a.target2]) {
+      if (!t?.ref) continue;
+      if (targetExists(scene, t.ref)) continue;
+      const joined = t.part ? `${t.ref}.${t.part}` : undefined;
+      if (joined && targetExists(scene, joined)) {
+        t.ref = joined;
+        t.part = undefined;
+        continue;
+      }
+      warn(joined ?? t.ref);
+    }
+    const members = a.options.members as string[] | undefined;
+    if (members) for (const m of members) if (m && !targetExists(scene, m)) warn(m);
+  }
 }
 
 /** Bottom edge (max y) of the scene's current content, 0 when empty. */
@@ -838,13 +881,24 @@ export function annotationFromCmd(cmd: AnnotationCmd, tokens: Map<string, Value>
     if (a.key === "color") continue;
     options[a.key] = valueToPlain(a.value, tokens);
   }
-  // members for box/spotlight over a list
+  // members for box/spotlight over a list (dotted refs keep their full id)
   let members: string[] | undefined;
   if (cmd.targetList && cmd.targetList.t === "list") {
-    members = cmd.targetList.v.map((v) => (v.t === "ident" ? v.v : v.t === "ref" ? v.id : "")).filter(Boolean);
+    members = cmd.targetList.v.map((v) => (v.t === "ident" ? v.v : v.t === "ref" ? (v.sub ? `${v.id}.${v.sub}` : v.id) : "")).filter(Boolean);
     options.members = members;
   }
-  const target = cmd.targetList ? { ref: members?.[0] ?? null } : annotationTargetFromEndpoint(cmd.target);
+  let target = cmd.targetList ? { ref: members?.[0] ?? null } : annotationTargetFromEndpoint(cmd.target);
+  // explicit `target:` attribute — lets a quoted string address dotted ids:
+  // strike { target: "fix.the-busy-slide" }
+  const targetAttr = cmd.attrs.find((a) => a.key === "target");
+  if (targetAttr) {
+    const tv = targetAttr.value;
+    const ref = tv.t === "str" || tv.t === "ident" ? tv.v : tv.t === "ref" ? (tv.sub ? `${tv.id}.${tv.sub}` : tv.id) : undefined;
+    if (ref) {
+      target = { ref };
+      delete options.target;
+    }
+  }
   const defaultColor = cmd.kind === "highlight" ? resolveMarker(undefined) : cmd.kind === "spotlight" ? "#000000" : "#1971c2";
   return {
     id: `an_${cmd.span.start}_${cmd.kind}`,
@@ -860,17 +914,38 @@ export function annotationFromCmd(cmd: AnnotationCmd, tokens: Map<string, Value>
 
 // ---- timeline --------------------------------------------------------------
 
-function resolveTargetIds(v: Value, scene: Scene): string[] {
+/** Expand one target id: viz-item keys ("block.item") become their member
+ *  element ids so reveal/hide/focus treat a data item as a unit. */
+function expandTargetId(id: string, scene: Scene): string[] {
+  const members = vizItemMembers(scene, id);
+  if (!members.length) return [id];
+  return members.includes(id) ? members : [id, ...members];
+}
+
+function resolveTargetIds(v: Value, scene: Scene, diags?: DiagnosticBag): string[] {
+  const checked = (id: string): string[] => {
+    if (diags && !targetExists(scene, id)) {
+      diags.warn("W-STEP-TARGET", `timeline target '${id}' matches no element`, { line: 1, col: 1, start: 0, end: 0 }, { hint: "check the id — viz items are addressed as <blockId>.<itemId>" });
+    }
+    return expandTargetId(id, scene);
+  };
   switch (v.t) {
     case "ident": {
       if (v.v === "all") return [...scene.nodes.map((n) => n.id), ...scene.edges.map((e) => e.id)];
       if (v.v === "nodes") return scene.nodes.map((n) => n.id);
       if (v.v === "edges") return scene.edges.map((e) => e.id);
       if (v.v === "groups") return scene.groups.map((g) => g.id);
-      return [v.v];
+      return checked(v.v);
     }
-    case "ref":
-      return [v.id];
+    case "ref": {
+      // dotted targets (`fix.item1`) parse as ref+sub: prefer the joined id
+      // when it names something (viz items, literal dotted ids)
+      if (v.sub) {
+        const joined = `${v.id}.${v.sub}`;
+        if (targetExists(scene, joined)) return expandTargetId(joined, scene);
+      }
+      return checked(v.id);
+    }
     case "class": {
       const cls = v.v;
       return scene.nodes
@@ -881,15 +956,15 @@ function resolveTargetIds(v: Value, scene: Scene): string[] {
         .map((n) => n.id);
     }
     case "list":
-      return v.v.flatMap((x) => resolveTargetIds(x, scene));
+      return v.v.flatMap((x) => resolveTargetIds(x, scene, diags));
     case "str":
-      return [v.v];
+      return checked(v.v);
     default:
       return [];
   }
 }
 
-function beatToStep(b: BeatDecl, idx: number, scene: Scene, tokens: Map<string, Value>, timelineProps: Record<string, Value>): Step {
+function beatToStep(b: BeatDecl, idx: number, scene: Scene, tokens: Map<string, Value>, timelineProps: Record<string, Value>, diags?: DiagnosticBag): Step {
   const step: Step = {
     id: b.id || `beat_${idx}`,
     name: b.title ?? b.id,
@@ -901,7 +976,7 @@ function beatToStep(b: BeatDecl, idx: number, scene: Scene, tokens: Map<string, 
   for (const item of b.items) {
     switch (item.type) {
       case "camera":
-        step.camera = cameraDirective(item, scene, tokens, timelineProps);
+        step.camera = cameraDirective(item, scene, tokens, timelineProps, diags);
         break;
       case "annotate":
         for (const c of item.commands) {
@@ -915,14 +990,14 @@ function beatToStep(b: BeatDecl, idx: number, scene: Scene, tokens: Map<string, 
         break;
       }
       case "reveal":
-        for (const c of item.commands) applyRevealToStep(c, scene, step);
+        for (const c of item.commands) applyRevealToStep(c, scene, step, diags);
         break;
       case "revealcmd":
-        applyRevealToStep(item, scene, step);
+        applyRevealToStep(item, scene, step, diags);
         break;
       case "stagger":
         for (const c of item.commands) {
-          if (c.type === "revealcmd") applyRevealToStep(c, scene, step);
+          if (c.type === "revealcmd") applyRevealToStep(c, scene, step, diags);
           else {
             const a = annotationFromCmd(c, tokens, "script");
             if (a) step.annotations.push(a);
@@ -940,8 +1015,8 @@ function beatToStep(b: BeatDecl, idx: number, scene: Scene, tokens: Map<string, 
   return step;
 }
 
-function applyRevealToStep(c: { verb: string; targets: Value[]; with?: string }, scene: Scene, step: Step): void {
-  const ids = c.targets.flatMap((t) => resolveTargetIds(t, scene));
+function applyRevealToStep(c: { verb: string; targets: Value[]; with?: string }, scene: Scene, step: Step, diags?: DiagnosticBag): void {
+  const ids = c.targets.flatMap((t) => resolveTargetIds(t, scene, diags));
   if (c.verb === "hide" || c.verb === "fade-out" || c.verb === "remove") {
     step.hide!.push(...ids);
     return;
@@ -975,11 +1050,11 @@ function revealEffect(raw: string | undefined): string | undefined {
   }
 }
 
-function cameraDirective(cam: import("./ast.js").CameraStmt, scene: Scene, _tokens: Map<string, Value>, timelineProps: Record<string, Value>): CameraDirective {
+function cameraDirective(cam: import("./ast.js").CameraStmt, scene: Scene, _tokens: Map<string, Value>, timelineProps: Record<string, Value>, diags?: DiagnosticBag): CameraDirective {
   const op = (cam.op ?? "fit-all") as CameraDirective["op"];
   const directive: CameraDirective = { op: normalizeCamOp(op) };
   if (cam.targets && cam.targets.length) {
-    directive.targets = cam.targets.flatMap((t) => resolveTargetIds(t, scene));
+    directive.targets = cam.targets.flatMap((t) => resolveTargetIds(t, scene, diags));
   }
   if (cam.zoom != null) directive.zoom = cam.zoom;
   if (cam.pad != null) directive.padding = cam.pad;

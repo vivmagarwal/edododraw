@@ -81,6 +81,12 @@ registerViz({
   aliases: ["column"],
   category: "Data",
   summary: "Column chart with per-category colors and value labels.",
+  entryKinds: ["item", "bar"],
+  options: [
+    { name: "yTitle", type: "string", description: "y-axis title" },
+    { name: "xTitle", type: "string", description: "x-axis title" },
+    { name: "showValues", type: "boolean", description: "print item values (default true)" },
+  ],
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "bar");
     const n = Math.max(items.length, 1);
@@ -95,14 +101,16 @@ registerViz({
       yTitle: optStr(spec.options, "yTitle"),
       xTitle: optStr(spec.options, "xTitle"),
     });
-    items.forEach((item, i) => {
-      const role = ctx.role(i, { n, color: item.color });
-      const h = ((item.value ?? 0) / max) * chartH;
-      const x = x0 + gap + i * (barW + gap);
-      ctx.shape("rectangle", x, y0 - h, barW, h, role, { id: ctx.uid(item.id) });
-      ctx.label(fmtNum(item.value ?? 0), x + barW / 2, y0 - h - 16, { size: 15, color: role.color, weight: 700 });
-      ctx.label(ctx.wrap(item.label, barW + gap - 6, 15), x + barW / 2, y0 + 22, { size: 15, color: ctx.ink });
-    });
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n, color: item.color });
+        const h = ((item.value ?? 0) / max) * chartH;
+        const x = x0 + gap + i * (barW + gap);
+        ctx.shape("rectangle", x, y0 - h, barW, h, role, { id: ctx.uid(item.id) });
+        if (ctx.showValue(item)) ctx.label(fmtNum(item.value ?? 0), x + barW / 2, y0 - h - 16, { size: 15, color: role.color, weight: 700, role: "value" });
+        ctx.label(ctx.wrap(item.label, barW + gap - 6, 15), x + barW / 2, y0 + 22, { size: 15, color: ctx.ink });
+      }),
+    );
   },
 });
 
@@ -113,6 +121,8 @@ registerViz({
   aliases: ["hbar"],
   category: "Data",
   summary: "Horizontal bars with circular category badges.",
+  entryKinds: ["item", "bar"],
+  options: [{ name: "showValues", type: "boolean", description: "print item values (default true)" }],
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "bar");
     const n = Math.max(items.length, 1);
@@ -121,16 +131,19 @@ registerViz({
     const trackW = 420;
     const x0 = 110;
     const max = niceMax(Math.max(...items.map((i) => i.value ?? 0), 1));
-    items.forEach((item, i) => {
-      const role = ctx.role(i, { n, color: item.color });
-      const cy = i * rowH + badgeR + 6;
-      ctx.shape("circle", 30 - badgeR, cy - badgeR, badgeR * 2, badgeR * 2, role, { id: ctx.uid(`${item.id}_badge`) });
-      if (item.icon) ctx.icon(item.icon, 30, cy, 28, role.textColor);
-      else ctx.label(String(i + 1), 30, cy, { size: 20, color: role.textColor, weight: 700 });
-      const w = ((item.value ?? 0) / max) * trackW;
-      ctx.shape("rectangle", x0, cy - 17, Math.max(w, 3), 34, role, { id: ctx.uid(item.id), style: { roundness: 8 } });
-      ctx.label(`${item.label}  ${fmtNum(item.value ?? 0)}`, x0 + w + 14, cy, { size: 16, color: ctx.ink, align: "left" });
-    });
+    const valueText = (it: VizItem) => (ctx.showValue(it) ? `  ${fmtNum(it.value ?? 0)}` : "");
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n, color: item.color });
+        const cy = i * rowH + badgeR + 6;
+        ctx.shape("circle", 30 - badgeR, cy - badgeR, badgeR * 2, badgeR * 2, role, { id: ctx.uid(`${item.id}_badge`) });
+        if (item.icon) ctx.icon(item.icon, 30, cy, 28, role.textColor);
+        else ctx.label(String(i + 1), 30, cy, { size: 20, color: role.textColor, weight: 700 });
+        const w = ((item.value ?? 0) / max) * trackW;
+        ctx.shape("rectangle", x0, cy - 17, Math.max(w, 3), 34, role, { id: ctx.uid(item.id), style: { roundness: 8 } });
+        ctx.label(`${item.label}${valueText(item)}`, x0 + w + 14, cy, { size: 16, color: ctx.ink, align: "left" });
+      }),
+    );
   },
 });
 
@@ -149,18 +162,20 @@ function stackedBars(spec: VizSpec, ctx: VizContext, horizontal: boolean): void 
     const pitch = 88;
     const trackW = 520;
     const x0 = 90;
-    rows.forEach((row, r) => {
-      const cy = y + r * pitch + rowH / 2 + 26;
-      ctx.label(row.label, x0 - 12, cy, { size: 15, color: ctx.ink, align: "right", maxW: 84 });
-      let x = x0;
-      row.values.forEach((v, s) => {
-        const role = ctx.role(s, { n: k });
-        const w = (v / max) * trackW;
-        ctx.shape("rectangle", x, cy - rowH / 2, Math.max(w, 2), rowH, role, { id: ctx.uid(`${row.id}_${s}`) });
-        if (w > 44) ctx.label(fmtNum(v), x + w / 2, cy, { size: 14, color: role.textColor });
-        x += w;
-      });
-    });
+    rows.forEach((row, r) =>
+      ctx.item(row.id, () => {
+        const cy = y + r * pitch + rowH / 2 + 26;
+        ctx.label(row.label, x0 - 12, cy, { size: 15, color: ctx.ink, align: "right", maxW: 84 });
+        let x = x0;
+        row.values.forEach((v, s) => {
+          const role = ctx.role(s, { n: k });
+          const w = (v / max) * trackW;
+          ctx.shape("rectangle", x, cy - rowH / 2, Math.max(w, 2), rowH, role, { id: ctx.uid(`${row.id}_${s}`) });
+          if (w > 44 && ctx.showValue(row)) ctx.label(fmtNum(v), x + w / 2, cy, { size: 14, color: role.textColor, role: "value" });
+          x += w;
+        });
+      }),
+    );
     const axisY = y + rows.length * pitch + 20;
     ctx.line(
       [
@@ -181,18 +196,20 @@ function stackedBars(spec: VizSpec, ctx: VizContext, horizontal: boolean): void 
     const x0 = 60;
     const y0 = y + chartH + 30;
     drawAxes(ctx, x0, y0, rows.length * (barW + gap) + gap, chartH, { yTitle: optStr(spec.options, "yTitle"), xTitle: optStr(spec.options, "xTitle") });
-    rows.forEach((row, r) => {
-      const x = x0 + gap + r * (barW + gap);
-      let top = y0;
-      row.values.forEach((v, s) => {
-        const role = ctx.role(s, { n: k });
-        const h = (v / max) * chartH;
-        top -= h;
-        ctx.shape("rectangle", x, top, barW, h, role, { id: ctx.uid(`${row.id}_${s}`) });
-        if (h > 26) ctx.label(fmtNum(v), x + barW / 2, top + h / 2, { size: 14, color: role.textColor });
-      });
-      ctx.label(ctx.wrap(row.label, barW + gap - 6, 15), x + barW / 2, y0 + 22, { size: 15, color: ctx.ink });
-    });
+    rows.forEach((row, r) =>
+      ctx.item(row.id, () => {
+        const x = x0 + gap + r * (barW + gap);
+        let top = y0;
+        row.values.forEach((v, s) => {
+          const role = ctx.role(s, { n: k });
+          const h = (v / max) * chartH;
+          top -= h;
+          ctx.shape("rectangle", x, top, barW, h, role, { id: ctx.uid(`${row.id}_${s}`) });
+          if (h > 26 && ctx.showValue(row)) ctx.label(fmtNum(v), x + barW / 2, top + h / 2, { size: 14, color: role.textColor, role: "value" });
+        });
+        ctx.label(ctx.wrap(row.label, barW + gap - 6, 15), x + barW / 2, y0 + 22, { size: 15, color: ctx.ink });
+      }),
+    );
   }
 }
 
@@ -200,6 +217,14 @@ registerViz({
   name: "stacked-bar",
   category: "Data",
   summary: "Stacked columns; rows are `item \"Q1\" [a, b, c]`, legend via `series`.",
+  entryKinds: ["item", "row", "series"],
+  options: [
+    { name: "yTitle", type: "string", description: "y-axis title" },
+    { name: "xTitle", type: "string", description: "x-axis title" },
+    { name: "legend", type: "string", description: "list of series names for the legend" },
+    { name: "series", type: "string", description: "alias for legend" },
+    { name: "showValues", type: "boolean", description: "print item values (default true)" },
+  ],
   generate: (spec, ctx) => stackedBars(spec, ctx, false),
 });
 
@@ -208,6 +233,12 @@ registerViz({
   aliases: ["stacked-hbar"],
   category: "Data",
   summary: "Horizontal stacked bars with a value axis and legend.",
+  entryKinds: ["item", "row", "series"],
+  options: [
+    { name: "legend", type: "string", description: "list of series names for the legend" },
+    { name: "series", type: "string", description: "alias for legend" },
+    { name: "showValues", type: "boolean", description: "print item values (default true)" },
+  ],
   generate: (spec, ctx) => stackedBars(spec, ctx, true),
 });
 
@@ -230,12 +261,14 @@ function lineChart(spec: VizSpec, ctx: VizContext, area: boolean): void {
     ctx.poly(poly, { ...ctx.role(0, { n: 1, color: role.color }), stroke: "transparent", fill: withSoft(ctx, role.color), fillStyle: "solid" }, { z: -1 });
   }
   ctx.line(pts, { color: ctx.preset.fillMode === "outline" ? ctx.preset.edge : role.color, width: 2.2 });
-  points.forEach((p, i) => {
-    const [px, py] = pts[i];
-    ctx.shape("circle", px - 5, py - 5, 10, 10, { stroke: role.color, fill: ctx.preset.background, fillStyle: "solid", strokeWidth: 2, roughness: Math.min(0.6, ctx.preset.roughness) });
-    ctx.label(fmtNum(p.value ?? 0), px, py - 20, { size: 14, color: role.color, weight: 700 });
-    ctx.label(p.label, px, y0 + 20, { size: 14, color: ctx.ink });
-  });
+  points.forEach((p, i) =>
+    ctx.item(p.id, () => {
+      const [px, py] = pts[i];
+      ctx.shape("circle", px - 5, py - 5, 10, 10, { stroke: role.color, fill: ctx.preset.background, fillStyle: "solid", strokeWidth: 2, roughness: Math.min(0.6, ctx.preset.roughness) });
+      if (ctx.showValue(p)) ctx.label(fmtNum(p.value ?? 0), px, py - 20, { size: 14, color: role.color, weight: 700, role: "value" });
+      ctx.label(p.label, px, y0 + 20, { size: 14, color: ctx.ink });
+    }),
+  );
 }
 
 function withSoft(ctx: VizContext, color: string): string {
@@ -246,6 +279,13 @@ registerViz({
   name: "line",
   category: "Data",
   summary: "Line chart with point markers and value labels.",
+  entryKinds: ["item", "point"],
+  options: [
+    { name: "yTitle", type: "string", description: "y-axis title" },
+    { name: "xTitle", type: "string", description: "x-axis title" },
+    { name: "color", type: "string", description: "line color override" },
+    { name: "showValues", type: "boolean", description: "print item values (default true)" },
+  ],
   generate: (spec, ctx) => lineChart(spec, ctx, false),
 });
 
@@ -253,6 +293,13 @@ registerViz({
   name: "area",
   category: "Data",
   summary: "Line chart with a soft filled area underneath.",
+  entryKinds: ["item", "point"],
+  options: [
+    { name: "yTitle", type: "string", description: "y-axis title" },
+    { name: "xTitle", type: "string", description: "x-axis title" },
+    { name: "color", type: "string", description: "line color override" },
+    { name: "showValues", type: "boolean", description: "print item values (default true)" },
+  ],
   generate: (spec, ctx) => lineChart(spec, ctx, true),
 });
 
@@ -262,6 +309,12 @@ registerViz({
   name: "waterfall",
   category: "Data",
   summary: "Start bar, floating signed deltas, computed net bar, connector line.",
+  entryKinds: ["item", "delta", "total", "net", "end"],
+  options: [
+    { name: "yTitle", type: "string", description: "y-axis title" },
+    { name: "xTitle", type: "string", description: "x-axis title" },
+    { name: "showValues", type: "boolean", description: "print item values (default true)" },
+  ],
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "delta");
     const totals = spec.items.filter((i) => i.kind === "total" || i.kind === "net" || i.kind === "end");
@@ -302,19 +355,21 @@ registerViz({
       ctx.label(fmtNum((max * t) / 4), x0 - 10, gy, { size: 13, color: ctx.mutedInk, align: "right" });
     }
     const joints: Array<[number, number]> = [];
-    bars.forEach((b, i) => {
-      const roleIdx = b.kind === "start" ? 0 : b.kind === "total" ? 2 : 1;
-      const role = ctx.role(roleIdx, { n: 3, color: b.item.color });
-      const x = x0 + gap + i * (barW + gap);
-      const top = Math.min(yOf(b.from), yOf(b.to));
-      const h = Math.max(Math.abs(yOf(b.from) - yOf(b.to)), 3);
-      ctx.shape("rectangle", x, top, barW, h, role, { id: ctx.uid(b.item.id), style: { roundness: 6 } });
-      const delta = b.to - b.from;
-      const sign = b.kind === "delta" ? (delta >= 0 ? "+" : "−") : "";
-      ctx.label(`${sign}${fmtNum(Math.abs(b.kind === "total" ? b.to : b.kind === "start" ? b.to : delta))}`, x + barW / 2, top - 16, { size: 15, color: role.color, weight: 700 });
-      ctx.label(ctx.wrap(b.item.label, barW + gap - 4, 14), x + barW / 2, y0 + 22, { size: 14, color: ctx.ink });
-      joints.push([x + barW / 2, yOf(b.to)]);
-    });
+    bars.forEach((b, i) =>
+      ctx.item(b.item.id, () => {
+        const roleIdx = b.kind === "start" ? 0 : b.kind === "total" ? 2 : 1;
+        const role = ctx.role(roleIdx, { n: 3, color: b.item.color });
+        const x = x0 + gap + i * (barW + gap);
+        const top = Math.min(yOf(b.from), yOf(b.to));
+        const h = Math.max(Math.abs(yOf(b.from) - yOf(b.to)), 3);
+        ctx.shape("rectangle", x, top, barW, h, role, { id: ctx.uid(b.item.id), style: { roundness: 6 } });
+        const delta = b.to - b.from;
+        const sign = b.kind === "delta" ? (delta >= 0 ? "+" : "−") : "";
+        if (ctx.showValue(b.item)) ctx.label(`${sign}${fmtNum(Math.abs(b.kind === "total" ? b.to : b.kind === "start" ? b.to : delta))}`, x + barW / 2, top - 16, { size: 15, color: role.color, weight: 700, role: "value" });
+        ctx.label(ctx.wrap(b.item.label, barW + gap - 4, 14), x + barW / 2, y0 + 22, { size: 14, color: ctx.ink });
+        joints.push([x + barW / 2, yOf(b.to)]);
+      }),
+    );
     ctx.line(joints, { color: ctx.preset.edge, width: 1.4, z: 1 });
     for (const [jx, jy] of joints) {
       ctx.shape("circle", jx - 4, jy - 4, 8, 8, { stroke: ctx.preset.edge, fill: ctx.preset.background, fillStyle: "solid", strokeWidth: 1.6, roughness: 0.4 }, { z: 2 });
@@ -329,35 +384,42 @@ registerViz({
   aliases: ["progress-bars", "tracks"],
   category: "Data",
   summary: "Rows of tracks with value bars and a hanging tag bubble.",
+  entryKinds: ["item", "row"],
+  options: [{ name: "showValues", type: "boolean", description: "print item values (default true)" }],
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "row");
     const n = Math.max(items.length, 1);
     const trackW = 520;
     const pitch = 118;
     const max = niceMax(Math.max(...items.map((i) => i.value ?? 0), 1));
-    items.forEach((item, i) => {
-      const role = ctx.role(i, { n, color: item.color });
-      const y = i * pitch;
-      ctx.label(item.label, 0, y, { size: 19, color: ctx.ink, align: "left", font: "heading", weight: ctx.preset.fonts.headingWeight });
-      const barY = y + 22;
-      ctx.shape("rectangle", 0, barY, trackW, 34, ctx.role(i, { neutral: true }), { style: { roundness: 17, opacity: 35 } });
-      const w = Math.max(((item.value ?? 0) / max) * trackW, 34);
-      ctx.shape("rectangle", 0, barY, w, 34, role, { id: ctx.uid(item.id), style: { roundness: 17 } });
-      const tag = item.strings[0] ?? item.opts.tag ?? fmtNum(item.value ?? 0);
-      // tag bubble hanging under the bar's right end
-      const tw = ctx.measure(String(tag), 13) + 20;
-      const bx = Math.max(w - tw / 2 - 10, 20);
-      ctx.poly(
-        [
-          [bx + tw / 2 - 7, barY + 42],
-          [bx + tw / 2, barY + 34],
-          [bx + tw / 2 + 7, barY + 42],
-        ],
-        { stroke: role.color, fill: role.color, fillStyle: "solid", strokeWidth: 1, roughness: ctx.preset.roughness },
-      );
-      ctx.shape("rectangle", bx - tw / 2, barY + 42, tw, 26, { stroke: role.color, fill: null, fillStyle: "none", strokeWidth: 1.4, roughness: ctx.preset.roughness }, { style: { roundness: 8 } });
-      ctx.label(String(tag), bx, barY + 55, { size: 13, color: role.color, weight: 700 });
-    });
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n, color: item.color });
+        const y = i * pitch;
+        ctx.label(item.label, 0, y, { size: 19, color: ctx.ink, align: "left", font: "heading", weight: ctx.preset.fonts.headingWeight });
+        const barY = y + 22;
+        ctx.shape("rectangle", 0, barY, trackW, 34, ctx.role(i, { neutral: true }), { style: { roundness: 17, opacity: 35 } });
+        const w = Math.max(((item.value ?? 0) / max) * trackW, 34);
+        ctx.shape("rectangle", 0, barY, w, 34, role, { id: ctx.uid(item.id), style: { roundness: 17 } });
+        // the bubble's fallback text is a pure value readout — skip it when values are hidden
+        const tag = item.strings[0] ?? item.opts.tag ?? (ctx.showValue(item) ? fmtNum(item.value ?? 0) : undefined);
+        if (tag !== undefined) {
+          // tag bubble hanging under the bar's right end
+          const tw = ctx.measure(String(tag), 13) + 20;
+          const bx = Math.max(w - tw / 2 - 10, 20);
+          ctx.poly(
+            [
+              [bx + tw / 2 - 7, barY + 42],
+              [bx + tw / 2, barY + 34],
+              [bx + tw / 2 + 7, barY + 42],
+            ],
+            { stroke: role.color, fill: role.color, fillStyle: "solid", strokeWidth: 1, roughness: ctx.preset.roughness },
+          );
+          ctx.shape("rectangle", bx - tw / 2, barY + 42, tw, 26, { stroke: role.color, fill: null, fillStyle: "none", strokeWidth: 1.4, roughness: ctx.preset.roughness }, { style: { roundness: 8 } });
+          ctx.label(String(tag), bx, barY + 55, { size: 13, color: role.color, weight: 700, role: "value" });
+        }
+      }),
+    );
   },
 });
 
@@ -368,13 +430,16 @@ registerViz({
   aliases: ["deltas"],
   category: "Data",
   summary: "Alternating capsules with a delta badge, connected to text blocks.",
+  entryKinds: ["item", "row"],
+  options: [{ name: "showValues", type: "boolean", description: "print item values (default true)" }],
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "row");
     const n = Math.max(items.length, 1);
     const pitch = 128;
     const capW = 300;
     const capH = 104;
-    items.forEach((item, i) => {
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
       const role = ctx.role(i, { n, color: item.color });
       const right = i % 2 === 0;
       const y = i * pitch;
@@ -403,9 +468,9 @@ registerViz({
       };
       ctx.line(waist(-1), { color: waistColor, width: role.strokeWidth || 2 });
       ctx.line(waist(1), { color: waistColor, width: role.strokeWidth || 2 });
-      const delta = (item.opts.delta as string) ?? item.strings[0] ?? (item.value !== undefined ? `+${fmtNum(item.value)}` : "");
+      const delta = (item.opts.delta as string) ?? item.strings[0] ?? (item.value !== undefined && ctx.showValue(item) ? `+${fmtNum(item.value)}` : "");
       const inBell = role.fill ? role.textColor : role.color;
-      ctx.label(String(delta), right ? cB : cA, gy, { size: 21, color: inBell, weight: 700, font: "heading", z: 2 });
+      ctx.label(String(delta), right ? cB : cA, gy, { size: 21, color: inBell, weight: 700, font: "heading", z: 2, role: "value" });
       const iconC = right ? cA : cB;
       if (item.icon) {
         ctx.shape("circle", iconC - r * 0.62, gy - r * 0.62, r * 1.24, r * 1.24, { stroke: inBell, fill: null, fillStyle: "none", strokeWidth: 1.6, roughness: Math.min(1, ctx.preset.roughness) }, { z: 2 });
@@ -417,7 +482,8 @@ registerViz({
       const conEnd: [number, number] = right ? [260, gy] : [640, gy];
       ctx.arrow(conStart[0], conStart[1], conEnd[0], conEnd[1], { color: ctx.preset.edge, width: 1.6 });
       ctx.labelBlock(item.label, item.detail, textX, gy, { color: role.color, align: "left", maxW: 240 });
-    });
+      }),
+    );
   },
 });
 
@@ -427,6 +493,12 @@ registerViz({
   name: "gantt",
   category: "Process",
   summary: "Cascading task bars over a time grid; `task \"Name\" start end`.",
+  entryKinds: ["task", "item"],
+  options: [
+    { name: "scale", type: "string", description: "list of tick labels for the time axis" },
+    { name: "deadline", type: "number", description: "time position of the deadline marker" },
+    { name: "deadlineLabel", type: "string", description: "caption for the deadline marker" },
+  ],
   generate(spec: VizSpec, ctx: VizContext) {
     const tasks = spec.items.filter((i) => i.kind === "task" || i.kind === "item");
     const scale = Array.isArray(spec.options.scale) ? (spec.options.scale as unknown[]).map(String) : undefined;
@@ -449,16 +521,18 @@ registerViz({
       const lbl = scale ? scale[t] : fmtNum((maxT * t) / (ticks - 1));
       ctx.label(lbl, tx, 18, { size: 14, color: ctx.mutedInk });
     }
-    tasks.forEach((task, i) => {
-      const role = ctx.role(i, { n: tasks.length, color: task.color });
-      const start = task.values[0] ?? 0;
-      const end = task.values[1] ?? start + 1;
-      const y = 48 + i * rowPitch;
-      ctx.label(task.label, x0 - 16, y + 17, { size: 16, color: role.color, align: "right", maxW: 130, font: "heading", weight: ctx.preset.fonts.headingWeight });
-      const bx = x0 + (start / maxT) * chartW;
-      const bw = Math.max(((end - start) / maxT) * chartW, 10);
-      ctx.shape("rectangle", bx, y, bw, 34, role, { id: ctx.uid(task.id), style: { roundness: 8 } });
-    });
+    tasks.forEach((task, i) =>
+      ctx.item(task.id, () => {
+        const role = ctx.role(i, { n: tasks.length, color: task.color });
+        const start = task.values[0] ?? 0;
+        const end = task.values[1] ?? start + 1;
+        const y = 48 + i * rowPitch;
+        ctx.label(task.label, x0 - 16, y + 17, { size: 16, color: role.color, align: "right", maxW: 130, font: "heading", weight: ctx.preset.fonts.headingWeight });
+        const bx = x0 + (start / maxT) * chartW;
+        const bw = Math.max(((end - start) / maxT) * chartW, 10);
+        ctx.shape("rectangle", bx, y, bw, 34, role, { id: ctx.uid(task.id), style: { roundness: 8 } });
+      }),
+    );
     const deadline = optNum(spec.options, "deadline");
     if (deadline !== undefined) {
       const dx = x0 + (deadline / maxT) * chartW;
@@ -480,6 +554,8 @@ registerViz({
   name: "sankey",
   category: "Data",
   summary: "Sources → targets with value-thick ribbons (`flow a -> b 25`).",
+  entryKinds: ["flow", "item", "node", "source", "target"],
+  options: [{ name: "showValues", type: "boolean", description: "print item values (default true)" }],
   generate(spec: VizSpec, ctx: VizContext) {
     const flows = spec.items.filter((i) => i.kind === "flow" || (i.kind === "item" && i.to));
     // collect nodes preserving declared order (explicit `node` entries first)
@@ -515,7 +591,7 @@ registerViz({
       srcPos.set(s, { y, used: 0, i });
       const role = ctx.role(i, { n: srcNames.length });
       ctx.shape("rectangle", colX.src - barW, y, barW, h, { ...roleFillOnly(ctx, i, srcNames.length), stroke: role.color });
-      ctx.labelBlock(s, fmtNum(srcTotals.get(s) ?? 0), colX.src - barW - 12, y + h / 2, { color: role.color, align: "right", maxW: 110, size: 16 });
+      ctx.labelBlock(s, ctx.showValues ? fmtNum(srcTotals.get(s) ?? 0) : undefined, colX.src - barW - 12, y + h / 2, { color: role.color, align: "right", maxW: 110, size: 16 });
       y += h + gapY;
     });
     y = 0;
@@ -524,7 +600,7 @@ registerViz({
       dstPos.set(s, { y, used: 0, i });
       const role = ctx.role(srcNames.length + i, { n: srcNames.length + dstNames.length });
       ctx.shape("rectangle", colX.dst, y, barW, h, { ...roleFillOnly(ctx, srcNames.length + i, srcNames.length + dstNames.length), stroke: role.color });
-      ctx.labelBlock(s, fmtNum(dstTotals.get(s) ?? 0), colX.dst + barW + 12, y + h / 2, { color: role.color, align: "left", maxW: 130, size: 16 });
+      ctx.labelBlock(s, ctx.showValues ? fmtNum(dstTotals.get(s) ?? 0) : undefined, colX.dst + barW + 12, y + h / 2, { color: role.color, align: "left", maxW: 130, size: 16 });
       y += h + gapY;
     });
 
@@ -540,19 +616,21 @@ registerViz({
       const y2 = dp.y + dp.used;
       sp.used += h;
       dp.used += h;
-      const role = ctx.role(sp.i, { n: srcNames.length });
-      const top: Array<[number, number]> = [];
-      const bot: Array<[number, number]> = [];
-      const segs = 18;
-      for (let s = 0; s <= segs; s++) {
-        const t = s / segs;
-        const ease = t * t * (3 - 2 * t);
-        const px = lerp(colX.src, colX.dst, t);
-        top.push([px, lerp(y1, y2, ease)]);
-        bot.unshift([px, lerp(y1 + h, y2 + h, ease)]);
-      }
-      ctx.poly([...top, ...bot], { stroke: "transparent", fill: role.softFill, fillStyle: "solid", strokeWidth: 0, roughness: 0.3 }, { z: -1, id: ctx.uid(`${f.id}_${to}`) });
-      ctx.label(fmtNum(f.value ?? 1), colX.dst - 44, y2 + h / 2, { size: 13, color: role.color, weight: 700 });
+      ctx.item(f.id, () => {
+        const role = ctx.role(sp.i, { n: srcNames.length });
+        const top: Array<[number, number]> = [];
+        const bot: Array<[number, number]> = [];
+        const segs = 18;
+        for (let s = 0; s <= segs; s++) {
+          const t = s / segs;
+          const ease = t * t * (3 - 2 * t);
+          const px = lerp(colX.src, colX.dst, t);
+          top.push([px, lerp(y1, y2, ease)]);
+          bot.unshift([px, lerp(y1 + h, y2 + h, ease)]);
+        }
+        ctx.poly([...top, ...bot], { stroke: "transparent", fill: role.softFill, fillStyle: "solid", strokeWidth: 0, roughness: 0.3 }, { z: -1, id: ctx.uid(`${f.id}_${to}`) });
+        if (ctx.showValue(f)) ctx.label(fmtNum(f.value ?? 1), colX.dst - 44, y2 + h / 2, { size: 13, color: role.color, weight: 700, role: "value" });
+      });
     }
   },
 });
@@ -564,6 +642,9 @@ registerViz({
   aliases: ["dropoff"],
   category: "Data",
   summary: "Nested rounded cards stepping down-right, labels called out around them.",
+  entryKinds: ["item", "stage"],
+  options: [{ name: "showValues", type: "boolean", description: "print item values (default true)" }],
+  sweetSpot: { min: 2, max: 5 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "stage");
     const n = Math.max(items.length, 1);
@@ -576,7 +657,8 @@ registerViz({
     let brX = cx0 + s0;
     let brY = cy0 + s0;
     const sizes = items.map((_, i) => s0 * Math.pow(shrink, i));
-    items.forEach((item, i) => {
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
       const role = ctx.role(i, { n, color: item.color });
       const s = sizes[i];
       if (i > 0) {
@@ -586,7 +668,7 @@ registerViz({
       const x = brX - s;
       const y = brY - s;
       ctx.shape("rectangle", x, y, s, s, role, { id: ctx.uid(item.id), style: { roundness: s * 0.2 } });
-      const value = item.value !== undefined ? ` ${fmtNum(item.value)}` : "";
+      const value = ctx.showValue(item) && item.value !== undefined ? ` ${fmtNum(item.value)}` : "";
       // callout positions cycle around the cluster: top-left, top-right, left, right, below
       const pos = i % 5;
       let lx: number;
@@ -614,6 +696,7 @@ registerViz({
       }
       ctx.labelBlock(item.label + value, item.detail, lx, ly, { color: role.color, align, maxW: 180 });
       if (item.icon) ctx.icon(item.icon, x + s * 0.32, y + s * 0.32, Math.max(24, s * 0.2), role.fill ? role.textColor : role.color);
-    });
+      }),
+    );
   },
 });

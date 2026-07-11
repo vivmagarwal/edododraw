@@ -9,6 +9,7 @@ import type { AnnotationLayer } from "../annotate/layer.js";
 import type { CameraController } from "../camera/controller.js";
 import type { SvgRenderer } from "../render/svgRenderer.js";
 import type { Scene, Step } from "../scene/types.js";
+import { computeHiddenAt } from "./stepState.js";
 
 export interface PlayerState {
   index: number; // -1 = home/overview (no step)
@@ -62,25 +63,14 @@ export class TimelinePlayer {
     });
   }
 
-  /** Cumulative sticky visibility through step `i`. */
-  private computeHidden(i: number): Set<string> {
-    const hidden = new Set<string>();
-    for (let s = 0; s <= i; s++) {
-      const step = this.steps[s];
-      for (const id of step.reveal ?? []) hidden.delete(id);
-      for (const id of step.hide ?? []) hidden.add(id);
-    }
-    return hidden;
-  }
-
   async goto(i: number, animate = true): Promise<void> {
     if (!this.scene || i < 0 || i >= this.steps.length) return;
     this.idx = i;
     const step = this.steps[i];
     const scene = this.scene;
 
-    // visibility (sticky)
-    this.renderer.applyVisibility(this.computeHidden(i));
+    // visibility (sticky) — shared with the pure stepStateAt() math
+    this.renderer.applyVisibility(computeHiddenAt(this.steps, i));
 
     // reveal animation (fade / pop / draw-on) for this beat's targets
     if (animate) this.renderer.playReveal(step.revealFx);

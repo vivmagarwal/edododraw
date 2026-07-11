@@ -25,6 +25,7 @@ import { sceneBBox } from "../engine/scene/query.js";
 import { applyOverrides } from "../engine/scene/overrides.js";
 import type { Scene } from "../engine/scene/types.js";
 import { TimelinePlayer, type PlayerState } from "../engine/timeline/player.js";
+import { resolveCameraDirective, stepStateAt, type StepState } from "../engine/timeline/stepState.js";
 import { convertMermaid, extractMermaidBlocks, injectMermaid } from "../engine/import/mermaid.js";
 
 export interface EdodoDrawOptions {
@@ -36,6 +37,19 @@ export interface EdodoDrawOptions {
   autoFit?: boolean;
   /** Padding (screen px) used when fitting. */
   padding?: number;
+  /**
+   * Deterministic frame rendering for screenshot/video consumers: disables
+   * ALL wall-clock CSS (visibility transitions, animated arrows, reveal
+   * animations). Drive motion explicitly — stepState()/applyStepState(),
+   * setRevealProgress(), camera. See docs/INTEGRATION_GUIDE.
+   */
+  static?: boolean;
+  /**
+   * Mount with every node/edge hidden (and no annotations) so choreographed
+   * embeds never flash the full diagram before the host applies its first
+   * state. Reveal via applyStepState()/timeline or applyVisibility.
+   */
+  startHidden?: boolean;
 }
 
 export type EdodoEvent = "render" | "state" | "live" | "diagnostics" | "edit" | "editstate";
@@ -91,11 +105,13 @@ export class EdodoDraw {
       grid: options.grid ?? true,
       autoFit: options.autoFit ?? true,
       padding: options.padding ?? 80,
+      static: options.static ?? false,
+      startHidden: options.startHidden ?? false,
     };
     if (getComputedStyle(container).position === "static") container.style.position = "relative";
     container.style.overflow = "hidden";
 
-    this.renderer = new SvgRenderer(container);
+    this.renderer = new SvgRenderer(container, { static: this.opts.static });
     this.renderer.mount();
     this.scene = compileEdd("scene {}").scene;
     this.controller = new CameraController(this.renderer);
@@ -222,6 +238,10 @@ export class EdodoDraw {
     this.hasRendered = true;
     this.renderer.render(scene);
     this.player.load(scene);
+    if (this.opts.startHidden) {
+      this.renderer.applyVisibility(new Set([...scene.nodes.map((n) => n.id), ...scene.edges.map((e) => e.id)]));
+      this.annotations.clear();
+    }
     this.renderer.measure();
     // Fit only on the first render or when explicitly requested — NOT on every
     // edit/keystroke (that would reset the camera while you're working).
@@ -318,6 +338,37 @@ export class EdodoDraw {
   }
   get timeline(): TimelinePlayer {
     return this.player;
+  }
+
+  // ---- frame-driven choreography (video / capture hosts) -------------------
+  /** Pure render-state for step `index` (-1 = overview) — no clock, no DOM. */
+  stepState(index: number): StepState {
+    return stepStateAt(this.scene, index);
+  }
+  /**
+   * Apply a StepState instantly (no tweens): visibility, annotations, and the
+   * step's sticky camera. Call per frame with states from stepState() to drive
+   * the timeline's own semantics frame-accurately (pair with {static: true};
+   * interpolate cameras yourself via mixCameras() for magic-move).
+   */
+  applyStepState(state: StepState): void {
+    this.renderer.applyVisibility(new Set(state.hidden));
+    this.annotations.render(this.scene, state.annotations, false);
+    if (state.effectiveCamera) {
+      const cam = resolveCameraDirective(this.scene, state.effectiveCamera, this.renderer.getViewportSize(), { current: this.controller.current });
+      this.controller.setImmediate(cam);
+    }
+  }
+  /**
+   * Host-driven draw-on: sweep an element's strokes on, then fade its labels.
+   * `id` = node id, edge id, or viz-item key ("block.item"); `p` = 0..1.
+   */
+  setRevealProgress(id: string, p: number): void {
+    this.renderer.setRevealProgress(id, p);
+  }
+  /** Hide/show elements directly (ids to hide; others become visible). */
+  applyVisibility(hiddenIds: Iterable<string>): void {
+    this.renderer.applyVisibility(new Set(hiddenIds));
   }
 
   // ---- tools (diagram-edit + annotation) ----------------------------------

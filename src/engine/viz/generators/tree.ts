@@ -53,6 +53,14 @@ function dot(ctx: VizContext, cx: number, cy: number, d: number): void {
   ctx.shape("circle", cx - d / 2, cy - d / 2, d, d, { stroke: ctx.ink, fill: ctx.ink, fillStyle: "solid", strokeWidth: 1, roughness: 0.5 });
 }
 
+/** Tag `fn`'s elements as item `itemId` when the emission belongs to a real
+ *  data item — roots/questions/outputs may instead come from the title or a
+ *  block option, in which case they stay untagged. */
+function scoped(ctx: VizContext, itemId: string | undefined, fn: () => void): void {
+  if (itemId) ctx.item(itemId, fn);
+  else fn();
+}
+
 /**
  * A tapering root sliver: a closed outline that starts `halfW` wide at `base`,
  * bows sideways (`bow` = -1|0|1), and narrows to a point `len` away at `ang°`.
@@ -104,6 +112,8 @@ function nodeBox(ctx: VizContext, label: string, fs: number, maxW: number, padX:
 // ---- mindmap (+ variants) ------------------------------------------------------
 
 interface MindmapRoot {
+  /** Set when the root is a real data item (drives per-item tagging). */
+  id?: string;
   label: string;
   detail?: string;
   color?: string;
@@ -123,7 +133,7 @@ function resolveMindmap(spec: VizSpec): { root: MindmapRoot; branches: VizItem[]
   if (top.length === 1 && top[0].children.length) return { root: top[0], branches: top[0].children, fromTitle: false };
   if (spec.title) return { root: { label: spec.title }, branches: top, fromTitle: true };
   if (top.length > 1) return { root: top[0], branches: [...top[0].children, ...top.slice(1)], fromTitle: false };
-  return { root: { label: top[0]?.label ?? "Topic" }, branches: top[0]?.children ?? [], fromTitle: false };
+  return { root: { id: top[0]?.id, label: top[0]?.label ?? "Topic" }, branches: top[0]?.children ?? [], fromTitle: false };
 }
 
 /** Vertical stack of clusters with given heights → center-y of each, centred on 0. */
@@ -144,31 +154,35 @@ function drawBranchCluster(ctx: VizContext, branch: VizItem, roleIdx: number, n:
   const role = ctx.role(roleIdx, { n, color: branch.color });
   const bb = nodeBox(ctx, branch.label, 15, 170, 12);
   const bx = dir > 0 ? branchX : branchX - bb.w;
-  ctx.shape("round-rectangle", bx, cy - bb.h / 2, bb.w, bb.h, role, {
-    id: ctx.uid(branch.id),
-    label: bb.text,
-    style: { fontSize: 15 },
+  ctx.item(branch.id, () => {
+    ctx.shape("round-rectangle", bx, cy - bb.h / 2, bb.w, bb.h, role, {
+      id: ctx.uid(branch.id),
+      label: bb.text,
+      style: { fontSize: 15 },
+    });
+    // root → branch fan (connector color from the preset)
+    ctx.line(sCurveH(rootEdge[0], rootEdge[1], dir > 0 ? bx - 2 : bx + bb.w + 2, cy), { color: ctx.preset.edge, width: 1.8 });
   });
-  // root → branch fan (connector color from the preset)
-  ctx.line(sCurveH(rootEdge[0], rootEdge[1], dir > 0 ? bx - 2 : bx + bb.w + 2, cy), { color: ctx.preset.edge, width: 1.8 });
   // children column, further out, in the branch color
   const kids = branch.children;
   if (!kids.length) return;
   const childGap = 56;
   const startY = cy - ((kids.length - 1) * CHILD_PITCH) / 2;
   const branchEdgeX = dir > 0 ? bx + bb.w : bx;
-  kids.forEach((child, k) => {
-    const kRole = ctx.role(roleIdx, { n, color: child.color ?? role.color });
-    const kb = nodeBox(ctx, child.label, 12, 150, 10);
-    const ky = startY + k * CHILD_PITCH;
-    const kx = dir > 0 ? branchEdgeX + childGap : branchEdgeX - childGap - kb.w;
-    ctx.shape("round-rectangle", kx, ky - kb.h / 2, kb.w, kb.h, kRole, {
-      id: ctx.uid(child.id),
-      label: kb.text,
-      style: { fontSize: 12 },
-    });
-    ctx.line(sCurveH(branchEdgeX + dir * 2, cy, dir > 0 ? kx - 2 : kx + kb.w + 2, ky, 14), { color: role.color, width: 1.5 });
-  });
+  kids.forEach((child, k) =>
+    ctx.item(child.id, () => {
+      const kRole = ctx.role(roleIdx, { n, color: child.color ?? role.color });
+      const kb = nodeBox(ctx, child.label, 12, 150, 10);
+      const ky = startY + k * CHILD_PITCH;
+      const kx = dir > 0 ? branchEdgeX + childGap : branchEdgeX - childGap - kb.w;
+      ctx.shape("round-rectangle", kx, ky - kb.h / 2, kb.w, kb.h, kRole, {
+        id: ctx.uid(child.id),
+        label: kb.text,
+        style: { fontSize: 12 },
+      });
+      ctx.line(sCurveH(branchEdgeX + dir * 2, cy, dir > 0 ? kx - 2 : kx + kb.w + 2, ky, 14), { color: role.color, width: 1.5 });
+    }),
+  );
 }
 
 function clusterHeight(branch: VizItem, minH: number): number {
@@ -184,7 +198,9 @@ function genMindmapSides(spec: VizSpec, ctx: VizContext, side: "both" | "left" |
   const rootW = Math.max(rb.w, 120);
   const rootH = Math.max(rb.h, 46);
   const rootRole = ctx.role(0, { neutral: true, color: root.color });
-  ctx.shape("round-rectangle", -rootW / 2, -rootH / 2, rootW, rootH, rootRole, { id: ctx.uid("root"), label: rb.text, style: { fontSize: 16 } });
+  scoped(ctx, root.id, () => {
+    ctx.shape("round-rectangle", -rootW / 2, -rootH / 2, rootW, rootH, rootRole, { id: ctx.uid("root"), label: rb.text, style: { fontSize: 16 } });
+  });
 
   const right: Array<{ item: VizItem; idx: number }> = [];
   const left: Array<{ item: VizItem; idx: number }> = [];
@@ -221,7 +237,9 @@ function genMindmapHorizontal(spec: VizSpec, ctx: VizContext): void {
   const rootW = Math.max(rb.w, 120);
   const rootH = Math.max(rb.h, 46);
   const rootRole = ctx.role(0, { neutral: true, color: root.color });
-  ctx.shape("round-rectangle", 0, -rootH / 2, rootW, rootH, rootRole, { id: ctx.uid("root"), label: rb.text, style: { fontSize: 16 } });
+  scoped(ctx, root.id, () => {
+    ctx.shape("round-rectangle", 0, -rootH / 2, rootW, rootH, rootRole, { id: ctx.uid("root"), label: rb.text, style: { fontSize: 16 } });
+  });
 
   const centers = stackCenters(
     branches.map((b) => clusterHeight(b, 52)),
@@ -243,7 +261,9 @@ function genMindmapVertical(spec: VizSpec, ctx: VizContext): void {
   const rt = ctx.wrap(root.label, 240, 22, "heading", 2);
   const rootW = Math.max(200, Math.max(...rt.split("\n").map((l) => ctx.measure(l, 22, "heading"))) + 56);
   const rootH = 70;
-  ctx.shape("round-rectangle", -rootW / 2, -rootH / 2, rootW, rootH, rootRole, { id: ctx.uid("root"), label: rt, style: { fontSize: 22 } });
+  scoped(ctx, root.id, () => {
+    ctx.shape("round-rectangle", -rootW / 2, -rootH / 2, rootW, rootH, rootRole, { id: ctx.uid("root"), label: rt, style: { fontSize: 22 } });
+  });
 
   const cardW = 260;
   const cardGap = 28;
@@ -310,17 +330,19 @@ function genMindmapVertical(spec: VizSpec, ctx: VizContext): void {
       const card = measureCard(branch, idx);
       const x = -rowW / 2 + j * (cardW + cardGap);
       const top = dir < 0 ? base - card.h : base;
-      drawCard(card, branch, x, top);
       const cx = x + cardW / 2;
       cxs.push(cx);
-      // elbow drop from the bus into the card
-      ctx.line(
-        [
-          [cx, busY],
-          [cx, base],
-        ],
-        { color: ctx.preset.edge, width: 1.8 },
-      );
+      ctx.item(branch.id, () => {
+        drawCard(card, branch, x, top);
+        // elbow drop from the bus into the card
+        ctx.line(
+          [
+            [cx, busY],
+            [cx, base],
+          ],
+          { color: ctx.preset.edge, width: 1.8 },
+        );
+      });
     });
     // trunk from root to bus + horizontal bus
     ctx.line(
@@ -342,11 +364,13 @@ function genMindmapVertical(spec: VizSpec, ctx: VizContext): void {
   });
 }
 
-function mindmapDef(name: string, summary: string, variant: "both" | "left" | "right" | "horizontal" | "vertical") {
+function mindmapDef(name: string, summary: string, variant: "both" | "left" | "right" | "horizontal" | "vertical", sweetSpot?: { min: number; max: number }) {
   registerViz({
     name,
     category: "Mindmap",
     summary,
+    entryKinds: ["item", "root", "center"],
+    sweetSpot,
     generate(spec: VizSpec, ctx: VizContext) {
       if (variant === "vertical") genMindmapVertical(spec, ctx);
       else if (variant === "horizontal") genMindmapHorizontal(spec, ctx);
@@ -355,11 +379,11 @@ function mindmapDef(name: string, summary: string, variant: "both" | "left" | "r
   });
 }
 
-mindmapDef("mindmap", "Root with branches fanning left and right; children beyond each branch.", "both");
-mindmapDef("mindmap-left", "Mindmap with every branch on the left of the root.", "left");
-mindmapDef("mindmap-right", "Mindmap with every branch on the right of the root.", "right");
-mindmapDef("mindmap-horizontal", "Root at the left; branches one column right, children beyond.", "horizontal");
-mindmapDef("mindmap-vertical", "Org-chart mindmap: root center, branch cards above/below with elbow trunks.", "vertical");
+mindmapDef("mindmap", "Root with branches fanning left and right; children beyond each branch.", "both", { min: 3, max: 8 });
+mindmapDef("mindmap-left", "Mindmap with every branch on the left of the root.", "left", { min: 2, max: 5 });
+mindmapDef("mindmap-right", "Mindmap with every branch on the right of the root.", "right", { min: 2, max: 5 });
+mindmapDef("mindmap-horizontal", "Root at the left; branches one column right, children beyond.", "horizontal", { min: 2, max: 6 });
+mindmapDef("mindmap-vertical", "Org-chart mindmap: root center, branch cards above/below with elbow trunks.", "vertical", { min: 2, max: 6 });
 
 // ---- decision -------------------------------------------------------------------
 
@@ -367,6 +391,9 @@ registerViz({
   name: "decision",
   category: "Comparison",
   summary: "A person weighing a question, elbow branches fanning to the options.",
+  entryKinds: ["item", "option", "question"],
+  options: [{ name: "question", type: "string", description: "the question posed (falls back to a question entry, then the title)" }],
+  sweetSpot: { min: 2, max: 5 },
   generate(spec: VizSpec, ctx: VizContext) {
     const options = itemsOf(spec, "item", "option");
     const n = Math.max(options.length, 1);
@@ -383,7 +410,9 @@ registerViz({
 
     // question at the top
     if (question) {
-      ctx.label(ctx.wrap(question, 360, 20, "heading", 3), 140, 24, { size: 20, color: ctx.ink, weight: 700, font: "heading", align: "left" });
+      scoped(ctx, questionEntry?.id, () => {
+        ctx.label(ctx.wrap(question, 360, 20, "heading", 3), 140, 24, { size: 20, color: ctx.ink, weight: 700, font: "heading", align: "left" });
+      });
     }
 
     // person at mid-left, vertically centered on the option list
@@ -403,33 +432,35 @@ registerViz({
       ],
       edgeStyle,
     );
-    options.forEach((item, i) => {
-      const role = ctx.role(i, { n, color: item.color });
-      const y = rows[i];
-      if (Math.abs(y - midY) < 2) {
-        ctx.line(
-          [
-            [splitX - r, midY],
+    options.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n, color: item.color });
+        const y = rows[i];
+        if (Math.abs(y - midY) < 2) {
+          ctx.line(
+            [
+              [splitX - r, midY],
+              [endX, y],
+            ],
+            edgeStyle,
+          );
+        } else {
+          const s = y > midY ? 1 : -1;
+          const pts: Array<[number, number]> = [
+            ...qCorner([splitX - r, midY], [splitX, midY], [splitX, midY + s * r]),
+            ...qCorner([splitX, y - s * r], [splitX, y], [splitX + r, y]),
             [endX, y],
-          ],
-          edgeStyle,
-        );
-      } else {
-        const s = y > midY ? 1 : -1;
-        const pts: Array<[number, number]> = [
-          ...qCorner([splitX - r, midY], [splitX, midY], [splitX, midY + s * r]),
-          ...qCorner([splitX, y - s * r], [splitX, y], [splitX + r, y]),
-          [endX, y],
-        ];
-        ctx.line(pts, edgeStyle);
-      }
-      if (item.icon) ctx.icon(item.icon, optX + 17, y, 34, role.color);
-      else {
-        ctx.shape("circle", optX + 4, y - 13, 26, 26, role, { id: ctx.uid(item.id) });
-        ctx.label(String(i + 1), optX + 17, y, { size: 15, color: role.textColor, weight: 700, font: "heading" });
-      }
-      ctx.labelBlock(item.label, item.detail, optX + 48, y, { color: ctx.ink, align: "left", maxW: 280 });
-    });
+          ];
+          ctx.line(pts, edgeStyle);
+        }
+        if (item.icon) ctx.icon(item.icon, optX + 17, y, 34, role.color);
+        else {
+          ctx.shape("circle", optX + 4, y - 13, 26, 26, role, { id: ctx.uid(item.id) });
+          ctx.label(String(i + 1), optX + 17, y, { size: 15, color: role.textColor, weight: 700, font: "heading" });
+        }
+        ctx.labelBlock(item.label, item.detail, optX + 48, y, { color: ctx.ink, align: "left", maxW: 280 });
+      }),
+    );
   },
 });
 
@@ -440,6 +471,8 @@ registerViz({
   aliases: ["root-cause"],
   category: "Cause and Effect",
   summary: "A leafy tree — the problem is the crown, the causes are its roots.",
+  entryKinds: ["item", "cause", "problem", "center"],
+  sweetSpot: { min: 2, max: 7 },
   generate(spec: VizSpec, ctx: VizContext) {
     const causes = itemsOf(spec, "item", "cause");
     const n = Math.max(causes.length, 1);
@@ -463,7 +496,9 @@ registerViz({
     }
     // problem stated above the crown (the tree "grows from" it)
     if (problem) {
-      ctx.label(ctx.wrap(problem, 320, 20, "heading", 2), 0, -182, { size: 20, color: ctx.ink, weight: 700, font: "heading", z: 3 });
+      scoped(ctx, problemEntry?.id, () => {
+        ctx.label(ctx.wrap(problem, 320, 20, "heading", 2), 0, -182, { size: 20, color: ctx.ink, weight: 700, font: "heading", z: 3 });
+      });
     }
 
     // tapering trunk flaring into buttress roots at the ground line
@@ -511,31 +546,33 @@ registerViz({
     const leader = { color: ctx.preset.edge, width: 1.5 };
     let leftJ = 0;
     let rightJ = 0;
-    causes.forEach((item, i) => {
-      const role = ctx.role(i, { n, color: item.color });
-      const bottom = i === causes.length - 1 && causes.length % 2 === 1 && causes.length >= 3;
-      if (bottom) {
-        const tip = tips[3];
-        const lx = 92;
-        const topY = tip[1] + 74;
-        ctx.line([tip, [tip[0], topY - 24], [lx, topY - 24], [lx, topY - 6]], leader);
-        ctx.labelBlock(item.label, item.detail, lx, topY, { color: role.color, align: "center", maxW: 280, vAnchor: "top" });
-        return;
-      }
-      const side = i % 2 === 0 ? -1 : 1;
-      const j = side < 0 ? leftJ++ : rightJ++;
-      const tip = tips[side < 0 ? leftTipIdx[Math.min(j, 2)] : rightTipIdx[Math.min(j, 2)]];
-      const y = tip[1] + Math.max(0, j - 2) * 78;
-      const bx = side * 220;
-      ctx.labelBlock(item.label, item.detail, bx, y, { color: role.color, align: side < 0 ? "right" : "left", maxW: 220 });
-      const sx = bx + side * -8;
-      if (Math.abs(y - tip[1]) < 2) {
-        ctx.line([[sx, y], tip], leader);
-      } else {
-        const mx = (sx + tip[0]) / 2;
-        ctx.line([[sx, y], [mx, y], [mx, tip[1]], tip], leader);
-      }
-    });
+    causes.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n, color: item.color });
+        const bottom = i === causes.length - 1 && causes.length % 2 === 1 && causes.length >= 3;
+        if (bottom) {
+          const tip = tips[3];
+          const lx = 92;
+          const topY = tip[1] + 74;
+          ctx.line([tip, [tip[0], topY - 24], [lx, topY - 24], [lx, topY - 6]], leader);
+          ctx.labelBlock(item.label, item.detail, lx, topY, { color: role.color, align: "center", maxW: 280, vAnchor: "top" });
+          return;
+        }
+        const side = i % 2 === 0 ? -1 : 1;
+        const j = side < 0 ? leftJ++ : rightJ++;
+        const tip = tips[side < 0 ? leftTipIdx[Math.min(j, 2)] : rightTipIdx[Math.min(j, 2)]];
+        const y = tip[1] + Math.max(0, j - 2) * 78;
+        const bx = side * 220;
+        ctx.labelBlock(item.label, item.detail, bx, y, { color: role.color, align: side < 0 ? "right" : "left", maxW: 220 });
+        const sx = bx + side * -8;
+        if (Math.abs(y - tip[1]) < 2) {
+          ctx.line([[sx, y], tip], leader);
+        } else {
+          const mx = (sx + tip[0]) / 2;
+          ctx.line([[sx, y], [mx, y], [mx, tip[1]], tip], leader);
+        }
+      }),
+    );
   },
 });
 
@@ -564,35 +601,42 @@ function genConverge(spec: VizSpec, ctx: VizContext): void {
   ctx.shape("ellipse", lensCx - lensW / 2, midY - lensH / 2, lensW, lensH, outline(ctx, ctx.mutedInk), { id: ctx.uid("lens") });
 
   // inputs, left
-  inputs.forEach((item, i) => {
-    const role = ctx.role(i, { n: n + 1, color: item.color });
-    const y = ys[i];
-    if (item.icon) ctx.icon(item.icon, 23, y, 46, role.color);
-    else {
-      ctx.shape("circle", 5, y - 18, 36, 36, role, { id: ctx.uid(item.id) });
-      ctx.label(String(i + 1), 23, y, { size: 18, color: role.textColor, weight: 700, font: "heading" });
-    }
-    const block = ctx.labelBlock(item.label, item.detail, 56, y, { color: role.color, align: "left", maxW: 230 });
-    // S-curve attached to the row's text block, converging INTO the lens
-    const startX = block.x + block.w + 8;
-    const t = n === 1 ? 0 : (i / (n - 1) - 0.5) * 44;
-    ctx.line(sCurveH(startX, y, lensCx + lensW / 2 - 12, midY + t), { color: ctx.preset.edge, width: 1.8 });
-  });
+  inputs.forEach((item, i) =>
+    ctx.item(item.id, () => {
+      const role = ctx.role(i, { n: n + 1, color: item.color });
+      const y = ys[i];
+      if (item.icon) ctx.icon(item.icon, 23, y, 46, role.color);
+      else {
+        ctx.shape("circle", 5, y - 18, 36, 36, role, { id: ctx.uid(item.id) });
+        ctx.label(String(i + 1), 23, y, { size: 18, color: role.textColor, weight: 700, font: "heading" });
+      }
+      const block = ctx.labelBlock(item.label, item.detail, 56, y, { color: role.color, align: "left", maxW: 230 });
+      // S-curve attached to the row's text block, converging INTO the lens
+      const startX = block.x + block.w + 8;
+      const t = n === 1 ? 0 : (i / (n - 1) - 0.5) * 44;
+      ctx.line(sCurveH(startX, y, lensCx + lensW / 2 - 12, midY + t), { color: ctx.preset.edge, width: 1.8 });
+    }),
+  );
 
   // output, right
   const outRole = ctx.role(inputs.length, { n: n + 1, color: output?.color });
   const outX = lensCx + lensW / 2 + 14;
-  ctx.arrow(outX, midY, outX + 66, midY, { color: ctx.preset.edge, width: 1.8 });
-  const blockX = outX + 84;
-  if (output?.icon) ctx.icon(output.icon, blockX + 23, midY, 46, outRole.color);
-  const textX = output?.icon ? blockX + 56 : blockX;
-  ctx.labelBlock(outputLabel ?? "Outcome", outputDetail, textX, midY, { color: outRole.color, align: "left", maxW: 220 });
+  scoped(ctx, output?.id, () => {
+    ctx.arrow(outX, midY, outX + 66, midY, { color: ctx.preset.edge, width: 1.8 });
+    const blockX = outX + 84;
+    if (output?.icon) ctx.icon(output.icon, blockX + 23, midY, 46, outRole.color);
+    const textX = output?.icon ? blockX + 56 : blockX;
+    ctx.labelBlock(outputLabel ?? "Outcome", outputDetail, textX, midY, { color: outRole.color, align: "left", maxW: 220 });
+  });
 }
 
 registerViz({
   name: "converge",
   category: "Brainstorming",
   summary: "Inputs funnel through a lens into one outcome.",
+  entryKinds: ["item", "input", "output", "out"],
+  options: [{ name: "output", type: "string", description: "outcome label when no output entry (else the last item is the output)" }],
+  sweetSpot: { min: 2, max: 5 },
   generate: genConverge,
 });
 
@@ -600,6 +644,9 @@ registerViz({
   name: "lens",
   category: "Visual Metaphors",
   summary: "A focusing lens — several inputs concentrated into one output.",
+  entryKinds: ["item", "input", "output", "out"],
+  options: [{ name: "output", type: "string", description: "outcome label when no output entry (else the last item is the output)" }],
+  sweetSpot: { min: 2, max: 5 },
   generate: genConverge,
 });
 
@@ -620,6 +667,8 @@ registerViz({
   name: "diverge",
   category: "Brainstorming",
   summary: "A question radiating thick arrows to option blocks at the corners.",
+  entryKinds: ["item", "option", "question", "center"],
+  sweetSpot: { min: 2, max: 4 },
   generate(spec: VizSpec, ctx: VizContext) {
     const options = itemsOf(spec, "item", "option");
     const n = Math.max(options.length, 1);
@@ -627,7 +676,11 @@ registerViz({
     const question = questionEntry?.label ?? spec.title;
     if (question && question === spec.title) ctx.titleHandled = true;
 
-    if (question) ctx.label(ctx.wrap(question, 420, 25, "heading", 2), 0, -14, { size: 25, color: ctx.ink, weight: 700, font: "heading" });
+    if (question) {
+      scoped(ctx, questionEntry?.id, () => {
+        ctx.label(ctx.wrap(question, 420, 25, "heading", 2), 0, -14, { size: 25, color: ctx.ink, weight: 700, font: "heading" });
+      });
+    }
 
     // arrow geometry — four uniform outlined block arrows radiating from the
     // origin under the question: straight fat arrows left/right, curved fat
@@ -654,53 +707,55 @@ registerViz({
     const C: [number, number] = [0, rowCy];
     if (slots.some((s) => s.kind === "ray")) dot(ctx, C[0], C[1], 10);
 
-    options.forEach((item, i) => {
-      const role = ctx.role(i, { n, color: item.color });
-      const slot = slots[i];
-      switch (slot.kind) {
-        case "left":
-        case "right": {
-          const dir: 1 | -1 = slot.kind === "right" ? 1 : -1;
-          const bx = dir > 0 ? gapX : -gapX - AW;
-          ctx.shape("block-arrow", bx, rowCy - AH / 2, AW, AH, role, {
-            id: ctx.uid(item.id),
-            data: { dir: dir > 0 ? "right" : "left" },
-          });
-          // item icon inside the arrow body, near the head
-          if (item.icon) ctx.icon(item.icon, bx + AW * (dir > 0 ? 0.62 : 0.38), rowCy, 30, role.textColor);
-          const tipX = dir > 0 ? bx + AW : bx;
-          ctx.labelBlock(item.label, item.detail, tipX + dir * 16, rowCy, { color: role.color, align: dir > 0 ? "left" : "right", maxW: 200 });
-          break;
+    options.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n, color: item.color });
+        const slot = slots[i];
+        switch (slot.kind) {
+          case "left":
+          case "right": {
+            const dir: 1 | -1 = slot.kind === "right" ? 1 : -1;
+            const bx = dir > 0 ? gapX : -gapX - AW;
+            ctx.shape("block-arrow", bx, rowCy - AH / 2, AW, AH, role, {
+              id: ctx.uid(item.id),
+              data: { dir: dir > 0 ? "right" : "left" },
+            });
+            // item icon inside the arrow body, near the head
+            if (item.icon) ctx.icon(item.icon, bx + AW * (dir > 0 ? 0.62 : 0.38), rowCy, 30, role.textColor);
+            const tipX = dir > 0 ? bx + AW : bx;
+            ctx.labelBlock(item.label, item.detail, tipX + dir * 16, rowCy, { color: role.color, align: dir > 0 ? "left" : "right", maxW: 200 });
+            break;
+          }
+          case "down-left":
+          case "down-right":
+          case "down-center": {
+            const mirrored = slot.kind !== "down-left";
+            // seat the tail beside the origin (down-center: straddle it)
+            const bx = slot.kind === "down-left" ? -10 - sx(106) : slot.kind === "down-right" ? 10 - sx(14) : -CW / 2;
+            ctx.path(mirrored ? DIVERGE_CURVE_R : DIVERGE_CURVE_L, DIVERGE_CURVE_VW, DIVERGE_CURVE_VH, bx, top, CW, CH, role, { id: ctx.uid(item.id) });
+            const headX = bx + sx(mirrored ? 92 : 28);
+            // item icon inside the descending body, near the head
+            if (item.icon) ctx.icon(item.icon, headX, top + (CH * 105) / DIVERGE_CURVE_VH, 28, role.textColor);
+            const tipY = top + CH;
+            const shift = slot.kind === "down-left" ? -30 : slot.kind === "down-right" ? 30 : 0;
+            ctx.labelBlock(item.label, item.detail, headX + shift, tipY + 16, { color: role.color, align: "center", maxW: 210, vAnchor: "top" });
+            break;
+          }
+          case "ray": {
+            const a = slot.angle ?? 90;
+            const from = polar(C[0], C[1], 50, a);
+            const to = polar(C[0], C[1], 190, a);
+            ctx.line([from, to], { color: role.color, width: 5, arrow: true, id: ctx.uid(item.id) });
+            const tip = polar(C[0], C[1], 214, a);
+            const align = radialAlign(a);
+            const shift = align === "left" ? 14 : align === "right" ? -14 : 0;
+            if (item.icon) ctx.icon(item.icon, tip[0], tip[1] + 18, 34, role.color);
+            ctx.labelBlock(item.label, item.detail, tip[0] + shift, tip[1] + (item.icon ? 44 : 14), { color: role.color, align, maxW: 190, vAnchor: "top" });
+            break;
+          }
         }
-        case "down-left":
-        case "down-right":
-        case "down-center": {
-          const mirrored = slot.kind !== "down-left";
-          // seat the tail beside the origin (down-center: straddle it)
-          const bx = slot.kind === "down-left" ? -10 - sx(106) : slot.kind === "down-right" ? 10 - sx(14) : -CW / 2;
-          ctx.path(mirrored ? DIVERGE_CURVE_R : DIVERGE_CURVE_L, DIVERGE_CURVE_VW, DIVERGE_CURVE_VH, bx, top, CW, CH, role, { id: ctx.uid(item.id) });
-          const headX = bx + sx(mirrored ? 92 : 28);
-          // item icon inside the descending body, near the head
-          if (item.icon) ctx.icon(item.icon, headX, top + (CH * 105) / DIVERGE_CURVE_VH, 28, role.textColor);
-          const tipY = top + CH;
-          const shift = slot.kind === "down-left" ? -30 : slot.kind === "down-right" ? 30 : 0;
-          ctx.labelBlock(item.label, item.detail, headX + shift, tipY + 16, { color: role.color, align: "center", maxW: 210, vAnchor: "top" });
-          break;
-        }
-        case "ray": {
-          const a = slot.angle ?? 90;
-          const from = polar(C[0], C[1], 50, a);
-          const to = polar(C[0], C[1], 190, a);
-          ctx.line([from, to], { color: role.color, width: 5, arrow: true, id: ctx.uid(item.id) });
-          const tip = polar(C[0], C[1], 214, a);
-          const align = radialAlign(a);
-          const shift = align === "left" ? 14 : align === "right" ? -14 : 0;
-          if (item.icon) ctx.icon(item.icon, tip[0], tip[1] + 18, 34, role.color);
-          ctx.labelBlock(item.label, item.detail, tip[0] + shift, tip[1] + (item.icon ? 44 : 14), { color: role.color, align, maxW: 190, vAnchor: "top" });
-          break;
-        }
-      }
-    });
+      }),
+    );
   },
 });
 
@@ -710,6 +765,9 @@ registerViz({
   name: "prism",
   category: "Visual Metaphors",
   summary: "One input beam split by a prism into several outputs.",
+  entryKinds: ["item", "output", "out", "input", "in"],
+  options: [{ name: "input", type: "string", description: "input label when no input entry" }],
+  sweetSpot: { min: 2, max: 5 },
   generate(spec: VizSpec, ctx: VizContext) {
     const outputs = itemsOf(spec, "item", "output", "out");
     const n = Math.max(outputs.length, 1);
@@ -736,36 +794,40 @@ registerViz({
     // input node + beam in
     const inRole = inputEntry?.color ? ctx.role(0, { color: inputEntry.color }) : undefined;
     const inColor = inRole?.color ?? ctx.ink;
-    ctx.shape("round-rectangle", 0, cy - 36, 72, 72, outline(ctx, inColor), { id: ctx.uid("input") });
-    ctx.icon(inputEntry?.icon ?? "bulb", 36, cy, 40, inColor);
-    ctx.label(ctx.wrap(inputLabel, 150, 20, "heading", 2), 36, cy + 62, { size: 20, color: inColor, weight: ctx.preset.fonts.headingWeight, font: "heading" });
-    ctx.line(
-      [
-        [74, cy],
-        [triX + 66, cy],
-      ],
-      { color: ctx.preset.edge, width: 2 },
-    );
+    scoped(ctx, inputEntry?.id, () => {
+      ctx.shape("round-rectangle", 0, cy - 36, 72, 72, outline(ctx, inColor), { id: ctx.uid("input") });
+      ctx.icon(inputEntry?.icon ?? "bulb", 36, cy, 40, inColor);
+      ctx.label(ctx.wrap(inputLabel, 150, 20, "heading", 2), 36, cy + 62, { size: 20, color: inColor, weight: ctx.preset.fonts.headingWeight, font: "heading" });
+      ctx.line(
+        [
+          [74, cy],
+          [triX + 66, cy],
+        ],
+        { color: ctx.preset.edge, width: 2 },
+      );
+    });
 
     // output beams fanning right to rounded-square nodes
     const pitch = 84;
     const nodeX = 560;
     const startY = cy - ((n - 1) * pitch) / 2;
-    outputs.forEach((item, i) => {
-      const role = ctx.role(i, { n, color: item.color });
-      const y = startY + i * pitch;
-      const t = n === 1 ? 0 : (i / (n - 1) - 0.5) * 44;
-      ctx.line(
-        [
-          [triX + triW - 30, cy + t * 0.4],
-          [nodeX - 6, y],
-        ],
-        { color: role.color, width: 2.2, arrow: true },
-      );
-      ctx.shape("round-rectangle", nodeX, y - 35, 70, 70, role, { id: ctx.uid(item.id) });
-      if (item.icon) ctx.icon(item.icon, nodeX + 35, y, 36, role.textColor);
-      else ctx.label(String(i + 1), nodeX + 35, y, { size: 24, color: role.textColor, weight: 700, font: "heading" });
-      ctx.labelBlock(item.label, item.detail, nodeX + 88, y, { color: role.color, align: "left", maxW: 210 });
-    });
+    outputs.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n, color: item.color });
+        const y = startY + i * pitch;
+        const t = n === 1 ? 0 : (i / (n - 1) - 0.5) * 44;
+        ctx.line(
+          [
+            [triX + triW - 30, cy + t * 0.4],
+            [nodeX - 6, y],
+          ],
+          { color: role.color, width: 2.2, arrow: true },
+        );
+        ctx.shape("round-rectangle", nodeX, y - 35, 70, 70, role, { id: ctx.uid(item.id) });
+        if (item.icon) ctx.icon(item.icon, nodeX + 35, y, 36, role.textColor);
+        else ctx.label(String(i + 1), nodeX + 35, y, { size: 24, color: role.textColor, weight: 700, font: "heading" });
+        ctx.labelBlock(item.label, item.detail, nodeX + 88, y, { color: role.color, align: "left", maxW: 210 });
+      }),
+    );
   },
 });

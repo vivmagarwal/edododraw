@@ -31,6 +31,8 @@ registerViz({
   name: "venn",
   category: "Comparison",
   summary: "Overlapping sets (2–7 circles) in a symmetric rosette with region labels.",
+  entryKinds: ["item", "set", "overlap", "intersection", "both", "all"],
+  sweetSpot: { min: 2, max: 3 },
   generate(spec: VizSpec, ctx: VizContext) {
     const sets = itemsOf(spec, "item", "set");
     const overlaps = spec.items.filter((i) => i.kind === "overlap" || i.kind === "intersection" || i.kind === "both" || i.kind === "all");
@@ -54,26 +56,31 @@ registerViz({
     });
 
     // tinted overlapping circles
-    used.forEach((item, i) => {
-      const role = vennRole(ctx, ctx.role(i, { n, color: item.color }));
-      const c = centers[i];
-      ctx.shape("circle", c.x - R, c.y - R, R * 2, R * 2, role, { id: ctx.uid(item.id) });
-    });
+    used.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = vennRole(ctx, ctx.role(i, { n, color: item.color }));
+        const c = centers[i];
+        ctx.shape("circle", c.x - R, c.y - R, R * 2, R * 2, role, { id: ctx.uid(item.id) });
+      }),
+    );
 
     // set label + icon in each circle's outer lobe
     const labelSize = n >= 6 ? 17 : 20;
     const labelW = n >= 6 ? 150 : n >= 5 ? 165 : 200;
-    used.forEach((item, i) => {
-      const role = ctx.role(i, { n, color: item.color });
-      const c = centers[i];
-      radialLabel(ctx, c.x, c.y, R, c.angle, item.label, item.detail, role.color, { maxW: labelW, size: labelSize });
-      if (item.icon) {
-        const [ix, iy] = polar(cx, cy, d + R * 0.5, c.angle);
-        ctx.icon(item.icon, ix, iy, 34, role.color);
-      }
-    });
+    used.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n, color: item.color });
+        const c = centers[i];
+        radialLabel(ctx, c.x, c.y, R, c.angle, item.label, item.detail, role.color, { maxW: labelW, size: labelSize });
+        if (item.icon) {
+          const [ix, iy] = polar(cx, cy, d + R * 0.5, c.angle);
+          ctx.icon(item.icon, ix, iy, 34, role.color);
+        }
+      }),
+    );
 
-    // overlap regions: icon inside, label pulled outward with a dotted leader
+    // overlap regions: icon inside, label pulled outward with a dotted leader.
+    // These span multiple sets, so they are deliberately NOT item-scoped.
     const idOf = (s: string) => used.findIndex((u) => u.id === s || u.label.toLowerCase() === s.toLowerCase());
     const figureR = d + R;
     overlaps.forEach((ov, k) => {

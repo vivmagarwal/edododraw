@@ -38,7 +38,34 @@ export function groupBBox(scene: Scene, g: SceneGroup): BBox {
   return b;
 }
 
-/** Resolve any element id (node/group; edges included if routed) to a bbox. */
+/**
+ * Element ids emitted for the viz data item `key` ("<blockId>.<itemId>").
+ * Viz generators tag every element they emit for an item with
+ * `data.vizItem = key`, so one data entry can be addressed as a unit.
+ */
+export function vizItemMembers(scene: Scene, key: string): string[] {
+  const out: string[] = [];
+  for (const n of scene.nodes) if ((n.data as { vizItem?: string } | undefined)?.vizItem === key) out.push(n.id);
+  for (const e of scene.edges) if ((e.data as { vizItem?: string } | undefined)?.vizItem === key) out.push(e.id);
+  return out;
+}
+
+/** Every distinct viz-item key ("<blockId>.<itemId>") present in the scene. */
+export function listVizItems(scene: Scene): string[] {
+  const keys = new Set<string>();
+  for (const n of scene.nodes) {
+    const k = (n.data as { vizItem?: string } | undefined)?.vizItem;
+    if (k) keys.add(k);
+  }
+  for (const e of scene.edges) {
+    const k = (e.data as { vizItem?: string } | undefined)?.vizItem;
+    if (k) keys.add(k);
+  }
+  return [...keys];
+}
+
+/** Resolve any element id (node/group; edges included if routed; viz-item
+ *  keys resolve to the union of their members) to a bbox. */
 export function elementBBox(scene: Scene, id: string): BBox | undefined {
   const n = getNode(scene, id);
   if (n) return nodeBBox(n);
@@ -47,6 +74,15 @@ export function elementBBox(scene: Scene, id: string): BBox | undefined {
   const e = getEdge(scene, id);
   if (e) {
     const b = edgeBBox(e);
+    return Number.isFinite(b.minX) ? b : undefined;
+  }
+  const members = vizItemMembers(scene, id);
+  if (members.length) {
+    let b = emptyBBox();
+    for (const m of members) {
+      const mb = elementBBox(scene, m);
+      if (mb) b = bboxUnion(b, mb);
+    }
     return Number.isFinite(b.minX) ? b : undefined;
   }
   return undefined;

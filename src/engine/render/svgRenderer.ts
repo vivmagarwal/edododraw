@@ -32,8 +32,22 @@ export interface CameraTransform {
   zoom: number;
 }
 
+export interface SvgRendererOptions {
+  /**
+   * Deterministic frame-by-frame rendering for screenshot/video consumers
+   * (Remotion, Puppeteer, export pipelines): disables ALL wall-clock CSS —
+   * visibility transitions, animated-arrow keyframes (the overlay isn't even
+   * emitted), and reveal animations — so any captured frame is final, never
+   * mid-transition. Drive motion explicitly via applyVisibility/applyCamera/
+   * setRevealProgress instead.
+   */
+  static?: boolean;
+}
+
 export class SvgRenderer {
   readonly container: HTMLElement;
+  /** True when constructed with `{ static: true }` — see SvgRendererOptions. */
+  readonly isStatic: boolean;
   svg!: SVGSVGElement;
   private defs!: SVGDefsElement;
   private bg!: SVGRectElement;
@@ -46,8 +60,9 @@ export class SvgRenderer {
   private viewport = { w: 800, h: 600 };
   private scene: Scene | null = null;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, options: SvgRendererOptions = {}) {
     this.container = container;
+    this.isStatic = options.static ?? false;
   }
 
   mount(): void {
@@ -55,7 +70,7 @@ export class SvgRenderer {
     ensureEngineStyles(this.container.ownerDocument);
     const doc = this.container.ownerDocument;
     const svg = doc.createElementNS(SVG_NS, "svg") as SVGSVGElement;
-    svg.setAttribute("class", "edd-canvas");
+    svg.setAttribute("class", this.isStatic ? "edd-canvas edd-static" : "edd-canvas");
     svg.style.position = "absolute";
     svg.style.inset = "0";
     svg.style.width = "100%";
@@ -177,6 +192,7 @@ export class SvgRenderer {
    * re-entering the same beat restarts the animation. `fx` = id -> effect.
    */
   playReveal(fx: Record<string, string> | undefined): void {
+    if (this.isStatic) return; // static frames must never catch a reveal mid-flight
     const classes = ["edd-reveal-fade", "edd-reveal-pop", "edd-reveal-sweep"];
     const els = this.svg.querySelectorAll<SVGGElement>("[data-node],[data-edge]");
     els.forEach((el) => el.classList.remove(...classes));
@@ -187,6 +203,61 @@ export class SvgRenderer {
       const id = el.getAttribute("data-node") ?? el.getAttribute("data-edge");
       const cls = id ? REVEAL_EFFECT_CLASS[fx[id]] : undefined;
       if (cls) el.classList.add(cls);
+    });
+  }
+
+  /**
+   * Drive a hand-drawn "draw-on" reveal of one element from host code: strokes
+   * sweep on in draw order (stroke-dashoffset), then labels fade in. `id` is a
+   * node id, edge id, or viz-item key ("block.item" — all member elements sweep
+   * as one continuous drawing). `progress` is 0..1; ≥1 restores the untouched
+   * rendering (original dash patterns included), ≤0 hides the element. Built
+   * for frame-driven hosts (Remotion, capture pipelines) — pair with
+   * `{ static: true }` so no wall-clock CSS competes with it.
+   */
+  setRevealProgress(id: string, progress: number): void {
+    const esc = cssEscape(id);
+    const groups = this.svg.querySelectorAll<SVGGElement>(`[data-node="${esc}"],[data-edge="${esc}"],[data-viz-item="${esc}"]`);
+    if (!groups.length) return;
+    const p = Math.max(0, Math.min(1, progress));
+
+    const strokes: SVGElement[] = [];
+    const texts: SVGElement[] = [];
+    groups.forEach((g) => {
+      g.querySelectorAll<SVGElement>("path,line,polyline,polygon,circle,ellipse,rect").forEach((el) => strokes.push(el));
+      g.querySelectorAll<SVGElement>("text").forEach((el) => texts.push(el));
+    });
+
+    // strokes complete at 85% progress; labels fade over the last 30%
+    const sweep = Math.min(1, p / 0.85);
+    const lens = strokes.map(strokeLength);
+    const total = lens.reduce((a, b) => a + b, 0) || 1;
+    let done = 0;
+    strokes.forEach((el, i) => {
+      const len = lens[i];
+      const local = Math.max(0, Math.min(1, (sweep * total - done) / len));
+      done += len;
+      if (progress >= 1) {
+        restoreStroke(el);
+        return;
+      }
+      const hasStroke = (el.getAttribute("stroke") ?? "") !== "none";
+      if (!hasStroke) {
+        // fill-only element (solid rough fills): fade instead of dash-sweep
+        el.style.opacity = String(local);
+        return;
+      }
+      if (el.getAttribute("data-edd-dash") === null) {
+        el.setAttribute("data-edd-dash", el.getAttribute("stroke-dasharray") ?? "");
+      }
+      el.setAttribute("stroke-dasharray", String(len));
+      el.setAttribute("stroke-dashoffset", String(len * (1 - local)));
+      el.style.opacity = local > 0 ? "" : "0";
+    });
+
+    const fade = Math.max(0, Math.min(1, (p - 0.7) / 0.3));
+    texts.forEach((el) => {
+      el.style.opacity = progress >= 1 ? "" : String(fade);
     });
   }
 
@@ -215,8 +286,9 @@ export class SvgRenderer {
     const edges = [...scene.edges].sort((a, b) => a.z - b.z);
     for (const edge of edges) {
       try {
-        const r = renderEdge(this.rc, scene, edge);
+        const r = renderEdge(this.rc, scene, edge, { static: this.isStatic });
         if (edge.label) r.group.appendChild(this.edgeLabel(scene, edge, r.points));
+        this.applyVizTags(r.group, edge.data);
         this.layers.edges.appendChild(r.group);
       } catch (err) {
         // never let one bad edge blank the whole diagram
@@ -272,11 +344,21 @@ export class SvgRenderer {
     return `url(#${id})`;
   }
 
+  /** Surface viz-item membership as DOM attributes so hosts can select one
+   *  data item's elements as a unit: [data-viz-item="loads.intrinsic"]. */
+  private applyVizTags(g: SVGGElement, data: Record<string, unknown> | undefined): void {
+    const item = (data as { vizItem?: string } | undefined)?.vizItem;
+    const role = (data as { vizRole?: string } | undefined)?.vizRole;
+    if (item) g.setAttribute("data-viz-item", item);
+    if (role) g.setAttribute("data-viz-role", role);
+  }
+
   private renderNode(_scene: Scene, node: SceneNode): SVGGElement {
     const doc = this.container.ownerDocument;
     const g = doc.createElementNS(SVG_NS, "g") as SVGGElement;
     g.setAttribute("data-node", node.id);
     g.setAttribute("class", "edd-node");
+    this.applyVizTags(g, node.data);
     g.style.opacity = String(node.style.opacity / 100);
 
     const fill = this.resolveGradientFill(node.style.fill);
@@ -388,4 +470,38 @@ export class SvgRenderer {
     }
     return g;
   }
+}
+
+// ---- reveal-progress helpers -------------------------------------------------
+
+function cssEscape(s: string): string {
+  const css = (globalThis as { CSS?: { escape?: (v: string) => string } }).CSS;
+  if (css?.escape) return css.escape(s);
+  return s.replace(/["\\]/g, "\\$&");
+}
+
+/** Path length of a drawable, with a safe fallback where getTotalLength is
+ *  unavailable (jsdom) or throws (detached/degenerate geometry). */
+function strokeLength(el: SVGElement): number {
+  const geo = el as Partial<SVGGeometryElement>;
+  if (typeof geo.getTotalLength === "function") {
+    try {
+      const len = geo.getTotalLength();
+      if (Number.isFinite(len) && len > 0) return len;
+    } catch {
+      /* fall through */
+    }
+  }
+  return 120;
+}
+
+function restoreStroke(el: SVGElement): void {
+  const orig = el.getAttribute("data-edd-dash");
+  if (orig !== null) {
+    if (orig === "") el.removeAttribute("stroke-dasharray");
+    else el.setAttribute("stroke-dasharray", orig);
+    el.removeAttribute("data-edd-dash");
+  }
+  el.removeAttribute("stroke-dashoffset");
+  el.style.opacity = "";
 }

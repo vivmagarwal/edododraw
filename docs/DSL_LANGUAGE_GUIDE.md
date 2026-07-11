@@ -246,6 +246,8 @@ Annotate elements in an always-on `annotate { … }` block or inside a timeline 
 
 `from` / `placement` take a cardinal (`n s e w ne …`). Annotations anchor to their target and track the camera. See ANNOTATIONS_GUIDE.md for the real-time editor and round-trip.
 
+**Targets.** Any node/edge/group id works, plus viz element/item ids with dots — `strike sales.won` resolves against the finished scene (viz items anchor to the union of the item's elements). An explicit attribute form is also accepted: `strike { target: "sales.won" }`. Targets that match nothing raise a `W-ANNOT-TARGET` diagnostic (they never silently no-op).
+
 ---
 
 ## 10. Timeline (magic-move presentation)
@@ -351,7 +353,7 @@ viz funnel sales "Sales Funnel" {
 
 62 templates ship built-in — funnel, pyramid, venn, pie, bar/line/area, waterfall, sankey, gantt, timeline, mindmap, swot, quadrant, journey, iceberg, and many more. Entries are `<kind> [id] ["Label"] [-> target] [values…] [{ attrs }] [{ nested entries }]`; every template accepts `item` plus natural synonyms (`stage`, `flow "A" -> "B" 25`, `task "Design" 0 3`, `set`, `pro`/`con`, …).
 
-Viz output is ordinary scene structure: elements get ids like `sales.won`, so annotations, camera beats, `reveal`, and direct editing all target them. `meta { style: <name> }` restyles the *whole* document — viz templates and classic scenes alike — through one of the named styles (`classic-color`, `chalkboard`, `crayon`, `mono-accent`, …).
+Viz output is ordinary scene structure: elements get ids like `sales.won`, so annotations, camera beats, `reveal`, and direct editing all target them — and `sales.won` used as a target addresses the item's **whole element group** (shape + label + icon together). Add `showValues: false` as a block option (or `showValue: false` on one item) to keep values driving the geometry without printing the numbers. `meta { style: <name> }` restyles the *whole* document — viz templates and classic scenes alike — through one of the named styles (`classic-color`, `chalkboard`, `crayon`, `mono-accent`, …).
 
 Full catalog + per-template options: [VISUALIZATIONS_GUIDE.md](VISUALIZATIONS_GUIDE.md). Preset reference: [STYLES_GUIDE.md](STYLES_GUIDE.md).
 
