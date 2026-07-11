@@ -7,6 +7,7 @@
 import { applyLayout } from "../layout/index.js";
 import { applyOverrides } from "../scene/overrides.js";
 import { emptyScene, makeEdge, makeNode } from "../scene/defaults.js";
+import { getLayoutPlugin } from "../plugins/registry.js";
 import { getEdge, getGroup, getNode, vizItemMembers } from "../scene/query.js";
 import { isLightColor, resolveMarker } from "../scene/palette.js";
 import { effectivePreset, getStylePreset, presetEdgeDefaults, presetNodeDefaults, presetTheme, roleStyle } from "../style/presets.js";
@@ -830,6 +831,8 @@ function resolveLayoutKind(kind: string | undefined, scene: Scene): LayoutKind {
     const anyUnpinned = scene.nodes.some((n) => !n.pinned);
     return anyUnpinned ? "dag" : "manual";
   }
+  // runtime-registered layouts pass through by name (see plugins/registry)
+  if (getLayoutPlugin(kind)) return kind;
   const map: Record<string, LayoutKind> = {
     dag: "dag",
     tree: "dag",

@@ -10,6 +10,8 @@ export { registerViz, registerVizAlias, getViz, listViz, listVizAliases, listViz
 export type { VizTemplateInfo } from "./registry.js";
 export { VIZ_ALIASES } from "./aliases.js";
 export { measureText, measureBlock, wrapText } from "./text.js";
-export { iconPath, listIcons, ICON_VIEWBOX } from "./icons.js";
+export { iconPath, iconEntry, registerIcon, listIcons, ICON_VIEWBOX } from "./icons.js";
+export { vizToScene, vizItem } from "./compose.js";
+export type { VizComposeOptions, VizComposeResult, VizItemInput, VizSpecInput } from "./compose.js";
 export type { VizBounds, VizDef, VizGenerate, VizItem, VizOptionDoc, VizResult, VizSpec } from "./types.js";
 export { itemsOf, optBool, optNum, optStr } from "./types.js";

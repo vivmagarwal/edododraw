@@ -4,6 +4,7 @@
  * drive the compiler.
  */
 
+import { getArrowAnimation } from "../plugins/registry.js";
 import { resolveFill, resolveStroke } from "../scene/palette.js";
 import type {
   ArrowAnimationKind,
@@ -155,6 +156,8 @@ export function mapAnimation(v: Value): { kind: ArrowAnimationKind; speed?: numb
     if (sp && sp.value.t === "num") speed = sp.value.v;
   }
   if (!name) return undefined;
+  // runtime-registered kinds pass through untouched (see plugins/registry)
+  if (getArrowAnimation(name)) return { kind: name as ArrowAnimationKind, speed };
   const known = new Set(["none", "flow", "dash-march", "draw-on", "pulse", "comet", "gradient-flow", "electric", "glow", "caravan", "wiggle"]);
   // remap a couple of spec names onto implemented kinds
   const remap: Record<string, ArrowAnimationKind> = { glow: "comet", caravan: "dash-march", wiggle: "flow" };

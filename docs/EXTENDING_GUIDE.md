@@ -27,20 +27,26 @@ that possible:
   names they've never seen — an unknown value flows through the pipeline untouched
   and is _resolved at the last moment_ by a renderer switch or a registry lookup.
 
-The practical consequence: **most extensions need no grammar change.** You add a
-name and teach one switch (or one registry) how to draw it.
+The practical consequence: **most extensions need no grammar change** — and
+**every extension seam is a runtime registry**, callable from any consuming app
+with no engine fork:
 
-There are two flavours of extension:
+| Seam | Register with | Usable from DSL text as |
+|---|---|---|
+| Shapes | `registerShape(name, fn)` | `shape: myshape` / the keyword |
+| Visualization templates | `registerViz(def)` | `viz my-viz { … }` |
+| Style presets | `registerStylePreset(preset)` | `meta { style: my-brand }` |
+| Arrow animations | `registerArrowAnimation(kind, def)` | `animate: surge` |
+| Annotation kinds | `registerAnnotation(kind, fn)` | `cross a "text"` (annotate blocks + beats) |
+| Layouts | `registerLayout(name, fn)` | `layout column` |
+| Icons | `registerIcon(name, pathD, opts?)` | `item "X" { icon: mylogo }` |
 
-| Flavour | Mechanism | Needs a repo edit? | Example |
-|---|---|---|---|
-| **Registry** (runtime) | `registerShape(name, fn)` | No — callable from any app | Custom shapes |
-| **Registry** (runtime) | `registerViz(def)` | No — callable from any app | Visualization templates (`viz my-viz { … }`) |
-| **Registry** (runtime) | `registerStylePreset(preset)` | No — callable from any app | Style presets (`meta { style: my-brand }`) |
-| **Switch** (compile-time) | add a `case` to a `switch` | Yes — you edit engine source | Animations, annotations, layouts |
-
-Shapes, viz templates, and style presets are fully-runtime seams; the rest are
-small, well-isolated `switch` additions.
+Registries win over the built-in switches, so a plugin can also *shadow* a
+built-in name. Each is detailed below; there's also a fully **programmatic**
+path — `vizToScene()` + `edd.renderScene()` build and mount diagrams from plain
+data with no DSL text at all, and `edd.appendSource()` grows a live diagram's
+text at runtime (see [§6](#6-add-a-visualization-template) and
+[INTEGRATION_GUIDE](INTEGRATION_GUIDE.md)).
 
 ---
 
@@ -193,8 +199,37 @@ paints.
 
 An edge draws a hand-drawn base stroke, arrowheads, and (optionally) a clean
 **overlay `<path>`** that carries a CSS animation along the exact same centerline.
-Adding a new animation kind is **exactly three edits** plus (optionally) widening
-the type union. We'll add a kind called `surge` (a fast, short dash sweep).
+
+### Runtime (package consumers) — `registerArrowAnimation`
+
+No engine fork needed: register the kind and it's immediately usable from DSL
+text (`animate: surge`), including the `{ speed: N }` form:
+
+```ts
+import { registerArrowAnimation } from "edododraw";
+
+registerArrowAnimation("surge", {
+  // keyframes + class, injected once per document (class is always edd-anim-<kind>)
+  css: `@keyframes edd-surge { to { stroke-dashoffset: -18; } }
+        .edd-anim-surge { animation-name: edd-surge; animation-timing-function: ease-in; animation-iteration-count: infinite; }`,
+  // style the overlay path; length/speed are precomputed for you
+  apply(path, edge, { length, speed }) {
+    path.setAttribute("stroke-dasharray", "4 14");
+    path.style.animationDuration = `${0.7 / speed}s`;
+  },
+});
+```
+
+The overlay arrives with stroke/width/linecap defaults matching the edge and
+`--edd-len` / `--edd-speed` CSS variables set. Registered kinds pass through the
+compiler untouched (no fallback to `flow`), are suppressed in `static: true`
+renders, and honor `prefers-reduced-motion` automatically via the blanket
+`.edd-anim` rule.
+
+### Contributing a built-in (in-repo)
+
+Adding a kind to the engine itself is **exactly three edits** plus (optionally)
+widening the type union. We'll add the same `surge` (a fast, short dash sweep).
 
 **Edit 1 — the overlay case** in `animationOverlay()`
 (`src/engine/render/edges.ts`). This configures the SVG path for the new kind; the
@@ -267,10 +302,44 @@ sets `animation: flow` + curved routing — override with the trailing block.
 ## 4. Add an annotation kind
 
 Annotations (scripted _and_ live) are `Annotation` records rendered by
-`AnnotationLayer.draw()` (`src/engine/annotate/layer.ts`). The `kind` field is an
-open union, so adding one is a single `case` plus a private draw method. We'll add
-`cross` (a big hand-drawn X over an element — distinct from `strike`, which is one
-horizontal line).
+`AnnotationLayer.draw()` (`src/engine/annotate/layer.ts`).
+
+### Runtime (package consumers) — `registerAnnotation`
+
+Register a draw function and the kind works from DSL text immediately — in
+top-level `annotate { … }` blocks **and** as a bare command inside timeline
+beats/staggers (the parser consults the registry):
+
+```ts
+import { registerAnnotation } from "edododraw";
+
+registerAnnotation("cross", (an, { g, rc, box, label }) => {
+  if (!box) return;
+  const opts = { stroke: an.color || "#e03131", strokeWidth: 3, roughness: 1.6, seed: 33 };
+  g.appendChild(rc.line(box.minX, box.minY, box.maxX, box.maxY, opts));
+  g.appendChild(rc.line(box.minX, box.maxY, box.maxX, box.minY, opts));
+  if (an.text) label(an.text, { x: box.minX, y: box.minY - 8 }, opts.stroke, "start");
+});
+```
+
+```edd
+scene { a[Deprecated] }
+annotate { cross a "kill it" { color: red } }
+timeline t { beat one { cross a } }   // beat context works too
+```
+
+The context gives you `scene`, the rough.js canvas `rc` (always pass a stable
+`seed` so strokes don't re-jitter), the resolved target `box` (nodes, edges,
+groups, and viz-item keys all resolve), `resolveBBox(id)` for secondary
+targets, and the hand-drawn `label()` helper. Everything is drawn in world
+space, so your marks track the camera and their target automatically.
+
+### Contributing a built-in (in-repo)
+
+The `kind` field is an open union, so adding one to the engine is a single
+`case` plus a private draw method. We'll add the same `cross` (a big
+hand-drawn X over an element — distinct from `strike`, which is one horizontal
+line).
 
 **Edit 1 — the `draw` switch** in `AnnotationLayer` (`layer.ts`). `box` is the
 target's world bounding box (already resolved for you from `an.target`):
@@ -344,8 +413,39 @@ so those come for free.
 ## 5. Add a layout
 
 Auto-layout assigns world positions to non-pinned nodes based on
-`scene.meta.layout` (a `LayoutKind`). See `src/engine/layout/index.ts`. Adding a
-mode is three edits; we'll add `column` (a single vertical stack).
+`scene.meta.layout` (a `LayoutKind`). See `src/engine/layout/index.ts`.
+
+### Runtime (package consumers) — `registerLayout`
+
+Register the algorithm and `layout <name>` works from DSL text immediately:
+
+```ts
+import { registerLayout } from "edododraw";
+
+registerLayout("column", (scene, movable) => {
+  let y = 0;
+  for (const n of movable) {
+    n.x = -n.w / 2;
+    n.y = y;
+    y += n.h + (scene.meta.spacing?.node ?? 40);
+  }
+});
+```
+
+```edd
+scene { layout column
+  rect a; rect b; rect c }
+```
+
+You receive only the **movable** (non-pinned) nodes; mutate their top-left
+`x`/`y` in place. Your function runs inside applyLayout's never-throw envelope
+(failures fall back to grid) and the result is normalized to a small positive
+margin afterwards — so relative geometry is what matters.
+
+### Contributing a built-in (in-repo)
+
+Adding a mode to the engine is three edits; we'll add the same `column` (a
+single vertical stack).
 
 **Edit 1 — the algorithm.** New file `src/engine/layout/column.ts`, mutating each
 node's top-left `x`/`y` in place (mirror the shape of `grid.ts`/`radial.ts`):
@@ -416,6 +516,29 @@ scene {
 
 `viz <name> { … }` blocks resolve through the viz registry, so a new template is
 a pure runtime registration — same pattern as shapes:
+
+> Three related runtime seams live nearby:
+>
+> - **`registerIcon(name, pathD, { viewBox?, aliases? })`** — add glyphs usable
+>   from any item's `icon:` attribute. Stroke-only paths (they're sketched by
+>   rough.js); `viewBox` is the square design size (default 24). Registered
+>   icons show up in `listIcons()` and can shadow built-ins.
+>   ```ts
+>   import { registerIcon } from "edododraw";
+>   registerIcon("bolt", "M8 2 L16 12 L10 12 L16 22", { aliases: ["zap"] });
+>   ```
+> - **`vizToScene(specs, { style?, mode? })`** — build visualizations **on the
+>   fly from plain data**, no DSL text: pass `{ type, items: [vizItem("Leads",
+>   1200), …] }` and get a render-ready Scene (same generators, presets, and
+>   `data-viz-item` tagging as the DSL path). Pure and DOM-free, so it also
+>   works in Node/workers. Render it with `edd.renderScene(scene)`.
+> - **`edd.appendSource(fragment)`** — grow a live diagram at runtime while
+>   keeping `.edd` text the single source of truth (compiles `source + "\n" +
+>   fragment` and re-renders).
+>
+> Declare `entryKinds` / `options` / `sweetSpot` on your `registerViz` def and
+> it appears fully described in `listVizTemplates()` (the machine-readable
+> catalog tooling uses to validate `.edd`).
 
 ```ts
 import { registerViz, type VizSpec, type VizContext } from "edododraw";

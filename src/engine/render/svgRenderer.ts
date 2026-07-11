@@ -13,6 +13,7 @@ import rough from "roughjs";
 import type { Point } from "../geometry.js";
 import type { Scene, SceneNode } from "../scene/types.js";
 import { registerBuiltinShapes } from "../plugins/builtins.js";
+import { ensurePluginStyles } from "../plugins/registry.js";
 import { renderEdge } from "./edges.js";
 import { labelBelow, renderShapeBody } from "./shapes.js";
 import { ensureEngineStyles, FONT_FAMILY } from "./theme.css.js";
@@ -263,6 +264,8 @@ export class SvgRenderer {
 
   render(scene: Scene): void {
     this.scene = scene;
+    // keyframes from runtime-registered arrow animations (cheap, idempotent)
+    ensurePluginStyles(this.container.ownerDocument);
     // Paint the background on the mount container, not the SVG rect: the host's
     // dotted-grid background sits *behind* the SVG, so an opaque bg rect would
     // occlude it. Keeping the on-screen rect transparent lets the grid show

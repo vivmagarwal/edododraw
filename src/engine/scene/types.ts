@@ -93,6 +93,7 @@ export type ArrowAnimationKind =
 
 export type EdgeRouting = "straight" | "curved" | "orthogonal" | "elbow";
 
+/** Built-in layouts. Plugins may register more (see plugins/registry). */
 export type LayoutKind =
   | "dag"
   | "dag-lr"
@@ -100,7 +101,8 @@ export type LayoutKind =
   | "dag-bt"
   | "grid"
   | "radial"
-  | "manual";
+  | "manual"
+  | (string & {});
 
 // ----------------------------------------------------------------------------
 // Styles

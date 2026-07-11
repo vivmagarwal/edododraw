@@ -11,6 +11,7 @@ import rough from "roughjs";
 import type { Options } from "roughjs/bin/core";
 import type { BBox, Point } from "../geometry.js";
 import { bboxCenter, bboxUnion, emptyBBox, expandBBox } from "../geometry.js";
+import { getAnnotationPlugin } from "../plugins/registry.js";
 import { elementBBox } from "../scene/query.js";
 import { resolveMarker } from "../scene/palette.js";
 import type { Annotation, Scene } from "../scene/types.js";
@@ -82,6 +83,20 @@ export class AnnotationLayer {
     g.setAttribute("data-annotation", an.id);
     g.setAttribute("class", "edd-annotation");
     const box = this.targetBBox(scene, an);
+
+    // runtime-registered kinds take precedence (see plugins/registry)
+    const plugin = getAnnotationPlugin(an.kind);
+    if (plugin) {
+      plugin(an, {
+        scene,
+        rc: this.rc,
+        g,
+        box,
+        resolveBBox: (id) => elementBBox(scene, id),
+        label: (text, at, color, anchor = "middle", size) => this.label(g, text, at, color, anchor, size),
+      });
+      return g.childNodes.length ? g : null;
+    }
 
     switch (an.kind) {
       case "highlight":

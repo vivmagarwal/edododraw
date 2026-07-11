@@ -16,6 +16,7 @@ import type rough from "roughjs";
 import type { Options } from "roughjs/bin/core";
 import type { Point } from "../geometry.js";
 import { rectCenter } from "../geometry.js";
+import { getArrowAnimation } from "../plugins/registry.js";
 import { resolveAnchor, nodeRect } from "../scene/anchors.js";
 import { getNode } from "../scene/query.js";
 import type { EdgeStyle, Scene, SceneEdge } from "../scene/types.js";
@@ -316,6 +317,16 @@ function animationOverlay(edge: SceneEdge, centerline: string, len: number): SVG
   const style = p.style;
   style.setProperty("--edd-len", String(Math.max(1, Math.round(len))));
   style.setProperty("--edd-speed", String(speed));
+
+  // runtime-registered animation kinds take precedence (see plugins/registry)
+  const plugin = getArrowAnimation(kind);
+  if (plugin) {
+    p.setAttribute("stroke", stroke);
+    p.setAttribute("stroke-width", String(sw * 1.2));
+    p.setAttribute("stroke-linecap", "round");
+    plugin.apply(p, edge, { length: len, speed });
+    return p;
+  }
 
   switch (kind) {
     case "flow":

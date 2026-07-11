@@ -257,6 +257,44 @@ export class EdodoDraw {
     return { scene, diagnostics: diags };
   }
 
+  /**
+   * Render a programmatic Scene directly (skip the DSL). Pair with
+   * `vizToScene()` / `runViz()` / hand-built Scene IR to create diagrams on
+   * the fly. Note: direct-manipulation editing round-trips through `.edd`
+   * source, so canvas edits are inert for scenes rendered this way — use
+   * `render()`/`appendSource()` when you need the code round-trip.
+   */
+  renderScene(scene: Scene): void {
+    this.renderSeq++; // invalidate any in-flight async render()
+    this.source = "";
+    this.scene = scene;
+    this.hasRendered = true;
+    this.renderer.render(scene);
+    this.player.load(scene);
+    if (this.opts.startHidden) {
+      this.renderer.applyVisibility(new Set([...scene.nodes.map((n) => n.id), ...scene.edges.map((e) => e.id)]));
+      this.annotations.clear();
+    }
+    this.renderer.measure();
+    if (this.opts.autoFit && (!this.hasFitted || this.fitOnce)) this.fit(false);
+    else this.updateGrid(this.controller.current);
+    this.hasFitted = true;
+    this.fitOnce = false;
+    this.live.render();
+    this.edit.render();
+    this.emit("render", { scene, diagnostics: [] });
+  }
+
+  /**
+   * Append a DSL fragment to the current source and re-render — grow a
+   * diagram at runtime while keeping the text as the single source of truth:
+   *   await edd.appendSource(`annotate { circle-mark api "hot path" }`);
+   */
+  appendSource(fragment: string): Promise<RenderResult> {
+    const base = this.source.trimEnd();
+    return this.render(base ? `${base}\n${fragment}` : fragment);
+  }
+
   getScene(): Scene {
     return this.scene;
   }

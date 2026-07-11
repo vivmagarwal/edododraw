@@ -22,6 +22,7 @@
  * The public surface is `applyLayout`; per-mode maths lives in dag/grid/radial.
  */
 
+import { getLayoutPlugin } from "../plugins/registry.js";
 import type { LayoutKind, Scene, SceneNode } from "../scene/types.js";
 import { layoutDag, type DagOptions, type RankDir } from "./dag.js";
 import { layoutGrid } from "./grid.js";
@@ -79,6 +80,12 @@ export function applyLayout(scene: Scene): void {
 function runLayout(scene: Scene, movable: SceneNode[]): void {
   const kind = scene.meta.layout;
   try {
+    // runtime-registered layouts take precedence (see plugins/registry)
+    const plugin = getLayoutPlugin(kind);
+    if (plugin) {
+      plugin(scene, movable);
+      return;
+    }
     switch (kind) {
       case "dag":
       case "dag-lr":

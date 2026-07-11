@@ -112,12 +112,36 @@ const ALIASES: Record<string, string> = {
   gem: "diamond",
 };
 
-export function iconPath(name: string | undefined): string | undefined {
+// Runtime-registered icons (package consumers extending the glyph set).
+const REGISTERED = new Map<string, { d: string; viewBox: number }>();
+
+/**
+ * Register a custom icon usable from any viz item (`icon: mylogo`) — stroke
+ * paths only (they're sketched by rough.js like everything else, so filled
+ * paths won't look right). `viewBox` is the square design size the path was
+ * authored at (default 24, like the built-ins). Re-registering a name
+ * replaces it; built-in names can be shadowed.
+ */
+export function registerIcon(name: string, d: string, opts: { viewBox?: number; aliases?: string[] } = {}): void {
+  const entry = { d, viewBox: opts.viewBox ?? ICON_VIEWBOX };
+  REGISTERED.set(name.trim().toLowerCase(), entry);
+  for (const a of opts.aliases ?? []) REGISTERED.set(a.trim().toLowerCase(), entry);
+}
+
+/** Resolve an icon name (or alias) to its path + design viewBox. */
+export function iconEntry(name: string | undefined): { d: string; viewBox: number } | undefined {
   if (!name) return undefined;
   const key = name.trim().toLowerCase();
-  return ICONS[key] ?? ICONS[ALIASES[key] ?? ""];
+  const reg = REGISTERED.get(key);
+  if (reg) return reg;
+  const d = ICONS[key] ?? ICONS[ALIASES[key] ?? ""];
+  return d ? { d, viewBox: ICON_VIEWBOX } : undefined;
+}
+
+export function iconPath(name: string | undefined): string | undefined {
+  return iconEntry(name)?.d;
 }
 
 export function listIcons(): string[] {
-  return Object.keys(ICONS);
+  return [...new Set([...Object.keys(ICONS), ...REGISTERED.keys()])];
 }

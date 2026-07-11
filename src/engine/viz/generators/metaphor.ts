@@ -368,65 +368,104 @@ registerViz({
     const cRole = ctx.role(0, { n: 2, color: current?.color });
     const vRole = ctx.role(1, { n: 2, color: vision?.color });
     const steps = 5;
-    const rise = 40;
-    const run = 46;
-    const slant = 14;
+    const rise = 46;
+    const run = 56;
     const groundY = 340;
-    const x0 = 46;
-    const doorW = 96;
-    const doorH = 172;
-    const topLeft = x0 + (steps - 1) * run; // left edge of the top step
-    const xR = topLeft + doorW + 78; // shared right edge of every step
-    // ground line, left
+    const x0 = 40; // first riser
+    const topX = x0 + steps * run;
+    const topY = groundY - steps * rise;
+    const landingW = 170; // door landing on top
+    const xR = topX + landingW;
+
+    // one closed stepped silhouette (risers + treads + landing) — reads as a
+    // real staircase, softly tinted in the "today" color
+    const silhouette: Array<[number, number]> = [[x0, groundY]];
+    for (let k = 0; k < steps; k++) {
+      const xL = x0 + k * run;
+      const yT = groundY - (k + 1) * rise;
+      silhouette.push([xL, yT], [xL + run, yT]);
+    }
+    silhouette.push([xR, topY], [xR, groundY]);
+    ctx.poly(silhouette, { stroke: ctx.ink, fill: cRole.softFill, fillStyle: "solid", strokeWidth: 2.2, roughness: ctx.preset.roughness }, { id: ctx.uid("stairs") });
+
+    // ground line under everything
     ctx.line(
       [
-        [-40, groundY],
-        [x0 - slant + 4, groundY],
+        [x0 - 104, groundY],
+        [xR + 44, groundY],
       ],
       { color: ctx.ink, width: 2.4 },
     );
-    // 5 chunky closed steps rising to the door's threshold — each a slab with
-    // a slightly slanted left edge (staircase silhouette in perspective)
-    for (let k = 0; k < steps; k++) {
-      const yTop = groundY - (k + 1) * rise;
-      const xL = x0 + k * run;
-      ctx.poly(
-        [
-          [xL, yTop],
-          [xR, yTop],
-          [xR, yTop + rise],
-          [xL - slant, yTop + rise],
-        ],
-        { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 2.2, roughness: ctx.preset.roughness },
-        k === 0 ? { id: ctx.uid("stairs") } : {},
-      );
-    }
-    // door glyph seated on the top step: frame + open leaf (skewed parallelogram) + knob
+
+    // dashed ascent arrow riding just above the step noses — today's momentum
+    ctx.line(
+      [
+        [x0 + run * 0.75, groundY - rise * 2.55],
+        [topX - 14, topY - 40],
+      ],
+      { color: vRole.color, width: 2.2, dash: true, arrow: true },
+    );
+
+    // a figure standing at the base — "you are here, today"
+    const fx = x0 - 52;
+    scoped(ctx, current, () => {
+      ctx.shape("circle", fx - 9, groundY - 76, 18, 18, { stroke: cRole.color, fill: null, fillStyle: "none", strokeWidth: 2, roughness: ctx.preset.roughness });
+      ctx.line([[fx, groundY - 58], [fx, groundY - 27]], { color: cRole.color, width: 2 }); // torso
+      ctx.line([[fx - 13, groundY - 47], [fx + 13, groundY - 47]], { color: cRole.color, width: 2 }); // arms
+      ctx.line([[fx, groundY - 27], [fx - 11, groundY]], { color: cRole.color, width: 2 }); // legs
+      ctx.line([[fx, groundY - 27], [fx + 11, groundY]], { color: cRole.color, width: 2 });
+      if (current?.icon) ctx.icon(current.icon, fx, groundY - 106, 30, cRole.color);
+      if (current) ctx.labelBlock(current.label, current.detail, fx - 52, groundY + 28, { color: cRole.color, align: "left", maxW: 210, vAnchor: "top" });
+    });
+
+    // the door on the landing: frame + doorway + open leaf + knob + light rays
     // — the door IS the vision item's shape, so it's tagged as that item
-    const doorX = topLeft + 14;
-    const doorB = groundY - steps * rise; // door base = top step's upper edge
+    const doorW = 92;
+    const doorH = 166;
+    const doorX = topX + (landingW - doorW) / 2 - 14;
+    const doorB = topY;
     scoped(ctx, vision, () => {
+      // frame (inverted U standing on the landing)
+      ctx.line(
+        [
+          [doorX - 7, doorB],
+          [doorX - 7, doorB - doorH - 7],
+          [doorX + doorW + 7, doorB - doorH - 7],
+          [doorX + doorW + 7, doorB],
+        ],
+        { color: ctx.ink, width: 2.2 },
+      );
       ctx.shape("rectangle", doorX, doorB - doorH, doorW, doorH, vRole, { id: vision ? ctx.uid(vision.id) : undefined });
+      // open leaf (skewed parallelogram) + knob
       ctx.poly(
         [
           [doorX + doorW, doorB - doorH],
-          [doorX + doorW + 52, doorB - doorH - 24],
-          [doorX + doorW + 52, doorB - 30],
+          [doorX + doorW + 54, doorB - doorH - 26],
+          [doorX + doorW + 54, doorB - 32],
           [doorX + doorW, doorB],
         ],
         vRole,
       );
-      dot(ctx, doorX + doorW + 41, doorB - doorH / 2 - 12, 8, vRole.textColor, 3);
-      if (vision?.icon) ctx.icon(vision.icon, doorX + doorW / 2, doorB - doorH - 40, 36, vRole.color);
+      dot(ctx, doorX + doorW + 42, doorB - doorH / 2 - 12, 8, vRole.textColor, 3);
+      // light rays fanning up from the open doorway
+      const rcx = doorX + doorW / 2;
+      const rcy = doorB - doorH - 14;
+      for (const [dx, dy] of [
+        [-40, -26],
+        [0, -34],
+        [40, -26],
+      ] as Array<[number, number]>) {
+        ctx.line(
+          [
+            [rcx + dx * 0.4, rcy + dy * 0.4],
+            [rcx + dx, rcy + dy],
+          ],
+          { color: vRole.color, width: 2 },
+        );
+      }
+      if (vision?.icon) ctx.icon(vision.icon, doorX + doorW / 2, doorB - doorH - 78, 34, vRole.color);
+      if (vision) ctx.labelBlock(vision.label, vision.detail, xR + 28, doorB - doorH + 14, { color: vRole.color, align: "left", maxW: 200, vAnchor: "top" });
     });
-    // current near the ground (left), vision near the door (upper right)
-    if (current) {
-      ctx.item(current.id, () => {
-        if (current.icon) ctx.icon(current.icon, -14, groundY - 28, 32, cRole.color);
-        ctx.labelBlock(current.label, current.detail, -40, groundY + 30, { color: cRole.color, align: "left", maxW: 220, vAnchor: "top" });
-      });
-    }
-    if (vision) ctx.item(vision.id, () => ctx.labelBlock(vision.label, vision.detail, doorX + doorW + 72, doorB - doorH + 20, { color: vRole.color, align: "left", maxW: 190, vAnchor: "top" }));
   },
 });
 

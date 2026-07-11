@@ -10,6 +10,7 @@
  * parser returns a best-effort AST plus a DiagnosticBag.
  */
 
+import { getAnnotationPlugin } from "../plugins/registry.js";
 import { DiagnosticBag } from "./diagnostics.js";
 import { lex } from "./lexer.js";
 import { SHAPE_KEYWORDS, T, type Token } from "./tokens.js";
@@ -860,7 +861,7 @@ class Parser {
         return null;
       }
       // bare annotation or reveal command
-      if (ANNOT_KINDS.has(t.text)) return this.parseAnnotationCmd();
+      if (isAnnotKind(t.text)) return this.parseAnnotationCmd();
       if (REVEAL_VERBS.has(t.text)) return this.parseRevealCmd();
     }
     this.error("E-BEAT", `unexpected '${t.text || t.kind}' in beat`, t, {
@@ -1031,7 +1032,7 @@ class Parser {
     this.skipSeps();
     while (!this.is(T.RBrace) && !this.atEnd()) {
       const w = this.cur().text;
-      if (this.cur().kind === T.Ident && ANNOT_KINDS.has(w)) {
+      if (this.cur().kind === T.Ident && isAnnotKind(w)) {
         const c = this.parseAnnotationCmd();
         if (c) commands.push(c);
       } else {
@@ -1336,6 +1337,12 @@ const ANNOT_KINDS = new Set([
   "highlight", "underline", "strike", "point-at", "spotlight", "callout",
   "label", "box", "circle-mark", "note-marker", "emphasize", "badge",
 ]);
+
+/** Built-in annotation verbs plus any runtime-registered kinds, so a plugin
+ *  annotation works as a bare command in beat/stagger context too. */
+function isAnnotKind(word: string): boolean {
+  return ANNOT_KINDS.has(word) || !!getAnnotationPlugin(word);
+}
 
 const REVEAL_VERBS = new Set([
   "show", "hide", "draw-on", "emphasize", "fade-in", "fade-out", "pop", "flow",

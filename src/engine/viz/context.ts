@@ -11,7 +11,7 @@ import type { Annotation, EdgeStyle, FontKind, NodeStyle, SceneEdge, SceneNode, 
 import type { DiagnosticBag } from "../dsl/diagnostics.js";
 import { roleStyle, type RoleOptions, type RoleStyle, type StylePreset } from "../style/presets.js";
 import { measureBlock, measureText, wrapText } from "./text.js";
-import { iconPath, ICON_VIEWBOX } from "./icons.js";
+import { iconEntry } from "./icons.js";
 import type { VizBounds, VizItem, VizResult } from "./types.js";
 
 export interface LabelOptions {
@@ -245,13 +245,13 @@ export class VizContext {
 
   /** A known line-icon glyph, centered at (cx, cy). Unknown names no-op. */
   icon(name: string | undefined, cx: number, cy: number, size: number, color: string, z?: number): SceneNode | null {
-    const d = iconPath(name);
-    if (!d) return null;
-    // The path shape scales its group by size/ICON_VIEWBOX, which multiplies the
+    const entry = iconEntry(name);
+    if (!entry) return null;
+    // The path shape scales its group by size/viewBox, which multiplies the
     // stroke too — so specify the stroke in DESIGN units such that the on-screen
     // width lands at ~2px (slightly heavier for very large icons).
     const visual = Math.min(3, Math.max(1.8, size / 18));
-    const strokeWidth = visual * (ICON_VIEWBOX / size);
+    const strokeWidth = visual * (entry.viewBox / size);
     return this.shape(
       "path",
       cx - size / 2,
@@ -259,7 +259,7 @@ export class VizContext {
       size,
       size,
       { stroke: color, fill: null, fillStyle: "none", strokeWidth, roughness: Math.min(0.8, this.preset.roughness) },
-      { z: z ?? 3, data: { d, vw: ICON_VIEWBOX, vh: ICON_VIEWBOX }, role: "icon" },
+      { z: z ?? 3, data: { d: entry.d, vw: entry.viewBox, vh: entry.viewBox }, role: "icon" },
     );
   }
 

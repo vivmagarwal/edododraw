@@ -98,6 +98,8 @@ new EdodoDraw(container: HTMLElement, options?: EdodoDrawOptions)
 | Method | Signature | Notes |
 |---|---|---|
 | `render` | `(source: string) => Promise<RenderResult>` | Compile + render. `RenderResult = { scene: Scene; diagnostics: Diagnostic[] }`. |
+| `appendSource` | `(fragment: string) => Promise<RenderResult>` | Append a DSL fragment to the current source and re-render — grow a diagram at runtime while the text stays the single source of truth. |
+| `renderScene` | `(scene: Scene) => void` | Render a programmatic Scene directly (skip the DSL) — pair with `vizToScene()`/`runViz()` to create visualizations on the fly. Canvas editing is inert for such scenes (no source to round-trip). |
 | `getScene` | `() => Scene` | The current rendered scene (Scene IR). |
 | `getSource` | `() => string` | The last source string passed to `render`. |
 | `setColorScheme` | `(mode: "light" \| "dark" \| null) => void` | Force light/dark rendering, overriding the diagram's declared theme. Re-themes the canvas background, the dotted grid, and the diagram's default ink (strokes/text adapt for contrast on the dark canvas; **explicit** colors are kept). `null` falls back to the DSL's own theme. Idempotent + re-renders the current source. |

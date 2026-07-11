@@ -37,8 +37,14 @@ export type { OverrideEntry } from "./dsl/patch.js";
 export { DiagnosticBag, formatDiagnostic } from "./dsl/diagnostics.js";
 export type { Diagnostic } from "./dsl/diagnostics.js";
 export { downloadSVG, downloadPNG, downloadJSON, exportSVGString, exportPNGBlob } from "./export.js";
-export { registerShape, getShapePlugin, listShapePlugins } from "./plugins/registry.js";
-export type { ShapePluginFn } from "./plugins/registry.js";
+export {
+  registerShape, getShapePlugin, listShapePlugins,
+  registerArrowAnimation, getArrowAnimation, listArrowAnimations,
+  registerAnnotation, getAnnotationPlugin, listAnnotationPlugins,
+  registerLayout, getLayoutPlugin, listLayoutPlugins,
+  ensurePluginStyles,
+} from "./plugins/registry.js";
+export type { ShapePluginFn, ArrowAnimationDef, ArrowAnimationInfo, AnnotationPluginFn, AnnotationDrawCtx, LayoutPluginFn } from "./plugins/registry.js";
 export * from "./style/color.js";
 export * from "./style/presets.js";
 export * from "./viz/index.js";
