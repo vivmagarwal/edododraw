@@ -76,6 +76,9 @@ export const VIZ_ALIASES: Record<string, string[]> = {
 
   // ---- Brainstorming / Parts of a whole -------------------------------------
   mindmap: ["mind-map", "brainstorm", "topics"],
+  personas: ["team", "cast", "roles", "characters", "people"],
+  quote: ["quotation", "big-quote", "saying", "callout-quote"],
+  clouds: ["idea-clouds", "thought-clouds", "sticky-ideas", "scattered-ideas"],
   "key-ideas": ["highlights", "takeaways", "key-points"],
   list: ["bullets", "checklist", "items", "bullet-list"],
   diverge: ["diverging", "branch-out", "fan-out"],
@@ -89,6 +92,7 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   bridge: ["gap", "migration", "span", "bridge-gap"],
   "root-causes": ["why", "causes", "cause-tree", "cause-effect"],
   domino: ["chain-reaction", "dominoes", "cascade-effect", "knock-on"],
+  fishbone: ["ishikawa", "fishbone-diagram", "cause-categories"],
   impact: ["ripple", "consequences", "effects"],
 
   // ---- Visual Metaphors -----------------------------------------------------

@@ -15,6 +15,7 @@ import "./metaphor.js";
 import "./strategy.js";
 import "./planning.js";
 import "./frameworks.js";
+import "./sketchnote.js";
 
 // Register the central LLM-friendly alias set once every generator is loaded.
 import { applyVizAliases } from "../aliases.js";

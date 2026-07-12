@@ -1,6 +1,6 @@
 # Visualizations Guide (`viz` templates)
 
-EDodoDraw ships **81 visualization templates** — funnels, pyramids, venns, charts, timelines, mindmaps, business frameworks, visual metaphors — each generated **100% from text**. A `viz` block declares *data*; the template turns it into ordinary diagram elements, so everything else in EDodoDraw (camera beats, annotations, direct editing, export, style presets) works on visualizations exactly as on hand-drawn scenes.
+EDodoDraw ships **85 visualization templates** — funnels, pyramids, venns, charts, timelines, mindmaps, business frameworks, visual metaphors — each generated **100% from text**. A `viz` block declares *data*; the template turns it into ordinary diagram elements, so everything else in EDodoDraw (camera beats, annotations, direct editing, export, style presets) works on visualizations exactly as on hand-drawn scenes.
 
 > Browse every template live (in every style) on the site's **Visualizations** page. Styling is a separate axis — see [STYLES_GUIDE.md](STYLES_GUIDE.md).
 
@@ -161,6 +161,9 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 |---|---|---|
 | `mindmap` (+ `mindmap-left`, `-right`, `-horizontal`, `-vertical`) | nested `item`s; root = title, a lone parent item, or a `root` entry | — |
 | `key-ideas` (`ideas`) | `item "Focus" "description"` lightbulbs | — |
+| `personas` (`team`, `cast`) | `item "The Builder" "detail" { pose: confident, emotion: happy, prop: wrench }` characters | — |
+| `quote` (`big-quote`) | title = the quote; `by:` attribution; a character presents it | `by:`, `pose:`, `emotion:`, `prop:` |
+| `clouds` (`idea-clouds`) | `item "Theme" "detail" { icon }` scattered thought-cloud islands | — |
 | `list` | `item "Value" "detail" { icon }` — vertical ≤5 items, horizontal 6+ | `orientation:` |
 | `diverge` | question = title + `item` options radiating on block arrows | — |
 | `converge` / `lens` | `item` inputs + `output "Result" { icon }` | — |
@@ -175,6 +178,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `challenges` (`hurdles`) / `bridge` | `from`/`to` states + `item` steps spanning the gap | `action:` caption |
 | `root-causes` (`root-cause`) | problem = title + `item "Cause" "description"` on the roots | — |
 | `domino` (`chain-reaction`) | `item "Config typo" "detail"` tiles toppling into the outcome | — |
+| `fishbone` (`ishikawa`) | title = the effect + `bone "People" { item "cause" … }` categories | — |
 | `impact` | `cause "Driver"` + `item "Effect" "description"` bubbles | — |
 
 ### Visual Metaphors
@@ -275,6 +279,10 @@ EDodoDraw is a **text→visualization generator**: it renders whatever you give 
 | `domino` | 3–6 tiles | fallen hardest at the trigger, upright at the outcome |
 | `lighthouse` | 2–4 rocks | + `ship:`; beam sweeps over every rock |
 | `magnet` | 2–5 chips | chips fan toward the poles |
+| `personas` | 2–6 characters | poses cycle when unset; `pose:`/`emotion:`/`prop:` per item |
+| `quote` | exactly 1 quote | `pose: none` hides the figure |
+| `clouds` | 3–7 clouds | staggered rows sized by the largest cloud |
+| `fishbone` | 2–6 bones × ≤4 causes | bones alternate above/below the spine |
 
 **Text length.** Labels are single-line-ish (they wrap, but keep them a few words). Descriptions (`detail:` / trailing string) wrap to a column and the layout expands to fit — but on the compact-side-label templates (`funnel`, `pyramid`, `bullseye`, `spectrum`, `decision`) a stage/level reads best with a **name + one short sentence**; multi-sentence prose is supported but makes those layouts tall. Narrative templates (`sequence`, `journey`, `dialogue`, `iceberg`, `problem-solution`, `transformation`, `root-causes`) comfortably hold 1–2 sentences per item.
 
@@ -334,7 +342,36 @@ tooling can validate `.edd` before rendering.
 
 `icon:` accepts a built-in line-glyph name; unknown names render nothing (layouts don't depend on them). Available: `check x plus minus arrow-up arrow-down arrow-right arrow-left trend-up trend-down star heart flag target bulb gear user users clock calendar rocket trophy medal search warning dollar chart pie doc mail chat home globe lock key leaf fire drop cloud database shield eye book wrench phone megaphone handshake scale puzzle diamond circle` (plus aliases like `idea`, `growth`, `money`, `team`, `award` — see `src/engine/viz/icons.ts`).
 
-## 6. Extending
+## 6. Characters
+
+A reusable **sketchnote character library** ships with the engine — the classic
+bullet-head figure (circle head + dot eyes + emotion mouth, vest-outline torso,
+curved limbs with hand blobs, motion lines) drawn parametrically, preset-aware,
+and deterministic like everything else.
+
+- **Poses**: `standing waving pointing presenting cheering running confident
+  thinking holding-overhead shrugging pulling peering` (plus any you register).
+- **Emotions**: `neutral happy sad surprised angry excited confused thinking
+  determined` — the workbook's mouth+eyes grid.
+- **Props**: ANY icon name (§5), held at the pose's anchor — `prop: trophy`
+  puts a trophy overhead in `holding-overhead`, `prop: star` crowns `cheering`.
+
+In the DSL, characters appear through templates: `personas` renders one per
+item (`{ pose: confident, emotion: happy, prop: wrench }`), `quote` adds a
+presenting figure, and `vision`/`hole`/`tug-of-war` use them internally. From
+generator code (see EXTENDING_GUIDE):
+
+```ts
+ctx.character("cheering", cx, groundY, 120, { color: role.color, prop: "trophy" });
+registerCharacterPose("dabbing", { armL: […], armR: […], legL: […], legR: […] });
+```
+
+Container shapes from the same vocabulary are first-class node shapes usable
+anywhere in the DSL: `speech-bubble` (tail via `dir`), `starburst` (impact),
+`ribbon` (banner titles), `paper-fold` (documents) — plus the existing `cloud`,
+`note`, and `document`.
+
+## 7. Extending
 
 Register your own template and it's immediately usable from the DSL — no grammar change:
 

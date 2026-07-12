@@ -329,6 +329,24 @@ const BUILDERS: Record<string, () => Variation[]> = {
   lighthouse: () => counts([2, 3, 4], "rocks", (n, long) => block("lighthouse", "Guidance", [`  ship: "The plan"`, ...itemLines(n, { detail: true, long })]), 3),
   magnet: () => counts([2, 3, 5], "chips", (n) => block("magnet", "Attraction", [`  label: "The pull"`, ...itemLines(n, { icon: true })])),
 
+  // ---- Sketchnote-native (2026-07) ----------------------------------------------
+  personas: () =>
+    counts([2, 4, 6], "personas", (n) => {
+      const poses = ["waving", "confident", "thinking", "cheering", "presenting", "pointing"];
+      return block("personas", "The Team", range(n).map((i) => `  item "${NAMES[i]}" "${DETAILS[i % DETAILS.length]}" { pose: ${poses[i]} }`));
+    }),
+  quote: () => [
+    { label: "Short quote", code: block("quote", "Less, but better.", ["  by: \"Dieter Rams\""]) },
+    { label: "Long quote", code: block("quote", "The people who are crazy enough to think they can change the world are the ones who do.", ["  by: \"Rob Siltanen\"", "  pose: cheering"]) },
+    { label: "No character", code: block("quote", "Make it work, make it right, make it fast.", ["  by: \"Kent Beck\"", "  pose: none"]) },
+  ],
+  clouds: () => counts([3, 5, 7], "clouds", (n, long) => block("clouds", "Themes", itemLines(n, { icon: true, detail: long, long })), 5),
+  fishbone: () =>
+    counts([2, 4, 6], "bones", (n) => {
+      const cats = ["People", "Process", "Tools", "Environment", "Measures", "Materials"];
+      return block("fishbone", "Why It Breaks", range(n).map((i) => `  bone "${cats[i]}" {\n    item "${NAMES[i * 2]}"\n    item "${NAMES[i * 2 + 1]}"\n  }`));
+    }),
+
   "tug-of-war": () => [
     { label: "Left winning", code: block("tug-of-war", "Ship now vs. polish", [`  side "Ship now" 3 {\n    item "Market window closing"\n    item "Team is burning out"\n  }`, `  side "Keep polishing" 1 {\n    item "Two rough edges left"\n  }`]) },
     { label: "Balanced", code: block("tug-of-war", "Rewrite vs. refactor", ["  tilt: balanced", `  side "Rewrite" {\n    item "Clean slate"\n  }`, `  side "Refactor" {\n    item "Keep shipping"\n  }`]) },

@@ -399,19 +399,11 @@ registerViz({
       { stroke: ctx.ink, fill: ctx.ink, fillStyle: "solid", strokeWidth: 1.4, roughness: ctx.preset.roughness },
     );
 
-    // stick figure hauling backward: leaning AWAY from center, hands on the
-    // rope toward center, front leg braced, back leg dug in
+    // character-library figures hauling backward (pose "pulling" grips toward
+    // the center; flip mirrors it for the right-hand team)
     const figure = (x: number, away: -1 | 1, color: string) => {
-      const grip = x - away * 26;
-      const hipX = x + away * 6;
-      const shX = x + away * 17;
-      ctx.shape("circle", x + away * 23 - 8, ropeY - 40, 16, 16, { stroke: color, fill: null, fillStyle: "none", strokeWidth: 2, roughness: ctx.preset.roughness });
-      ctx.line([[hipX, ropeY + 14], [shX, ropeY - 24]], { color, width: 2.2 }); // torso leaning back
-      ctx.line([[shX, ropeY - 22], [grip, ropeY - 2]], { color, width: 2 }); // upper arm
-      ctx.line([[shX, ropeY - 16], [grip + away * 7, ropeY + 2]], { color, width: 2 }); // lower arm
-      ctx.line([[hipX, ropeY + 14], [x - away * 13, ropeY + 44]], { color, width: 2.2 }); // braced front leg
-      ctx.line([[hipX, ropeY + 14], [x + away * 17, ropeY + 44]], { color, width: 2.2 }); // dug-in back leg
-      ctx.line([[x - away * 22, ropeY + 46], [x + away * 26, ropeY + 46]], { color: ctx.mutedInk, width: 1.5 }); // ground
+      ctx.character("pulling", x, ropeY + 46, 104, { color, flip: away === 1, emotion: "determined" });
+      ctx.line([[x - away * 22, ropeY + 48], [x + away * 26, ropeY + 48]], { color: ctx.mutedInk, width: 1.5 }); // ground
     };
 
     sides.forEach((side, si) =>

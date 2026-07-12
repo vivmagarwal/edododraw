@@ -10,6 +10,7 @@ import { makeEdge, makeNode } from "../scene/defaults.js";
 import type { Annotation, EdgeStyle, FontKind, NodeStyle, SceneEdge, SceneNode, ShapeKind, TextAlign } from "../scene/types.js";
 import type { DiagnosticBag } from "../dsl/diagnostics.js";
 import { roleStyle, type RoleOptions, type RoleStyle, type StylePreset } from "../style/presets.js";
+import { drawCharacter, type CharacterOptions } from "./characters.js";
 import { measureBlock, measureText, wrapText } from "./text.js";
 import { iconEntry } from "./icons.js";
 import type { VizBounds, VizItem, VizResult } from "./types.js";
@@ -366,6 +367,12 @@ export class VizContext {
     const w = Math.max(lm.w, dm.w);
     const bx = align === "left" ? x : align === "right" ? x - w : x - w / 2;
     return { x: bx, y: top, w, h: totalH };
+  }
+
+  /** Sketchnote character with its feet at (cx, groundY) — see characters.ts
+   *  for poses, emotions, and props. Returns the drawn bounds. */
+  character(pose: string, cx: number, groundY: number, h: number, opts: Omit<CharacterOptions, "pose"> = {}): VizBounds {
+    return drawCharacter(this, cx, groundY, h, { ...opts, pose });
   }
 
   /** Diagram title in the preset's title font. */

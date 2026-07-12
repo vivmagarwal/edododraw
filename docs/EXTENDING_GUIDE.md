@@ -40,6 +40,7 @@ with no engine fork:
 | Annotation kinds | `registerAnnotation(kind, fn)` | `cross a "text"` (annotate blocks + beats) |
 | Layouts | `registerLayout(name, fn)` | `layout column` |
 | Icons | `registerIcon(name, pathD, opts?)` | `item "X" { icon: mylogo }` |
+| Character poses | `registerCharacterPose(name, pose)` | `item "X" { pose: myname }` (personas et al.) |
 
 Registries win over the built-in switches, so a plugin can also *shadow* a
 built-in name. Each is detailed below; there's also a fully **programmatic**
@@ -536,6 +537,11 @@ a pure runtime registration — same pattern as shapes:
 >   keeping `.edd` text the single source of truth (compiles `source + "\n" +
 >   fragment` and re-renders).
 >
+> - **Characters**: `ctx.character(pose, cx, groundY, h, { color, emotion,
+>   prop, flip })` draws the sketchnote stick figure anywhere in a generator;
+>   `registerCharacterPose(name, { armL, armR, legL, legR, … })` adds poses
+>   (limb polylines in a unit frame — see `src/engine/viz/characters.ts`).
+>
 > Declare `entryKinds` / `options` / `sweetSpot` on your `registerViz` def and
 > it appears fully described in `listVizTemplates()` (the machine-readable
 > catalog tooling uses to validate `.edd`).
@@ -567,7 +573,7 @@ registerViz({
   camera, annotations, editing and export then work automatically.
 - Follow the golden rule: **never hardcode colors** — derive everything from
   `ctx.role` / `ctx.ink` / `ctx.preset` so all style presets keep working. See
-  `src/engine/viz/generators/*.ts` for 81 worked examples and
+  `src/engine/viz/generators/*.ts` for 85 worked examples and
   [VISUALIZATIONS_GUIDE.md](VISUALIZATIONS_GUIDE.md) for the authoring surface.
 
 ## 7. Add a style preset

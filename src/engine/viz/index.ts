@@ -12,6 +12,8 @@ export { VIZ_ALIASES } from "./aliases.js";
 export { measureText, measureBlock, wrapText } from "./text.js";
 export { iconPath, iconEntry, registerIcon, listIcons, ICON_VIEWBOX } from "./icons.js";
 export { vizToScene, vizItem } from "./compose.js";
+export { drawCharacter, registerCharacterPose, getCharacterPose, listCharacterPoses, listCharacterEmotions } from "./characters.js";
+export type { CharacterPose, CharacterOptions } from "./characters.js";
 export type { VizComposeOptions, VizComposeResult, VizItemInput, VizSpecInput } from "./compose.js";
 export type { VizBounds, VizDef, VizGenerate, VizItem, VizOptionDoc, VizResult, VizSpec } from "./types.js";
 export { itemsOf, optBool, optNum, optStr } from "./types.js";

@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import "../src/engine/viz/generators/index.js";
 import { listVizTemplates } from "../src/engine/viz/registry.js";
 import { listIcons } from "../src/engine/viz/icons.js";
+import { listCharacterPoses, listCharacterEmotions } from "../src/engine/viz/characters.js";
 import { listStyleChoices } from "../src/engine/style/presets.js";
 import { VIZ_DEMOS } from "../src/site/vizDemos.js";
 
@@ -88,6 +89,8 @@ L.push(`annotations, timeline reveal/hide, and camera focus.`);
 L.push("");
 L.push(`Style presets (any template × any preset, \`meta { style: <name> }\`): ${listStyleChoices().map((s) => s.name).join(", ")}.`);
 L.push(`Icons (\`icon: <name>\`): ${listIcons().join(" ")}.`);
+L.push(`Characters (personas/quote items: \`{ pose: …, emotion: …, prop: <icon> }\`) — poses: ${listCharacterPoses().join(" ")}; emotions: ${listCharacterEmotions().join(" ")}.`);
+L.push(`Sketchnote container shapes (usable on any node via \`shape:\` or as keywords): speech-bubble, starburst, ribbon, paper-fold (+ cloud, note, document).`);
 L.push("");
 let lastCat = "";
 for (const t of templates) {

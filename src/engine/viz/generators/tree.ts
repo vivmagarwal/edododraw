@@ -8,7 +8,7 @@ import { registerViz } from "../registry.js";
 import { itemsOf, optStr, type VizItem, type VizSpec } from "../types.js";
 import type { VizContext } from "../context.js";
 import type { NodeStyle } from "../../scene/types.js";
-import { polar, rad, radialAlign } from "./util.js";
+import { polar, rad, radialAlign , scallopedBlob } from "./util.js";
 
 // ---- shared helpers ----------------------------------------------------------
 
@@ -600,27 +600,6 @@ registerViz({
   },
 });
 
-/**
- * Closed scalloped cloud outline: `bumps` outward arc bulges around an
- * ellipse, in local path coords inside a (2rx × 2ry) box. Deterministic
- * wobble (index-driven) keeps re-renders stable.
- */
-function scallopedBlob(rx: number, ry: number, bumps: number): string {
-  const pts: Array<[number, number]> = [];
-  for (let i = 0; i < bumps; i++) {
-    const a = (i / bumps) * Math.PI * 2 - Math.PI / 2;
-    const wob = 0.93 + 0.06 * Math.sin(i * 2.7) + 0.04 * Math.cos(i * 1.3);
-    pts.push([rx + rx * wob * Math.cos(a), ry + ry * wob * Math.sin(a)]);
-  }
-  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
-  for (let i = 1; i <= bumps; i++) {
-    const [x1, y1] = pts[i - 1];
-    const [x2, y2] = pts[i % bumps];
-    const r = Math.hypot(x2 - x1, y2 - y1) * 0.62;
-    d += ` A${r.toFixed(1)},${r.toFixed(1)} 0 0 1 ${x2.toFixed(1)},${y2.toFixed(1)}`;
-  }
-  return d + " Z";
-}
 
 // ---- converge / lens -----------------------------------------------------------------
 

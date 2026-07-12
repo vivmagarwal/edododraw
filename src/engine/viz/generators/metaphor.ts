@@ -420,15 +420,11 @@ registerViz({
       { color: vRole.color, width: 2.2, dash: true, arrow: true },
     );
 
-    // a figure standing at the base — "you are here, today"
+    // a figure standing at the base, pointing up the stairs — "today"
     const fx = x0 - 52;
     scoped(ctx, current, () => {
-      ctx.shape("circle", fx - 9, groundY - 76, 18, 18, { stroke: cRole.color, fill: null, fillStyle: "none", strokeWidth: 2, roughness: ctx.preset.roughness });
-      ctx.line([[fx, groundY - 58], [fx, groundY - 27]], { color: cRole.color, width: 2 }); // torso
-      ctx.line([[fx - 13, groundY - 47], [fx + 13, groundY - 47]], { color: cRole.color, width: 2 }); // arms
-      ctx.line([[fx, groundY - 27], [fx - 11, groundY]], { color: cRole.color, width: 2 }); // legs
-      ctx.line([[fx, groundY - 27], [fx + 11, groundY]], { color: cRole.color, width: 2 });
-      if (current?.icon) ctx.icon(current.icon, fx, groundY - 106, 30, cRole.color);
+      ctx.character("pointing", fx, groundY, 86, { color: cRole.color });
+      if (current?.icon) ctx.icon(current.icon, fx, groundY - 112, 30, cRole.color);
       if (current) ctx.labelBlock(current.label, current.detail, fx - 52, groundY + 28, { color: cRole.color, align: "left", maxW: 210, vAnchor: "top" });
     });
 
@@ -526,12 +522,7 @@ registerViz({
       );
     }
     // a figure at the rim, peering in — someone is about to fall for this
-    const fx = pitL - 52;
-    ctx.shape("circle", fx + 2, -76, 16, 16, { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 2, roughness: ctx.preset.roughness });
-    ctx.line([[fx + 8, -60], [fx, -28]], { color: ctx.ink, width: 2.2 }); // torso leaning toward the pit
-    ctx.line([[fx + 5, -48], [fx + 26, -38]], { color: ctx.ink, width: 2 }); // arm pointing in
-    ctx.line([[fx, -28], [fx - 11, 0]], { color: ctx.ink, width: 2.2 }); // legs
-    ctx.line([[fx, -28], [fx + 8, 0]], { color: ctx.ink, width: 2.2 });
+    ctx.character("peering", pitL - 52, 0, 86, { color: ctx.ink });
     // ground = grass line either side of the mouth + a couple of tufts
     const grass = ctx.role(0, { n: 2 }).color;
     ctx.line(

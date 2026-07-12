@@ -528,6 +528,27 @@ viz list "Core Values" {
   item "Learn it" "Curiosity as default" { icon: book }
 }`),
 
+  d("personas", "Brainstorming", "Personas", "A cast of sketchnote characters — poses, emotions, and props per role.", `
+viz personas "The Launch Team" {
+  item "The Builder" "Ships fast, hates meetings" { pose: confident, prop: wrench }
+  item "The Skeptic" "Asks the hard questions" { pose: thinking, emotion: thinking }
+  item "The Champion" "Sells the vision" { pose: cheering, prop: star }
+  item "The Guide" "Points the way" { pose: pointing, emotion: happy }
+}`),
+  d("quote", "Brainstorming", "Quote", "A big hand-lettered quote with attribution and a presenting character.", `
+viz quote "The best way to predict the future is to invent it." {
+  by: "Alan Kay"
+  pose: presenting
+}`),
+  d("clouds", "Brainstorming", "Clouds", "Scattered thought-cloud islands — a loose collection of ideas.", `
+viz clouds "What We Heard" {
+  item "Onboarding is confusing" { icon: warning }
+  item "Docs are loved" { icon: heart }
+  item "Pricing feels fair" { icon: dollar }
+  item "Mobile is missed" { icon: phone }
+  item "Support is fast" { icon: rocket }
+}`),
+
   // ---- Parts of a whole ---------------------------------------------------------------
   d("diverge", "Parts of a whole", "Diverge", "One question radiating to options.", `
 viz diverge "How might we grow?" {
@@ -687,6 +708,13 @@ viz magnet "Why Devs Stay" {
 }`),
 
   // ---- Cause and Effect ------------------------------------------------------------------------
+  d("fishbone", "Cause and Effect", "Fishbone", "Ishikawa diagram — cause categories on angled bones along a spine.", `
+viz fishbone "Why Releases Slip" {
+  bone "People" { item "Training gaps"; item "Turnover" }
+  bone "Process" { item "No code review"; item "Manual QA" }
+  bone "Tools" { item "Flaky CI" }
+  bone "Environment" { item "Noisy office" }
+}`),
   d("domino", "Cause and Effect", "Domino", "A chain reaction toppling left to right into the outcome.", `
 viz domino "How the Outage Spread" {
   item "Config typo" "Deployed on Friday"

@@ -504,7 +504,7 @@ exported from `edododraw` if you want to drive the import yourself. See
   *browser*: give it a jsdom document (set the `document`/`window` globals, mount into
   a div, render, serialize `renderer.svg.outerHTML`) and you can bake SVGs in Node/CI.
   This repo's visual-QA harness (`scripts/qa/render-viz.mts`) is a working reference —
-  it renders all 81 viz templates headlessly this way. Pair with `{ static: true }`.
+  it renders all 85 viz templates headlessly this way. Pair with `{ static: true }`.
 - **Fonts are self-contained.** The hand-drawn font (Excalifont/Virgil) is embedded
   as a base64 `@font-face` in the engine's injected CSS and in every exported SVG —
   **no external font file or CDN is needed**. The live canvas injects this CSS once
