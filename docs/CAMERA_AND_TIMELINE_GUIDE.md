@@ -68,6 +68,24 @@ timeline story {
 
 In the app, the bottom **player bar** shows Fit / Restart / Prev / Play / Next, the step indicator, and the caption. `⤢ Fit` reframes the whole diagram at any time.
 
+## Auto-choreography for visualizations
+
+Any `viz` block becomes a timeline with one option — no beats to write:
+
+```edd
+viz pyramid brand "Brand Pyramid" {
+  animate: fade          // or pop / draw-on; hold: <s>; animateCamera: true
+  item "Essence"; item "Benefits"; item "Features"
+}
+```
+
+The compiler synthesizes: an **Overview** beat hiding every data item, a beat
+per item (its `data-viz-item` group reveals with the chosen effect, the item
+label becomes the caption, `animateCamera: true` adds a per-item `camera
+focus`), and a closing fit-all. The result is ordinary `scene.steps`, so the
+player, `stepStateAt()`, and video hosts treat it exactly like a hand-written
+timeline. An explicit `timeline {}` in the same document always wins.
+
 ## Frame-driven playback (pure step state)
 
 The player is a thin rAF/clock loop over **pure functions** in

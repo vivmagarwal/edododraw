@@ -272,6 +272,7 @@ registerViz({
   name: "table",
   category: "Comparison",
   summary: "Grid of individually drawn cells; each column stroked its own color.",
+  sweetSpot: { min: 1, max: 8 },
   entryKinds: ["row", "item", "header"],
   generate(spec: VizSpec, ctx: VizContext) {
     const rows = spec.items.filter((i) => i.kind === "row" || i.kind === "item" || i.kind === "header");
@@ -343,6 +344,7 @@ registerViz({
   aliases: ["pros-cons"],
   category: "Comparison",
   summary: "Two panels — pros with a check, cons with a cross — as bullet lists.",
+  sweetSpot: { min: 1, max: 6 },
   entryKinds: ["pro", "con", "item"],
   options: [
     { name: "proColor", type: "string", description: "override the pros panel color" },
@@ -404,6 +406,7 @@ registerViz({
   aliases: ["vs"],
   category: "Comparison",
   summary: "Two contenders compared criterion by criterion around a center gutter.",
+  sweetSpot: { min: 1, max: 6 },
   entryKinds: ["left", "right", "item", "contender", "criterion", "row"],
   generate(spec: VizSpec, ctx: VizContext) {
     let left = spec.items.find((i) => i.kind === "left");
@@ -467,6 +470,7 @@ registerViz({
   name: "problem-solution",
   category: "Problems and Solutions",
   summary: "Problem → central solution circle → outcome, with support captions.",
+  sweetSpot: { min: 3, max: 6 },
   entryKinds: ["item", "problem", "solution", "outcome", "support"],
   generate(spec: VizSpec, ctx: VizContext) {
     const generic = itemsOf(spec, "item");

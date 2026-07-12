@@ -23,7 +23,7 @@ Guidance for AI agents working in this repo.
 - Style presets (18 named looks incl. the 16 reference styles): `src/engine/style/presets.ts`. **Never hardcode colors in generators** — always derive via `ctx.role`/`ctx.ink`/`ctx.preset` so every preset works.
 - Camera/timeline: `src/engine/camera/`, `src/engine/timeline/`.
 - Annotations (scripted + live): `src/engine/annotate/`.
-- Visual QA harness: `scripts/qa/render-viz.mts` (+ `render-styles.mts`) renders every viz demo headlessly (jsdom) to SVG for reference comparison.
+- Visual QA harness: `scripts/qa/render-viz.mts` (+ `render-styles.mts`, `render-variations.mts`) renders every viz demo headlessly (jsdom) to SVG. `scripts/qa/audit-collisions.mts` compiles every demo + content variation × every preset and flags text-overlap collisions (run after generator changes); `scripts/qa/audit-docs.mts` gates catalog/demo/variation/metadata completeness for all templates.
 - Historical design explorations (superseded, more ambitious than what shipped — NOT docs): `design-notes/` (incl. `viz-import/` — the reverse-engineered style tokens + layout recipes behind the viz templates).
 
 ## Documentation Pointers

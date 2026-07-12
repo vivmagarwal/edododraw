@@ -416,6 +416,12 @@ edd.camera.setImmediate(cam);
 sticky). The interactive `TimelinePlayer` is built on the same functions, so
 one `.edd` file powers docs, playground and video identically.
 
+**Zero-choreography timelines.** Add `animate: true` (plus optional `hold:` /
+`animateCamera:`) to any `viz` block and the compiler synthesizes the beat
+sequence for you — overview, one captioned beat per data item, closing fit-all
+— ready for `stepStateAt()` with no timeline authoring at all (see
+VISUALIZATIONS_GUIDE §1).
+
 **Draw-on progress.** Sweep any element on like it's being hand-drawn — strokes
 first (stroke-dashoffset in draw order), then labels fade:
 

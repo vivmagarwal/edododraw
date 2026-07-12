@@ -439,11 +439,13 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
   // ---- viz templates -------------------------------------------------------
   // Generated AFTER layout so each block stacks below existing graph content
   // (viz output is pinned Scene IR — camera/annotations/editing work as usual).
+  const animatedSpecs: VizSpecLike[] = [];
   if (vizDecls.length) {
     const vizPreset = preset ?? effectivePreset(undefined, mode);
     let cursorY = contentMaxY(scene) + (scene.nodes.length ? 100 : 40);
     for (let i = 0; i < vizDecls.length; i++) {
       const spec = lowerViz(vizDecls[i], i, tokenMap);
+      if (spec.options.animate) animatedSpecs.push(spec);
       const result = runViz(spec, vizPreset, mode, diags);
       if (!result) continue;
       const dx = 40 - result.bounds.x;
@@ -466,7 +468,12 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
 
   // ---- timeline -> steps ----------------------------------------------------
   // After viz generation so `reveal all` (etc.) covers viz-emitted elements.
-  scene.steps = timeline.map((b, idx) => beatToStep(b, idx, scene, tokenMap, timelineProps, diags));
+  // Auto-choreography: `viz <type> { animate: true … }` synthesizes a beat per
+  // data item (any of the 81 templates becomes animation-ready) — unless the
+  // author wrote an explicit timeline, which always wins.
+  if (timeline.length) scene.steps = timeline.map((b, idx) => beatToStep(b, idx, scene, tokenMap, timelineProps, diags));
+  else if (animatedSpecs.length) scene.steps = buildAutoVizSteps(scene, animatedSpecs);
+  else scene.steps = [];
 
   // Late-bind annotation targets (viz elements exist only now) + diagnostics
   // for targets that would otherwise silently no-op.
@@ -518,6 +525,65 @@ function contentMaxY(scene: Scene): number {
   let maxY = 0;
   for (const n of scene.nodes) maxY = Math.max(maxY, n.y + n.h);
   return maxY;
+}
+
+// ---- viz auto-choreography ---------------------------------------------------
+
+/** The subset of VizSpec the auto-choreographer needs (kept structural so the
+ *  compiler doesn't import viz types beyond what lowerViz returns). */
+interface VizSpecLike {
+  id: string;
+  title?: string;
+  options: Record<string, unknown>;
+  items: Array<{ id: string; label: string; children: VizSpecLike["items"] }>;
+}
+
+/**
+ * Synthesize a timeline from `animate:`-marked viz blocks: an overview beat
+ * with every data item hidden, then one beat per item revealing its whole
+ * element group (data-viz-item members, descendants included) with the chosen
+ * effect, then a closing fit-all. Item labels become captions, so one `.edd`
+ * line turns any template into a narrated, video-ready build — frame hosts
+ * drive the same steps via stepStateAt().
+ *
+ * Options: `animate: true | fade | pop | draw-on` (effect), `hold: <seconds>`
+ * (auto-advance dwell), `animateCamera: true` (focus each item, magic-move).
+ */
+function buildAutoVizSteps(scene: Scene, specs: VizSpecLike[]): Step[] {
+  interface Beat { key: string; label: string; members: string[]; effect: string; hold?: number; camera: boolean }
+  const beats: Beat[] = [];
+  const withDescendants = (item: VizSpecLike["items"][number]): string[] => [item.id, ...item.children.flatMap(withDescendants)];
+  for (const spec of specs) {
+    const effect = revealEffect(spec.options.animate === true ? "fade" : String(spec.options.animate)) ?? "fade";
+    const holdRaw = spec.options.hold;
+    const hold = typeof holdRaw === "number" ? (holdRaw <= 60 ? holdRaw * 1000 : holdRaw) : undefined;
+    const camera = spec.options.animateCamera === true || spec.options.animateCamera === "focus";
+    for (const item of spec.items) {
+      const members = withDescendants(item).flatMap((id) => vizItemMembers(scene, `${spec.id}.${id}`));
+      if (!members.length) continue;
+      beats.push({ key: `${spec.id}.${item.id}`, label: item.label, members: [...new Set(members)], effect, hold, camera });
+    }
+  }
+  if (!beats.length) return [];
+
+  const steps: Step[] = [
+    { id: "auto_overview", name: "Overview", annotations: [], reveal: [], hide: beats.flatMap((b) => b.members), camera: { op: "fit-all" } },
+  ];
+  beats.forEach((b, i) => {
+    steps.push({
+      id: `auto_${b.key.replace(/[^a-zA-Z0-9_]/g, "_")}_${i}`,
+      name: b.label,
+      caption: b.label,
+      annotations: [],
+      reveal: b.members,
+      hide: [],
+      revealFx: Object.fromEntries(b.members.map((m) => [m, b.effect])),
+      autoAdvanceMs: b.hold,
+      camera: b.camera ? { op: "focus", targets: [b.key], padding: 150 } : undefined,
+    });
+  });
+  steps.push({ id: "auto_fit", name: "All together", annotations: [], reveal: [], hide: [], camera: { op: "fit-all" } });
+  return steps;
 }
 
 // ---- helpers ---------------------------------------------------------------

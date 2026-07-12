@@ -232,3 +232,42 @@ describe("listVizTemplates", () => {
     expect(ideas.aliases).toContain("ideas");
   });
 });
+
+// ---- auto-choreography (animate: on any viz block) --------------------------------
+
+describe("viz auto-choreography", () => {
+  const SRC = `viz list fix "Fixes" {
+  animate: pop
+  hold: 2
+  item "The busy slide"
+  item "No contrast"
+}`;
+
+  it("synthesizes overview + one beat per item + closing fit-all", () => {
+    const { scene } = compileEdd(SRC);
+    expect(scene.steps.length).toBe(4);
+    expect(scene.steps[0]).toMatchObject({ name: "Overview", camera: { op: "fit-all" } });
+    const members = vizItemMembers(scene, "fix.the-busy-slide");
+    for (const m of members) expect(scene.steps[0].hide).toContain(m);
+    const beat = scene.steps[1];
+    expect(beat.caption).toBe("The busy slide");
+    expect(beat.reveal).toEqual(expect.arrayContaining(members));
+    expect(beat.revealFx?.[members[0]]).toBe("pop");
+    expect(beat.autoAdvanceMs).toBe(2000);
+    expect(scene.steps[3].camera).toMatchObject({ op: "fit-all" });
+    // the pure frame-driven API sees the same story
+    expect(new Set(stepStateAt(scene, 0).hidden)).toEqual(computeHiddenAt(scene.steps, 0));
+    expect(stepStateAt(scene, 1).hidden.length).toBeLessThan(stepStateAt(scene, 0).hidden.length);
+  });
+
+  it("animateCamera focuses each item's group", () => {
+    const { scene } = compileEdd(SRC.replace("animate: pop", "animate: true\n  animateCamera: true"));
+    expect(scene.steps[1].camera).toMatchObject({ op: "focus", targets: ["fix.the-busy-slide"] });
+  });
+
+  it("an explicit timeline always wins over animate:", () => {
+    const { scene } = compileEdd(`${SRC}\ntimeline t { beat one "1" { camera fit-all } }`);
+    expect(scene.steps.length).toBe(1);
+    expect(scene.steps[0].name).toBe("1");
+  });
+});

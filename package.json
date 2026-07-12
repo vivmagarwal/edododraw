@@ -1,6 +1,6 @@
 {
   "name": "edododraw",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "description": "A 100% code/syntax-to-diagram engine with the Excalidraw hand-drawn aesthetic, magic-move camera, scriptable + real-time annotations, animated arrows, and first-class Mermaid import.",
   "license": "MIT",
@@ -55,8 +55,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "gen:llms": "node scripts/gen-llms-txt.mjs",
-    "prebuild": "node scripts/gen-llms-txt.mjs",
+    "gen:llms": "tsx scripts/gen-llms-txt.mjs",
+    "prebuild": "tsx scripts/gen-llms-txt.mjs",
     "build": "tsc -b && vite build",
     "build:lib": "vite build --config vite.lib.config.ts",
     "build:types": "tsc -p tsconfig.lib.json",
@@ -103,6 +103,7 @@
     "marked": "^18.0.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "tsx": "^4.23.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
     "vitest": "^2.1.8"

@@ -260,15 +260,40 @@ registerViz({
       if (i < 0) i = pts.length - 1;
       return { p: pts[i], i };
     };
-    items.forEach((item, i) =>
+    // labels alternate sides of the trail; a global bbox relaxation then moves
+    // any colliding label further up-trail, so unusual counts and long text
+    // can't overlap — across sides too (switchbacks bring both sides together)
+    const marks = items.map((item, i) => {
+      const { p } = at((i + 1) / (n + 0.6));
+      const m = ctx.measureLabelBlock(item.label, item.detail, { maxW: 170 });
+      const side = i % 2 === 0 ? 1 : -1;
+      const lx = p[0] + side * 26;
+      return { item, i, p, side, lx, w: m.w, h: m.h, labelY: p[1] + (item.icon ? 8 : 0) };
+    });
+    const boxOf = (m: (typeof marks)[number]) => ({
+      x0: m.side > 0 ? m.lx : m.lx - m.w,
+      x1: m.side > 0 ? m.lx + m.w : m.lx,
+      y0: m.labelY - m.h / 2,
+      y1: m.labelY + m.h / 2,
+    });
+    for (let pass = 0; pass < 4; pass++) {
+      for (let a = 0; a < marks.length; a++) {
+        for (let b = a + 1; b < marks.length; b++) {
+          const A = boxOf(marks[a]);
+          const B = boxOf(marks[b]);
+          if (A.x0 < B.x1 - 8 && B.x0 < A.x1 - 8 && A.y0 < B.y1 - 6 && B.y0 < A.y1 - 6) {
+            marks[b].labelY = A.y0 - marks[b].h / 2 - 12; // later milestone moves up-trail
+          }
+        }
+      }
+    }
+    marks.forEach(({ item, i, p, side, lx, labelY }) =>
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n: n + 1, color: item.color });
-        const { p } = at((i + 1) / (n + 0.6));
         ctx.shape("circle", p[0] - 8, p[1] - 8, 16, 16, { stroke: role.stroke, fill: role.fill ?? role.color, fillStyle: "solid", strokeWidth: role.strokeWidth, roughness: 0.8 }, { id: ctx.uid(item.id) });
         if (item.icon) ctx.icon(item.icon, p[0], p[1] - 30, 26, role.color);
-        const side = i % 2 === 0 ? 1 : -1; // alternate right/left of the trail
-        const lx = p[0] + side * 26;
-        ctx.labelBlock(item.label, item.detail, lx, p[1] + (item.icon ? 8 : 0), { color: role.color, align: side > 0 ? "left" : "right", maxW: 170 });
+        if (Math.abs(labelY - p[1]) > 24) ctx.line([[p[0] + side * 12, p[1]], [lx + side * 6, labelY]], { color: ctx.preset.edge, width: 1.2, dotted: true });
+        ctx.labelBlock(item.label, item.detail, lx, labelY, { color: role.color, align: side > 0 ? "left" : "right", maxW: 170 });
       }),
     );
   },

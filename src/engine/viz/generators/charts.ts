@@ -81,6 +81,7 @@ registerViz({
   aliases: ["column"],
   category: "Data",
   summary: "Column chart with per-category colors and value labels.",
+  sweetSpot: { min: 1, max: 12 },
   entryKinds: ["item", "bar"],
   options: [
     { name: "yTitle", type: "string", description: "y-axis title" },
@@ -121,6 +122,7 @@ registerViz({
   aliases: ["hbar"],
   category: "Data",
   summary: "Horizontal bars with circular category badges.",
+  sweetSpot: { min: 1, max: 8 },
   entryKinds: ["item", "bar"],
   options: [{ name: "showValues", type: "boolean", description: "print item values (default true)" }],
   generate(spec: VizSpec, ctx: VizContext) {
@@ -217,6 +219,7 @@ registerViz({
   name: "stacked-bar",
   category: "Data",
   summary: "Stacked columns; rows are `item \"Q1\" [a, b, c]`, legend via `series`.",
+  sweetSpot: { min: 2, max: 6 },
   entryKinds: ["item", "row", "series"],
   options: [
     { name: "yTitle", type: "string", description: "y-axis title" },
@@ -233,6 +236,7 @@ registerViz({
   aliases: ["stacked-hbar"],
   category: "Data",
   summary: "Horizontal stacked bars with a value axis and legend.",
+  sweetSpot: { min: 2, max: 6 },
   entryKinds: ["item", "row", "series"],
   options: [
     { name: "legend", type: "string", description: "list of series names for the legend" },
@@ -279,6 +283,7 @@ registerViz({
   name: "line",
   category: "Data",
   summary: "Line chart with point markers and value labels.",
+  sweetSpot: { min: 2, max: 14 },
   entryKinds: ["item", "point"],
   options: [
     { name: "yTitle", type: "string", description: "y-axis title" },
@@ -293,6 +298,7 @@ registerViz({
   name: "area",
   category: "Data",
   summary: "Line chart with a soft filled area underneath.",
+  sweetSpot: { min: 2, max: 14 },
   entryKinds: ["item", "point"],
   options: [
     { name: "yTitle", type: "string", description: "y-axis title" },
@@ -309,6 +315,7 @@ registerViz({
   name: "waterfall",
   category: "Data",
   summary: "Start bar, floating signed deltas, computed net bar, connector line.",
+  sweetSpot: { min: 2, max: 8 },
   entryKinds: ["item", "delta", "total", "net", "end"],
   options: [
     { name: "yTitle", type: "string", description: "y-axis title" },
@@ -384,6 +391,7 @@ registerViz({
   aliases: ["progress-bars", "tracks"],
   category: "Data",
   summary: "Rows of tracks with value bars and a hanging tag bubble.",
+  sweetSpot: { min: 2, max: 8 },
   entryKinds: ["item", "row"],
   options: [{ name: "showValues", type: "boolean", description: "print item values (default true)" }],
   generate(spec: VizSpec, ctx: VizContext) {
@@ -430,6 +438,7 @@ registerViz({
   aliases: ["deltas"],
   category: "Data",
   summary: "Alternating capsules with a delta badge, connected to text blocks.",
+  sweetSpot: { min: 2, max: 6 },
   entryKinds: ["item", "row"],
   options: [{ name: "showValues", type: "boolean", description: "print item values (default true)" }],
   generate(spec: VizSpec, ctx: VizContext) {
@@ -493,6 +502,7 @@ registerViz({
   name: "gantt",
   category: "Process",
   summary: "Cascading task bars over a time grid; `task \"Name\" start end`.",
+  sweetSpot: { min: 1, max: 10 },
   entryKinds: ["task", "item"],
   options: [
     { name: "scale", type: "string", description: "list of tick labels for the time axis" },
@@ -554,6 +564,7 @@ registerViz({
   name: "sankey",
   category: "Data",
   summary: "Sources → targets with value-thick ribbons (`flow a -> b 25`).",
+  sweetSpot: { min: 2, max: 5 },
   entryKinds: ["flow", "item", "node", "source", "target"],
   options: [{ name: "showValues", type: "boolean", description: "print item values (default true)" }],
   generate(spec: VizSpec, ctx: VizContext) {

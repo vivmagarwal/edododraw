@@ -558,6 +558,19 @@ registerViz({
       if (!causeRoot.includes(idx)) ctx.poly(r.outline, outline(ctx, ctx.ink, 1.6));
     });
 
+    // side labels sit at their root tip's height, then relax apart (measured
+    // blocks) so stacked same-side causes never overlap at any count
+    const labelY = causes.map((item, i) => (causeRoot[i] === 3 ? 0 : roots[causeRoot[i]].tip[1]));
+    const blockH = causes.map((item) => ctx.measureLabelBlock(item.label, item.detail, { maxW: 220 }).h);
+    for (const side of [-1, 1]) {
+      const col = causes.map((_, i) => i).filter((i) => causeRoot[i] !== 3 && (i % 2 === 0 ? -1 : 1) === side).sort((a, b) => labelY[a] - labelY[b]);
+      for (let k = 1; k < col.length; k++) {
+        const above = col[k - 1];
+        const need = labelY[above] + blockH[above] / 2 + blockH[col[k]] / 2 + 16;
+        if (labelY[col[k]] < need) labelY[col[k]] = need;
+      }
+    }
+
     causes.forEach((item, i) =>
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n, color: item.color });
@@ -572,8 +585,7 @@ registerViz({
           return;
         }
         const side = i % 2 === 0 ? -1 : 1;
-        const j = causeRow[i];
-        const y = tip[1] + Math.max(0, j - 2) * 78;
+        const y = labelY[i];
         const bx = side * 226;
         ctx.labelBlock(item.label, item.detail, bx, y, { color: role.color, align: side < 0 ? "right" : "left", maxW: 220 });
         const sx = bx + side * -8;

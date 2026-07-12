@@ -41,6 +41,21 @@ Entry attributes understood everywhere: `icon:` (glyph name, §5), `color:`/`fil
 
 **`showValues: false`** (block option, every value-printing template): values still drive the geometry — bar heights, funnel proportions, slice angles — but the numbers themselves aren't printed. For hosts with a "no unsourced numbers on screen" rule, or when the shape alone tells the story.
 
+**`animate:` — auto-choreography (block option, every template).** One line turns any visualization into a narrated, step-by-step build: the compiler synthesizes a timeline with an overview beat (all data items hidden), one beat per item revealing its whole element group with the item's label as the caption, and a closing fit-all. No `timeline {}` needed — but an explicit timeline always wins.
+
+```edd
+viz funnel sales "Pipeline" {
+  animate: pop          // true | fade | pop | draw-on (the reveal effect)
+  hold: 2               // seconds per beat when playing
+  animateCamera: true   // optional: magic-move focus onto each item
+  item "Leads" 1200
+  item "Demos" 240
+  item "Won" 36
+}
+```
+
+Play it with `edd.play()`, scrub it with `next()/prev()`, or drive it frame-accurately from a video host via `stepStateAt()` (see [CAMERA_AND_TIMELINE_GUIDE](CAMERA_AND_TIMELINE_GUIDE.md) and [INTEGRATION_GUIDE §6](INTEGRATION_GUIDE.md)). Nested children (mindmap branches, kanban cards) reveal with their parent item.
+
 Multiple `viz` blocks in one document stack vertically; a `viz` block after a `scene` graph is placed below it.
 
 ### Reaching a template by name
@@ -195,7 +210,7 @@ EDodoDraw is a **text→visualization generator**: it renders whatever you give 
 | `gantt` | 1–10 tasks | give `scale` enough ticks to cover the last `end` |
 | `bar` | 1–12 bars | — |
 | `bar-horizontal` | 1–8 bars | — |
-| `stacked-bar` / `-horizontal` | 2–5 series × 2–6 categories | legend from `series` entries |
+| `stacked-bar` / `stacked-bar-horizontal` | 2–5 series × 2–6 categories | legend from `series` entries |
 | `line` / `area` | 2–14 points | — |
 | `waterfall` | 2–8 deltas | plus the start `item` and a `total` |
 | `gauge` | **exactly 1** value (0–100) | one dial |
