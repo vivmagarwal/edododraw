@@ -173,6 +173,17 @@ viz sankey "Energy Mix" {
   flow "Wind" -> "Homes" 15
 }`),
 
+  d("radar", "Data", "Radar", "A spider chart — series polygons over labeled axes.", `
+viz radar "Platform Assessment" {
+  axis "Security"
+  axis "Performance"
+  axis "Docs"
+  axis "Ecosystem"
+  axis "DX"
+  series "Today" [3, 4, 2, 3, 2]
+  series "Target" [5, 4, 4, 4, 5]
+}`),
+
   // ---- Timelines --------------------------------------------------------------
   d("timeline", "Timelines", "Timeline", "Events along a dashed baseline, alternating up/down.", `
 viz timeline "Company Milestones" {
@@ -180,6 +191,33 @@ viz timeline "Company Milestones" {
   item "2021" "First 1,000 customers" { icon: users }
   item "2023" "Series A raised" { icon: dollar }
   item "2025" "Global expansion" { icon: globe }
+}`),
+
+  d("roadmap-lanes", "Timelines", "Roadmap lanes", "Workstream swimlanes across quarters — the product-roadmap slide.", `
+viz roadmap-lanes "2027 Roadmap" {
+  scale: ["Q1", "Q2", "Q3", "Q4"]
+  lane "Platform" {
+    task "SSO + RBAC" 0 1.5
+    task "Audit log" 2 3
+    icon: gear
+  }
+  lane "Growth" {
+    task "Referrals" 0.5 2
+    milestone "Self-serve GA" 3
+    icon: trend-up
+  }
+  lane "Mobile" {
+    task "iOS beta" 1 2.5
+    task "Android" 2.5 4
+    icon: phone
+  }
+}`),
+  d("milestone-path", "Timelines", "Milestone path", "A winding trail to the summit flag, milestones along the way.", `
+viz milestone-path "Road to Launch" {
+  item "Prototype" "Q1 — clickable demo"
+  item "Private beta" "Q2 — 20 design partners"
+  item "Pricing" "Q3 — packaging locked"
+  goal "Launch" "Public GA"
 }`),
 
   // ---- Comparison ----------------------------------------------------------------
@@ -265,6 +303,25 @@ viz venn "Product Sweet Spot" {
   overlap all "Great products"
 }`),
 
+  d("pricing-tiers", "Comparison", "Pricing tiers", "Plan cards with prices and feature lists; highlight one tier.", `
+viz pricing-tiers "Plans" {
+  period: "/mo"
+  tier "Starter" 0 {
+    item "3 projects"
+    item "Community support"
+  }
+  tier "Pro" 29 { highlight: true
+    item "Unlimited projects"
+    item "SSO + RBAC"
+    item "Priority support"
+  }
+  tier "Enterprise" 99 {
+    item "Dedicated VPC"
+    item "SLA + audit log"
+    item "Onboarding team"
+  }
+}`),
+
   // ---- Business Frameworks ------------------------------------------------------
   d("swot", "Business Frameworks", "SWOT", "Strengths, weaknesses, opportunities, threats.", `
 viz swot "SWOT — Acme Corp" {
@@ -324,6 +381,24 @@ viz funnel "Sales Funnel" {
   item "Evaluation" 420
   item "Negotiation" 120
   item "Won" 38
+}`),
+
+  d("flywheel", "Business Frameworks", "Flywheel", "A self-reinforcing momentum loop of ring segments.", `
+viz flywheel "Marketplace Flywheel" {
+  center: "Growth"
+  item "More sellers" { icon: users }
+  item "More selection" { icon: star }
+  item "More buyers" { icon: heart }
+  item "Lower prices" { icon: dollar }
+}`),
+  d("value-chain", "Business Frameworks", "Value chain", "A Porter-style chevron band with optional support bars.", `
+viz value-chain "How We Deliver" {
+  support "Infrastructure & tooling"
+  support "People & culture"
+  item "Source" { icon: search }
+  item "Build" { icon: wrench }
+  item "Ship" { icon: rocket }
+  item "Support" { icon: heart }
 }`),
 
   // ---- Brainstorming ---------------------------------------------------------------

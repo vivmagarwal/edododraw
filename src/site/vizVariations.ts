@@ -239,6 +239,38 @@ const BUILDERS: Record<string, () => Variation[]> = {
 
   // ---- Cause and Effect -----------------------------------------------------
   "root-causes": () => counts([2, 3, 4], "causes", (n, long) => block("root-causes", "Why Releases Slip", itemLines(n, { detail: true, long })), 3),
+
+  // ---- Strategy & planning (tier 1, 2026-07) ----------------------------------
+  flywheel: () => counts([3, 4, 5, 6], "segments", (n, long) => block("flywheel", "Growth Flywheel", itemLines(n, { icon: true, detail: long, long }), ["  center: \"Growth\""]), 4),
+  radar: () =>
+    counts([4, 5, 6, 8], "axes", (n) => {
+      const axes = ["Security", "Performance", "Docs", "Ecosystem", "DX", "Support", "Pricing", "Scale"];
+      return block("radar", "Platform Assessment", [
+        ...range(n).map((i) => `  axis "${axes[i]}"`),
+        `  series "Today" [${range(n).map((i) => 2 + ((i * 2) % 3)).join(", ")}]`,
+        `  series "Target" [${range(n).map((i) => 4 + (i % 2)).join(", ")}]`,
+      ]);
+    }),
+  "roadmap-lanes": () =>
+    counts([2, 3, 4], "lanes", (n) => {
+      const lanes = ["Platform", "Growth", "Mobile", "Data"];
+      const rows = range(n).map(
+        (i) => `  lane "${lanes[i]}" {\n    task "${NAMES[i * 2]}" ${i * 0.5} ${i * 0.5 + 1.5}\n    ${i % 2 ? `milestone "${NAMES[i * 2 + 1]}" ${2.5 + i * 0.4}` : `task "${NAMES[i * 2 + 1]}" ${2 + i * 0.4} ${3.4}`}\n  }`,
+      );
+      return block("roadmap-lanes", "Roadmap", rows, ['  scale: ["Q1", "Q2", "Q3", "Q4"]']);
+    }),
+  "milestone-path": () => counts([3, 4, 5, 6], "milestones", (n, long) => block("milestone-path", "Road to Launch", [...itemLines(n, { detail: true, long }), `  goal "Launch" "Public GA"`]), 4),
+  "value-chain": () =>
+    counts([3, 4, 5, 6], "stages", (n, long) =>
+      block("value-chain", "Value Chain", [`  support "Infrastructure & tooling"`, ...itemLines(n, { icon: true, detail: long, long })]),
+    4),
+  "pricing-tiers": () =>
+    counts([2, 3, 4], "tiers", (n) => {
+      const tiers = ["Starter", "Pro", "Team", "Enterprise"];
+      const feats = [["3 projects", "Community support"], ["Unlimited projects", "SSO + RBAC", "Priority support"], ["Everything in Pro", "Shared workspaces", "Usage analytics"], ["Dedicated VPC", "SLA + audit log", "Onboarding team"]];
+      const rows = range(n).map((i) => `  tier "${tiers[i]}" ${[0, 29, 59, 99][i]} {${i === 1 ? " highlight: true" : ""}\n${feats[i].map((f) => `    item "${f}"`).join("\n")}\n  }`);
+      return block("pricing-tiers", "Plans", rows, ['  period: "/mo"']);
+    }),
 };
 
 function vennCode(n: number, long: boolean): string {

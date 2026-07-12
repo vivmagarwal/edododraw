@@ -37,7 +37,7 @@ Everything else is optional layering on top.
 | `style .name { … }` / `style .name extends .other { … }` | Reusable style class. |
 | `defaults { node { … } edge { … } }` | Defaults applied to every node/edge. |
 | `scene [name] { … }` | Structure. Multiple `scene` blocks merge. |
-| `viz <type> [id] ["Title"] { … }` | A data-driven visualization template — 62 built-in types (see §12 and VISUALIZATIONS_GUIDE.md). |
+| `viz <type> [id] ["Title"] { … }` | A data-driven visualization template — 68 built-in types (see §12 and VISUALIZATIONS_GUIDE.md). |
 | `annotate ["label"] { … }` | Always-on annotations (outside the timeline). |
 | `timeline [name] { … }` | Choreography (beats). |
 | `overrides { id at (x, y) [size (w, h)] … }` | Pinned positions/sizes (usually machine-written by direct editing — see §11). |
@@ -351,7 +351,7 @@ viz funnel sales "Sales Funnel" {
 }
 ```
 
-62 templates ship built-in — funnel, pyramid, venn, pie, bar/line/area, waterfall, sankey, gantt, timeline, mindmap, swot, quadrant, journey, iceberg, and many more. Entries are `<kind> [id] ["Label"] [-> target] [values…] [{ attrs }] [{ nested entries }]`; every template accepts `item` plus natural synonyms (`stage`, `flow "A" -> "B" 25`, `task "Design" 0 3`, `set`, `pro`/`con`, …).
+68 templates ship built-in — funnel, pyramid, venn, pie, bar/line/area, radar, waterfall, sankey, gantt, timeline, roadmap-lanes, flywheel, mindmap, swot, quadrant, journey, pricing-tiers, iceberg, and many more. Entries are `<kind> [id] ["Label"] [-> target] [values…] [{ attrs }] [{ nested entries }]`; every template accepts `item` plus natural synonyms (`stage`, `flow "A" -> "B" 25`, `task "Design" 0 3`, `set`, `pro`/`con`, …).
 
 Viz output is ordinary scene structure: elements get ids like `sales.won`, so annotations, camera beats, `reveal`, and direct editing all target them — and `sales.won` used as a target addresses the item's **whole element group** (shape + label + icon together). Add `showValues: false` as a block option (or `showValue: false` on one item) to keep values driving the geometry without printing the numbers. `meta { style: <name> }` restyles the *whole* document — viz templates and classic scenes alike — through one of the named styles (`classic-color`, `chalkboard`, `crayon`, `mono-accent`, …).
 

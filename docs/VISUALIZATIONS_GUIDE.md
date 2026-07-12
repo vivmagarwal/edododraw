@@ -1,6 +1,6 @@
 # Visualizations Guide (`viz` templates)
 
-EDodoDraw ships **62 visualization templates** — funnels, pyramids, venns, charts, timelines, mindmaps, business frameworks, visual metaphors — each generated **100% from text**. A `viz` block declares *data*; the template turns it into ordinary diagram elements, so everything else in EDodoDraw (camera beats, annotations, direct editing, export, style presets) works on visualizations exactly as on hand-drawn scenes.
+EDodoDraw ships **68 visualization templates** — funnels, pyramids, venns, charts, timelines, mindmaps, business frameworks, visual metaphors — each generated **100% from text**. A `viz` block declares *data*; the template turns it into ordinary diagram elements, so everything else in EDodoDraw (camera beats, annotations, direct editing, export, style presets) works on visualizations exactly as on hand-drawn scenes.
 
 > Browse every template live (in every style) on the site's **Visualizations** page. Styling is a separate axis — see [STYLES_GUIDE.md](STYLES_GUIDE.md).
 
@@ -92,12 +92,15 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `dumbbell-vertical` (`deltas`) | `item "Speed" "+15%" { icon, detail }` | — |
 | `dumbbell-horizontal` (`progress-bars`) | `item "Docs" 80 "80%"` — track + value bar + tag | — |
 | `sankey` | `flow "Coal" -> "Industry" 25` | — |
+| `radar` (`spider`) | `axis "Security"` + `series "Today" [3, 4, 2]` (or plain `item "X" 3`) | `max:` scale ceiling |
 
 ### Timelines
 
 | type | data | options |
 |---|---|---|
 | `timeline` | `item "2019" "What happened" { icon: home }` — teardrop pins alternating up/down | — |
+| `roadmap-lanes` (`product-roadmap`) | `lane "Platform" { task "SSO" 0 1.5; milestone "GA" 3 }` | `scale: ["Q1", …]` column headers |
+| `milestone-path` (`path-to-goal`) | `item "Beta" "May"` milestones + `goal "Launch"` summit flag | `goal:` |
 
 ### Comparison
 
@@ -113,6 +116,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `spectrum` | `item` / `zone` — first/last get arrow ends | — |
 | `quadrant` (`2x2`, `matrix`) | 4 `item`s in order TL, TR, BL, BR (+ children bullets) | `xLabels: [neg, pos]`, `yLabels: [neg, pos]` |
 | `venn` | `set "Name" "desc" { icon }` (2–7 sets) + `overlap all "Label"` / `overlap [a, b] "Label"` | — |
+| `pricing-tiers` (`pricing`, `plans`) | `tier "Pro" 29 { highlight: true; item "SSO" }` — price + feature list cards | `period:`, `currency:`, `showValues:` |
 
 ### Business Frameworks
 
@@ -124,6 +128,8 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `pyramid` | `item` levels, top → bottom | — |
 | `bullseye` (`target`) | `item` rings, **outermost first** | — |
 | `funnel` | `item "Stage" [value]` | `input:`, `output:` captions |
+| `flywheel` (`growth-loop`) | `item "More sellers" { icon: users }` ring segments + optional `center` entry | `center:` wheel label |
+| `value-chain` (`chevron-process`) | `item "Build" { icon: wrench }` chevrons + `support "…"` bars above | — |
 
 ### Brainstorming / Parts of a whole
 
@@ -222,6 +228,12 @@ EDodoDraw is a **text→visualization generator**: it renders whatever you give 
 | `dialogue` | 2–8 turns | **exactly 2 speakers** (`a:` / `b:`) |
 | `prism` | 2–6 outputs | + one `input` |
 | `pillar` | 2–5 columns | — |
+| `flywheel` | 3–6 segments | arrowheads spin clockwise; center label optional |
+| `radar` | 4–8 axes × 1–3 series | values clamp to `max:`; legend appears with 2+ series |
+| `roadmap-lanes` | 2–5 lanes × 1–4 rows each | `scale` sets the columns; `milestone` renders a diamond |
+| `milestone-path` | 3–6 milestones | + one `goal` flag; labels alternate sides of the trail |
+| `value-chain` | 3–6 chevrons | + 0–3 `support` bars above the band |
+| `pricing-tiers` | 2–4 tiers × ≤6 features | one `highlight: true` tier lifts + gets the badge |
 
 **Text length.** Labels are single-line-ish (they wrap, but keep them a few words). Descriptions (`detail:` / trailing string) wrap to a column and the layout expands to fit — but on the compact-side-label templates (`funnel`, `pyramid`, `bullseye`, `spectrum`, `decision`) a stage/level reads best with a **name + one short sentence**; multi-sentence prose is supported but makes those layouts tall. Narrative templates (`sequence`, `journey`, `dialogue`, `iceberg`, `problem-solution`, `transformation`, `root-causes`) comfortably hold 1–2 sentences per item.
 

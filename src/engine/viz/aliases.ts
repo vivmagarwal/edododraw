@@ -34,9 +34,12 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   "dumbbell-vertical": ["change-comparison", "yoy", "before-after-values"],
   "dumbbell-horizontal": ["goal-progress", "kpi-bars"],
   sankey: ["flow-diagram", "sankey-diagram", "flows"],
+  radar: ["spider", "spider-chart", "radar-chart", "capability-map", "skills-chart"],
 
   // ---- Timelines ------------------------------------------------------------
   timeline: ["milestones", "chronology", "history"],
+  "roadmap-lanes": ["product-roadmap", "swimlane-roadmap", "quarterly-roadmap", "release-plan"],
+  "milestone-path": ["path-to-goal", "summit", "trail", "journey-to-goal"],
 
   // ---- Comparison -----------------------------------------------------------
   "pros-and-cons": ["pro-con", "plus-minus", "for-against"],
@@ -49,6 +52,7 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   spectrum: ["range", "continuum", "scale-range"],
   quadrant: ["four-quadrant", "grid-2x2"],
   venn: ["venn-diagram", "overlap", "sets", "intersection"],
+  "pricing-tiers": ["pricing", "plans", "pricing-table", "packages"],
 
   // ---- Business Frameworks --------------------------------------------------
   swot: ["swot-analysis", "strengths-weaknesses"],
@@ -57,6 +61,8 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   pyramid: ["hierarchy", "layers", "tiers", "triangle"],
   bullseye: ["concentric", "priorities", "rings"],
   funnel: ["sales-funnel", "conversion-funnel", "pipeline"],
+  flywheel: ["momentum", "growth-loop", "virtuous-cycle", "growth-engine"],
+  "value-chain": ["porter-value-chain", "chevron-process", "delivery-chain"],
 
   // ---- Brainstorming / Parts of a whole -------------------------------------
   mindmap: ["mind-map", "brainstorm", "topics"],

@@ -1127,17 +1127,15 @@ class Parser {
         break;
       }
     }
-    // trailing blocks: `{ attrs }` and/or `{ nested entries }` in any order
+    // trailing `{ … }` blocks: attributes and nested entries MIX FREELY in any
+    // order (`{ highlight: true; item "SSO" }`) — parseVizBody handles both, so
+    // an attribute on the first line can never silently swallow the children.
     while (this.is(T.LBrace)) {
-      if (this.braceIsAttr()) {
-        entry.attrs.push(...this.parseAttrBlock());
-      } else {
-        this.eat(T.LBrace);
-        const childAttrs: AttrBlock = [];
-        this.parseVizBody(childAttrs, entry.children);
-        entry.attrs.push(...childAttrs);
-        this.eat(T.RBrace);
-      }
+      this.eat(T.LBrace);
+      const childAttrs: AttrBlock = [];
+      this.parseVizBody(childAttrs, entry.children);
+      entry.attrs.push(...childAttrs);
+      this.eat(T.RBrace);
     }
     entry.span = this.spanFrom(t);
     return entry;

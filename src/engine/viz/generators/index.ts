@@ -12,6 +12,7 @@ import "./flow.js";
 import "./grid.js";
 import "./tree.js";
 import "./metaphor.js";
+import "./strategy.js";
 
 // Register the central LLM-friendly alias set once every generator is loaded.
 import { applyVizAliases } from "../aliases.js";

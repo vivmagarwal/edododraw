@@ -8,7 +8,7 @@ apply: colors only via `ctx.role`/`ctx.ink`/`ctx.preset`, item scoping via
 `ctx.item`, values gated by `ctx.showValue`, `entryKinds`/`options`/`sweetSpot`
 declared on the def.
 
-## Tier 1 — build next (high deck-frequency, clean fit to existing primitives)
+## Tier 1 — SHIPPED 2026-07-12 in 0.4.0 (all six)
 
 1. **`flywheel`** — the momentum loop every strategy deck wants. 3–6 thick
    banana-arc segments forming a continuous ring, arrowheads between, center
