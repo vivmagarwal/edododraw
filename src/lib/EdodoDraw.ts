@@ -536,7 +536,12 @@ export class EdodoDraw {
 
   private localPoint(e: { clientX: number; clientY: number }): Point {
     const rect = this.container.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    // Client coordinates are visual px; the camera/world math runs in layout
+    // px (see SvgRenderer.measure). Under an ancestor CSS transform the two
+    // differ — rescale so pointer interaction stays accurate in scaled embeds.
+    const sx = rect.width > 0 ? (this.container.clientWidth || rect.width) / rect.width : 1;
+    const sy = rect.height > 0 ? (this.container.clientHeight || rect.height) / rect.height : 1;
+    return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
   }
 
   private bindInteraction(): void {

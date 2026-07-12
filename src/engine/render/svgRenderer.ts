@@ -137,8 +137,21 @@ export class SvgRenderer {
 
   /** Read the container size; call on mount + resize. */
   measure(): { w: number; h: number } {
-    const rect = this.container.getBoundingClientRect();
-    this.viewport = { w: Math.max(1, rect.width), h: Math.max(1, rect.height) };
+    // Layout pixels (clientWidth/Height), NOT getBoundingClientRect: the SVG
+    // fills the container's LAYOUT box, so camera math must use the same
+    // coordinate space. An embedder that scales the diagram with an ancestor
+    // CSS transform (slide stages, thumbnails, zoomed previews) keeps
+    // design-space-correct fits and paddings this way — gBCR would return
+    // the visually scaled size and collapse focus paddings/zoom.
+    const c = this.container;
+    let w = c.clientWidth;
+    let h = c.clientHeight;
+    if (!w || !h) {
+      const rect = c.getBoundingClientRect();
+      w = w || rect.width;
+      h = h || rect.height;
+    }
+    this.viewport = { w: Math.max(1, w), h: Math.max(1, h) };
     return this.viewport;
   }
 
