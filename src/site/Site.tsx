@@ -3,6 +3,7 @@ import { navigate, useHashRoute } from "./router.js";
 import { Home } from "./pages/Home.js";
 import { Gallery } from "./pages/Gallery.js";
 import { Visualizations } from "./pages/Visualizations.js";
+import { Characters } from "./pages/Characters.js";
 import { VizDetail } from "./pages/VizDetail.js";
 import { Styles } from "./pages/Styles.js";
 import { DocsPage } from "./pages/DocsPage.js";
@@ -15,6 +16,7 @@ const NAV = [
   { route: "/", label: "Home" },
   { route: "/playground", label: "Playground" },
   { route: "/visualizations", label: "Visualizations" },
+  { route: "/characters", label: "Characters" },
   { route: "/styles", label: "Styles" },
   { route: "/gallery", label: "Gallery" },
   { route: "/docs/language", label: "Docs" },
@@ -75,6 +77,7 @@ function Route({ route }: { route: string }) {
     const type = route.split("/")[2];
     return type ? <VizDetail type={type} /> : <Visualizations />;
   }
+  if (route.startsWith("/characters")) return <Characters />;
   if (route.startsWith("/styles")) return <Styles />;
   if (route.startsWith("/gallery")) return <Gallery />;
   if (route.startsWith("/docs")) {

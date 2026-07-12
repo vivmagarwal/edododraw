@@ -57,7 +57,7 @@ export function listCharacterPoses(): string[] {
   return [...POSES.keys()];
 }
 
-export const CHARACTER_EMOTIONS = ["neutral", "happy", "sad", "surprised", "angry", "excited", "confused", "thinking", "determined"] as const;
+export const CHARACTER_EMOTIONS = ["neutral", "happy", "sad", "surprised", "angry", "excited", "confused", "thinking", "determined", "wink", "love", "starstruck", "sleeping", "dizzy"] as const;
 
 export function listCharacterEmotions(): string[] {
   return [...CHARACTER_EMOTIONS];
@@ -420,22 +420,84 @@ export function drawCharacter(ctx: VizContext, cx: number, groundY: number, h: n
   const eyeY = hy - 0.015 * h;
   const dotR = Math.max(1.1, h * 0.012);
   const stroke = (pts: Pt[], w = lw * 0.8) => ctx.line(pts, { color, width: w, z: (z ?? 0) + 1 });
-  if (emotion === "surprised") {
-    dot(hx - ex, eyeY, dotR * 1.5);
-    dot(hx + ex, eyeY, dotR * 1.5);
-  } else if (emotion === "thinking") {
-    dot(hx - ex, eyeY - 0.01 * h, dotR);
-    dot(hx + ex, eyeY - 0.01 * h, dotR);
-  } else {
-    dot(hx - ex, eyeY, dotR);
-    dot(hx + ex, eyeY, dotR);
+  const heartEye = (px: number) => {
+    const r = 0.026 * h;
+    ctx.poly(
+      [[px, eyeY + r * 0.9], [px - r, eyeY - r * 0.25], [px - r * 0.5, eyeY - r * 0.95], [px, eyeY - r * 0.3], [px + r * 0.5, eyeY - r * 0.95], [px + r, eyeY - r * 0.25]],
+      { stroke: color, fill: color, fillStyle: "solid", strokeWidth: 1, roughness: 0.4 },
+      { z: (z ?? 0) + 1, role: "character" },
+    );
+  };
+  const starEye = (px: number) => {
+    const r = 0.03 * h;
+    const pts: Pt[] = [];
+    for (let i = 0; i < 10; i++) {
+      const rr = i % 2 === 0 ? r : r * 0.45;
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      pts.push([px + Math.cos(a) * rr, eyeY + Math.sin(a) * rr]);
+    }
+    ctx.poly(pts, { stroke: color, fill: color, fillStyle: "solid", strokeWidth: 1, roughness: 0.4 }, { z: (z ?? 0) + 1, role: "character" });
+  };
+  const xEye = (px: number) => {
+    const r = 0.02 * h;
+    stroke([[px - r, eyeY - r], [px + r, eyeY + r]], lw * 0.7);
+    stroke([[px - r, eyeY + r], [px + r, eyeY - r]], lw * 0.7);
+  };
+  const closedEye = (px: number) => stroke([[px - 0.022 * h, eyeY], [px, eyeY + 0.012 * h], [px + 0.022 * h, eyeY]], lw * 0.7);
+  switch (emotion) {
+    case "surprised":
+      dot(hx - ex, eyeY, dotR * 1.5);
+      dot(hx + ex, eyeY, dotR * 1.5);
+      break;
+    case "thinking":
+      dot(hx - ex, eyeY - 0.01 * h, dotR);
+      dot(hx + ex, eyeY - 0.01 * h, dotR);
+      break;
+    case "wink":
+      dot(hx - ex, eyeY, dotR);
+      closedEye(hx + ex);
+      break;
+    case "love":
+      heartEye(hx - ex);
+      heartEye(hx + ex);
+      break;
+    case "starstruck":
+      starEye(hx - ex);
+      starEye(hx + ex);
+      break;
+    case "sleeping":
+      closedEye(hx - ex);
+      closedEye(hx + ex);
+      break;
+    case "dizzy":
+      xEye(hx - ex);
+      xEye(hx + ex);
+      break;
+    default:
+      dot(hx - ex, eyeY, dotR);
+      dot(hx + ex, eyeY, dotR);
   }
   const my = hy + 0.045 * h;
   const mw = 0.035 * h;
   switch (emotion) {
     case "happy":
     case "excited":
+    case "wink":
+    case "love":
       stroke([[hx - mw, my - 0.008 * h], [hx, my + 0.012 * h], [hx + mw, my - 0.008 * h]]);
+      break;
+    case "starstruck": {
+      const r = 0.02 * h;
+      ctx.shape("circle", hx - r, my - r * 0.6, r * 2, r * 1.6, { stroke: color, fill: null, fillStyle: "none", strokeWidth: lw * 0.7, roughness: 0.5 }, { z: (z ?? 0) + 1, role: "character" });
+      break;
+    }
+    case "sleeping":
+      stroke([[hx - mw * 0.5, my + 0.004 * h], [hx + mw * 0.5, my + 0.004 * h]]);
+      ctx.label("z", hx + hr + 0.05 * h, hy - 0.09 * h, { size: Math.max(9, 0.085 * h), color, weight: 700, font: "heading", z: (z ?? 0) + 1, role: "character" });
+      ctx.label("Z", hx + hr + 0.11 * h, hy - 0.16 * h, { size: Math.max(11, 0.11 * h), color, weight: 700, font: "heading", z: (z ?? 0) + 1, role: "character" });
+      break;
+    case "dizzy":
+      stroke([[hx - mw, my], [hx - mw * 0.33, my + 0.012 * h], [hx + mw * 0.33, my - 0.006 * h], [hx + mw, my + 0.008 * h]]);
       break;
     case "sad":
     case "confused":

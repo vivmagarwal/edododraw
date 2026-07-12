@@ -1,5 +1,5 @@
 /**
- * The visualization catalog page: all 62 built-in viz templates, rendered
+ * The visualization catalog page: every built-in viz template, rendered
  * live, with a global style-preset switcher so every layout can be seen in
  * every one of the built-in styles.
  */
@@ -41,7 +41,7 @@ export function Visualizations() {
       <div className="page-head">
         <h1>Visualizations</h1>
         <p>
-          All 62 built-in chart and diagram templates ({VIZ_DEMOS.length} demos — the mindmap variants share one card),
+          All 87 built-in chart and diagram templates ({VIZ_DEMOS.length} demos — the mindmap variants share one card),
           each generated 100% from the code on its card. Pick a style to restyle every one of them — the same source, a
           different visual identity. Open any card's <strong>Styles &amp; variations →</strong> to see it flex across
           item counts and text lengths, in every style.

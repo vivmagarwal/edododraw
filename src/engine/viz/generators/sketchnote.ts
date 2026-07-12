@@ -217,23 +217,25 @@ registerViz({
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "thought").slice(0, 6);
     const n = Math.max(items.length, 1);
-    // side-profile head (facing right), designed in a 300×360 box
+    // side-profile head (facing right), designed in a 300×360 box: big smooth
+    // cranium, then a clearly-drawn brow → nose → lips → chin → jaw → neck
     const HEAD_D =
-      "M150 10 C 220 10 268 58 272 128 C 274 162 264 180 276 196 L 292 218 L 272 226 " +
-      "L 274 252 C 274 268 260 274 240 270 L 218 266 C 214 292 206 318 182 340 L 96 340 " +
-      "C 60 300 30 260 30 180 C 30 80 80 10 150 10 Z";
+      "M130 10 C 200 8 252 40 258 96 C 260 118 256 132 250 142 C 246 148 243 152 245 157 " +
+      "C 262 168 269 180 263 190 C 256 197 249 196 246 200 C 253 206 253 214 246 220 " +
+      "C 251 226 249 234 242 238 C 252 248 250 262 236 270 C 220 288 192 300 168 304 " +
+      "L 163 340 L 84 340 C 90 310 92 298 88 284 C 58 258 42 220 44 168 C 46 88 76 12 130 10 Z";
     const W = 330;
     const H = 396;
     ctx.path(HEAD_D, 300, 360, 0, 0, W, H, { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 2.6, roughness: ctx.preset.roughness }, { id: ctx.uid("head") });
 
     // thoughts stacked inside the cranium
     const slots: Array<[number, number]> = [
-      [142, 90],
-      [146, 156],
-      [142, 222],
-      [134, 288],
-      [148, 122],
-      [146, 190],
+      [142, 84],
+      [148, 150],
+      [144, 214],
+      [142, 268],
+      [150, 116],
+      [148, 184],
     ];
     const order = n <= 4 ? [0, 1, 2, 3] : [4, 5, 2, 3, 0, 1];
     items.forEach((item, i) =>

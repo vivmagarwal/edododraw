@@ -357,8 +357,10 @@ and deterministic like everything else.
   running confident thinking holding-overhead shrugging pulling peering
   walking jumping pushing carrying sitting meditating facepalm arms-crossed
   halting searching climbing falling` (plus any you register).
-- **Emotions**: `neutral happy sad surprised angry excited confused thinking
-  determined` — the workbook's mouth+eyes grid.
+- **Emotions (14 expressions)**: `neutral happy sad surprised angry excited
+  confused thinking determined wink love starstruck sleeping dizzy` — the
+  workbook's mouth+eyes grid, extended with heart/star eyes, a wink, Zzz
+  sleep, and dizzy X-eyes.
 - **Shirts (7 styles)**: `vest tee striped solid tie dress hoodie` — the
   figure-style continuum (vest outline → filled silhouette → triangle person),
   via `shirt:` (+ `shirtColor:` for the fill/stripes/tie accent).

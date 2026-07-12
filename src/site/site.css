@@ -276,3 +276,35 @@ body { font-family: var(--sans); color: var(--ink); background: var(--bg); -webk
 .viz-detail-jump a { color: var(--accent, #6d5ae6); text-decoration: none; font-weight: 600; }
 .section-lead { color: var(--muted, #6b7280); margin: -6px 0 16px; font-size: 15px; }
 .style-tile-name.var-label { font-weight: 700; color: var(--fg, #1f2430); }
+
+/* ---- character catalog ------------------------------------------------- */
+.char-tabs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.char-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+.char-tile {
+  border: 1px solid var(--border, #e2e4ea);
+  border-radius: 12px;
+  background: var(--card-bg, #fff);
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.char-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(20, 22, 40, 0.10);
+}
+.char-tile-canvas {
+  height: 218px;
+  pointer-events: none;
+}
