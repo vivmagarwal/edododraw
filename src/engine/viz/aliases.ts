@@ -15,6 +15,7 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   // ---- Process --------------------------------------------------------------
   flowchart: ["workflow", "flow-chart", "steps-flow"],
   kanban: ["board", "task-board", "kanban-board"],
+  "swimlane-flow": ["swimlanes", "cross-functional-flow", "raci-flow"],
   sequence: ["sequential", "step-by-step", "procedure"],
   stairs: ["steps", "step-up", "climb"],
   journey: ["journey-map", "user-journey", "path"],
@@ -38,6 +39,7 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   radar: ["spider", "spider-chart", "radar-chart", "capability-map", "skills-chart"],
   heatmap: ["heat-map", "intensity-grid", "risk-matrix", "skills-grid"],
   "slope-chart": ["slope", "slopegraph", "before-after-lines", "rank-change"],
+  "bullet-chart": ["bullet", "kpi-vs-target", "target-bars"],
 
   // ---- Timelines ------------------------------------------------------------
   timeline: ["milestones", "chronology", "history"],
@@ -49,7 +51,7 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   table: ["comparison-table", "grid", "feature-table"],
   versus: ["head-to-head", "comparison", "showdown"],
   balance: ["tradeoff", "trade-off", "weigh"],
-  relationship: ["ecosystem", "network", "hub"],
+  relationship: ["network", "hub"],
   podium: ["ranking", "leaderboard", "winners", "top-three"],
   decision: ["choose", "options"],
   spectrum: ["range", "continuum", "scale-range"],
@@ -67,6 +69,8 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   funnel: ["sales-funnel", "conversion-funnel", "pipeline"],
   flywheel: ["momentum", "growth-loop", "virtuous-cycle", "growth-engine"],
   okr: ["okrs", "objectives", "goal-tree", "key-results"],
+  "business-model-canvas": ["bmc", "business-canvas", "model-canvas"],
+  ecosystem: ["orbits", "stakeholder-map", "ecosystem-map"],
   "value-chain": ["porter-value-chain", "chevron-process", "delivery-chain"],
   "tug-of-war": ["force-field", "push-pull", "tension"],
 
@@ -84,6 +88,7 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   challenges: ["obstacles", "barriers"],
   bridge: ["gap", "migration", "span", "bridge-gap"],
   "root-causes": ["why", "causes", "cause-tree", "cause-effect"],
+  domino: ["chain-reaction", "dominoes", "cascade-effect", "knock-on"],
   impact: ["ripple", "consequences", "effects"],
 
   // ---- Visual Metaphors -----------------------------------------------------
@@ -97,6 +102,8 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   lens: ["focus", "magnify", "filter"],
   prism: ["refraction", "one-to-many", "split"],
   pillar: ["columns", "foundations", "supports"],
+  lighthouse: ["guidance", "beacon", "watch-out"],
+  magnet: ["attraction", "retention", "pull"],
 };
 
 /** Register every alias in VIZ_ALIASES against its canonical template. */

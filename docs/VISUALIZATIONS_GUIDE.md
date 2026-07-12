@@ -1,6 +1,6 @@
 # Visualizations Guide (`viz` templates)
 
-EDodoDraw ships **74 visualization templates** — funnels, pyramids, venns, charts, timelines, mindmaps, business frameworks, visual metaphors — each generated **100% from text**. A `viz` block declares *data*; the template turns it into ordinary diagram elements, so everything else in EDodoDraw (camera beats, annotations, direct editing, export, style presets) works on visualizations exactly as on hand-drawn scenes.
+EDodoDraw ships **81 visualization templates** — funnels, pyramids, venns, charts, timelines, mindmaps, business frameworks, visual metaphors — each generated **100% from text**. A `viz` block declares *data*; the template turns it into ordinary diagram elements, so everything else in EDodoDraw (camera beats, annotations, direct editing, export, style presets) works on visualizations exactly as on hand-drawn scenes.
 
 > Browse every template live (in every style) on the site's **Visualizations** page. Styling is a separate axis — see [STYLES_GUIDE.md](STYLES_GUIDE.md).
 
@@ -77,6 +77,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `cycle` (`loop`) | `item` / `phase` — circles on a ring with swept arrows (3–4 big nodes; 5+ switches to dots) | — |
 | `gantt` | `task "Name" start end` | `scale: ["Wk 1", …]`, `deadline: n`, `deadlineLabel:` |
 | `kanban` (`board`) | `column "Doing" { item "Checkout flow" }` — cards per column | — |
+| `swimlane-flow` (`swimlanes`) | `lane "QA" { step "Test" 2 }` — numbered steps flow across lanes | — |
 
 ### Data
 
@@ -96,6 +97,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `radar` (`spider`) | `axis "Security"` + `series "Today" [3, 4, 2]` (or plain `item "X" 3`) | `max:` scale ceiling |
 | `heatmap` (`risk-matrix`) | `row "API" [1, 3, 5]` intensity cells | `cols: ["Q1", …]`, `max:`, `showValues:` |
 | `slope-chart` (`slopegraph`) | `item "Billing" 340 120` — before/after per line | `left:`, `right:` headers, `showValues:` |
+| `bullet-chart` (`kpi-vs-target`) | `kpi "Revenue" 74 90` — actual bar vs target tick | `max:`, `showValues:` |
 
 ### Timelines
 
@@ -135,6 +137,8 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `flywheel` (`growth-loop`) | `item "More sellers" { icon: users }` ring segments + optional `center` entry | `center:` wheel label |
 | `value-chain` (`chevron-process`) | `item "Build" { icon: wrench }` chevrons + `support "…"` bars above | — |
 | `okr` (`goal-tree`) | `kr "NPS above 60" 0.72` progress cards under one objective | `objective:`, `showValues:` |
+| `business-model-canvas` (`bmc`) | 9 kind-keyed sections (`value { item "…" }`, `segments`, `costs`, …) | — |
+| `ecosystem` (`stakeholder-map`) | `center "Core"` + `ring "Partners" { item "…" { icon } }` orbits | — |
 
 ### Brainstorming / Parts of a whole
 
@@ -155,6 +159,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `transformation` (`before-after`) | `before "Label" "desc"` + `after "Label" "desc"` (suspension-bridge scene) | — |
 | `challenges` (`hurdles`) / `bridge` | `from`/`to` states + `item` steps spanning the gap | `action:` caption |
 | `root-causes` (`root-cause`) | problem = title + `item "Cause" "description"` on the roots | — |
+| `domino` (`chain-reaction`) | `item "Config typo" "detail"` tiles toppling into the outcome | — |
 | `impact` | `cause "Driver"` + `item "Effect" "description"` bubbles | — |
 
 ### Visual Metaphors
@@ -171,6 +176,8 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `prism` | `input "One thing" { icon }` + `item` outputs | — |
 | `pillar` (`pillars`) | `item "Trust" "description" { icon }` columns | — |
 | `tug-of-war` (`force-field`) | two `side "Name" [weight] { item "force" … }` teams | `tilt: left\|right\|balanced` |
+| `lighthouse` (`beacon`) | `item "Risk" "detail"` rocks under the beam | `ship:` traveler label |
+| `magnet` (`attraction`) | `item "Fast CI" { icon }` chips being pulled in | `label:` magnet caption |
 
 ---
 
@@ -246,6 +253,13 @@ EDodoDraw is a **text→visualization generator**: it renders whatever you give 
 | `heatmap` | 2–7 rows × 2–8 cols | missing cells render dashed; intensity ramps to `max:` |
 | `slope-chart` | 2–6 lines | close labels self-space vertically |
 | `tug-of-war` | **exactly 2 sides** × 0–4 forces | marker drifts toward the heavier side (`value` or force count) |
+| `business-model-canvas` | 5–9 sections × ≤4 bullets | kind-keyed cells; missing ones render with default titles |
+| `ecosystem` | 2–3 rings × 3–6 members | + one `center`; outer-ring names point outward |
+| `swimlane-flow` | 2–4 lanes × 4–8 steps total | number steps (`step "X" 2`) for cross-lane order |
+| `bullet-chart` | 2–6 KPIs | second value (or `target:`) draws the target tick |
+| `domino` | 3–6 tiles | fallen hardest at the trigger, upright at the outcome |
+| `lighthouse` | 2–4 rocks | + `ship:`; beam sweeps over every rock |
+| `magnet` | 2–5 chips | chips fan toward the poles |
 
 **Text length.** Labels are single-line-ish (they wrap, but keep them a few words). Descriptions (`detail:` / trailing string) wrap to a column and the layout expands to fit — but on the compact-side-label templates (`funnel`, `pyramid`, `bullseye`, `spectrum`, `decision`) a stage/level reads best with a **name + one short sentence**; multi-sentence prose is supported but makes those layouts tall. Narrative templates (`sequence`, `journey`, `dialogue`, `iceberg`, `problem-solution`, `transformation`, `root-causes`) comfortably hold 1–2 sentences per item.
 

@@ -87,6 +87,21 @@ viz kanban "Sprint 12" {
   }
 }`),
 
+  d("swimlane-flow", "Process", "Swimlane flow", "A flowchart over responsibility lanes — who does what, in order.", `
+viz swimlane-flow "Release Process" {
+  lane "Product" {
+    step "Spec" 0 { icon: doc }
+    step "Sign-off" 3 { icon: check }
+  }
+  lane "Engineering" {
+    step "Build" 1 { icon: wrench }
+    step "Deploy" 4 { icon: rocket }
+  }
+  lane "QA" {
+    step "Test" 2 { icon: search }
+  }
+}`),
+
   // ---- Data ------------------------------------------------------------------
   d("bar", "Data", "Bar chart", "Columns with per-category colors and value labels.", `
 viz bar "Revenue by Quarter" {
@@ -217,6 +232,14 @@ viz slope-chart "Ticket Volume" {
   item "Onboarding" 210 190
   item "API" 90 160
   item "Other" 150 60
+}`),
+
+  d("bullet-chart", "Data", "Bullet chart", "KPI rows — the actual bar vs a target tick.", `
+viz bullet-chart "Q3 Scorecard" {
+  kpi "Revenue" 74 90
+  kpi "NPS" 61 55
+  kpi "Uptime" 99.5 99.9
+  kpi "Hiring" 6 10
 }`),
 
   // ---- Timelines --------------------------------------------------------------
@@ -454,6 +477,34 @@ viz okr "Objective: Best-loved dev tool" {
   kr "10k weekly active teams" 0.31
 }`),
 
+  d("business-model-canvas", "Business Frameworks", "Business Model Canvas", "The classic 9-box BMC grid with bullet sections.", `
+viz business-model-canvas "EDodo, Inc." {
+  partners { item "Cloud provider"; item "Design agencies" }
+  activities { item "Engine development"; item "Community" }
+  resources { item "Rendering engine"; item "Template library" }
+  value { item "Diagrams from plain text"; item "Hand-drawn warmth" }
+  relationships { item "Self-serve"; item "Discord community" }
+  channels { item "npm + docs site"; item "Conference talks" }
+  segments { item "Dev-tool teams"; item "Educators" }
+  costs { item "R&D"; item "Infrastructure" }
+  revenue { item "Pro licenses"; item "Support plans" }
+}`),
+  d("ecosystem", "Business Frameworks", "Ecosystem", "Concentric stakeholder orbits around one center.", `
+viz ecosystem "Platform" {
+  center "EDodo Core" { icon: gear }
+  ring "Builders" {
+    item "Plugin devs" { icon: wrench }
+    item "Template authors" { icon: doc }
+    item "Integrators" { icon: puzzle }
+  }
+  ring "Ecosystem" {
+    item "npm" { icon: cloud }
+    item "GitHub" { icon: globe }
+    item "Educators" { icon: book }
+    item "Agencies" { icon: users }
+  }
+}`),
+
   // ---- Brainstorming ---------------------------------------------------------------
   d("mindmap", "Brainstorming", "Mindmap", "A central topic branching in both directions; variants: -left, -right, -horizontal, -vertical.", `
 viz mindmap "Product Launch" {
@@ -619,7 +670,30 @@ viz tug-of-war "Ship now vs. polish" {
   }
 }`),
 
+  d("lighthouse", "Visual Metaphors", "Lighthouse", "A beam sweeping over labeled rocks — guidance past the risks.", `
+viz lighthouse "Compliance Guidance" {
+  ship: "Launch plan"
+  item "Data residency" "EU hosting required"
+  item "Audit gaps" "SOC 2 evidence missing"
+  item "Access sprawl" "Stale admin accounts"
+}`),
+  d("magnet", "Visual Metaphors", "Magnet", "A horseshoe magnet pulling item chips in — attraction and retention.", `
+viz magnet "Why Devs Stay" {
+  label: "Developer experience"
+  item "Fast CI" { icon: rocket }
+  item "Clear docs" { icon: book }
+  item "Small PRs" { icon: check }
+  item "Owned services" { icon: shield }
+}`),
+
   // ---- Cause and Effect ------------------------------------------------------------------------
+  d("domino", "Cause and Effect", "Domino", "A chain reaction toppling left to right into the outcome.", `
+viz domino "How the Outage Spread" {
+  item "Config typo" "Deployed on Friday"
+  item "Cache stampede"
+  item "API brownout"
+  item "Checkout down" "43 minutes"
+}`),
   d("root-causes", "Cause and Effect", "Root causes", "A tree whose roots carry the causes.", `
 viz root-causes "Why Releases Slip" {
   item "Unclear scope" "Requirements change mid-sprint"

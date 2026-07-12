@@ -567,7 +567,7 @@ registerViz({
   camera, annotations, editing and export then work automatically.
 - Follow the golden rule: **never hardcode colors** — derive everything from
   `ctx.role` / `ctx.ink` / `ctx.preset` so all style presets keep working. See
-  `src/engine/viz/generators/*.ts` for 74 worked examples and
+  `src/engine/viz/generators/*.ts` for 81 worked examples and
   [VISUALIZATIONS_GUIDE.md](VISUALIZATIONS_GUIDE.md) for the authoring surface.
 
 ## 7. Add a style preset

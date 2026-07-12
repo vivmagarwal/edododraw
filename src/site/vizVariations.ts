@@ -306,6 +306,29 @@ const BUILDERS: Record<string, () => Variation[]> = {
         ...range(n).map((i) => `  item "${names[i]}" ${340 - i * 45} ${120 + ((i * 67) % 180)}`),
       ]);
     }),
+  // ---- Frameworks round 3 (tier 3, 2026-07) -----------------------------------
+  "business-model-canvas": () =>
+    counts([5, 9], "sections", (n) => {
+      const kinds = ["value", "segments", "revenue", "costs", "channels", "partners", "activities", "resources", "relationships"];
+      return block("business-model-canvas", "Canvas", range(n).map((i) => `  ${kinds[i]} { item "${NAMES[i]}"; item "${NAMES[(i + 4) % NAMES.length]}" }`));
+    }),
+  ecosystem: () =>
+    counts([2, 3], "rings", (n) => {
+      const ringNames = ["Core", "Partners", "Community"];
+      const rows = range(n).map((ri) => `  ring "${ringNames[ri]}" {\n${range(3 + ri).map((j) => `    item "${NAMES[(ri * 4 + j) % NAMES.length]}" { icon: ${ICONS[(ri * 4 + j) % ICONS.length]} }`).join("\n")}\n  }`);
+      return block("ecosystem", "Ecosystem", [`  center "Core" { icon: gear }`, ...rows]);
+    }),
+  "swimlane-flow": () =>
+    counts([2, 3], "lanes", (n) => {
+      const laneNames = ["Product", "Engineering", "QA"];
+      const rows = range(n).map((li) => `  lane "${laneNames[li]}" {\n    step "${NAMES[li * 2]}" ${li * 2}\n    step "${NAMES[li * 2 + 1]}" ${li * 2 + 1}\n  }`);
+      return block("swimlane-flow", "Process", rows);
+    }),
+  "bullet-chart": () => counts([2, 4, 6], "KPIs", (n) => block("bullet-chart", "Scorecard", range(n).map((i) => `  kpi "${NAMES[i]}" ${40 + ((i * 23) % 55)} ${60 + ((i * 17) % 40)}`))),
+  domino: () => counts([3, 4, 6], "tiles", (n, long) => block("domino", "Chain Reaction", itemLines(n, { detail: long, long })), 4),
+  lighthouse: () => counts([2, 3, 4], "rocks", (n, long) => block("lighthouse", "Guidance", [`  ship: "The plan"`, ...itemLines(n, { detail: true, long })]), 3),
+  magnet: () => counts([2, 3, 5], "chips", (n) => block("magnet", "Attraction", [`  label: "The pull"`, ...itemLines(n, { icon: true })])),
+
   "tug-of-war": () => [
     { label: "Left winning", code: block("tug-of-war", "Ship now vs. polish", [`  side "Ship now" 3 {\n    item "Market window closing"\n    item "Team is burning out"\n  }`, `  side "Keep polishing" 1 {\n    item "Two rough edges left"\n  }`]) },
     { label: "Balanced", code: block("tug-of-war", "Rewrite vs. refactor", ["  tilt: balanced", `  side "Rewrite" {\n    item "Clean slate"\n  }`, `  side "Refactor" {\n    item "Keep shipping"\n  }`]) },

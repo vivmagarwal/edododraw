@@ -46,7 +46,7 @@ declared on the def.
     with the rope's knot offset by the value balance. Great change-management
     metaphor.
 
-## Tier 3 — worth having eventually
+## Tier 3 — SHIPPED 2026-07-12 in 0.6.0 (all seven)
 
 13. **`business-model-canvas`** — the 9-box BMC (needs dense text handling).
 14. **`ecosystem`** — concentric stakeholder orbits (bullseye × relationship).
