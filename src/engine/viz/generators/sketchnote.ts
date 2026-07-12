@@ -38,7 +38,9 @@ registerViz({
         const pose = typeof item.opts.pose === "string" ? item.opts.pose : PERSONA_POSES[i % PERSONA_POSES.length];
         const emotion = typeof item.opts.emotion === "string" ? item.opts.emotion : undefined;
         const prop = typeof item.opts.prop === "string" ? item.opts.prop : item.icon;
-        ctx.character(pose, cx, figH + 26, figH, { color: role.color, emotion, prop, propColor: role.color });
+        const shirt = typeof item.opts.shirt === "string" ? item.opts.shirt : undefined;
+        const shirtColor = typeof item.opts.shirtColor === "string" ? item.opts.shirtColor : undefined;
+        ctx.character(pose, cx, figH + 26, figH, { color: role.color, emotion, prop, propColor: role.color, shirt, shirtColor });
         // ground stroke under each figure
         ctx.line([[cx - 34, figH + 28], [cx + 34, figH + 28]], { color: ctx.mutedInk, width: 1.6 });
         ctx.labelBlock(item.label, item.detail, cx, figH + 52, { color: role.color, align: "center", maxW: 180, vAnchor: "top", size: 18 });
@@ -59,6 +61,7 @@ registerViz({
     { name: "pose", type: "string", description: 'character pose (default "presenting"; "none" hides the figure)' },
     { name: "emotion", type: "string", description: "character emotion" },
     { name: "prop", type: "string", description: "icon the character holds" },
+    { name: "shirt", type: "string", description: "character shirt style (vest/tee/striped/solid/tie/dress/hoodie)" },
   ],
   sweetSpot: { min: 1, max: 1 },
   generate(spec: VizSpec, ctx: VizContext) {
@@ -97,6 +100,8 @@ registerViz({
         emotion: optStr(spec.options, "emotion"),
         prop: optStr(spec.options, "prop"),
         propColor: accent,
+        shirt: optStr(spec.options, "shirt"),
+        shirtColor: accent,
       });
       ctx.line([[qx - 344, qh + 114], [qx - 266, qh + 114]], { color: ctx.mutedInk, width: 1.6 });
     }

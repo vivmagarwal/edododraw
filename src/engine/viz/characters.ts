@@ -63,6 +63,13 @@ export function listCharacterEmotions(): string[] {
   return [...CHARACTER_EMOTIONS];
 }
 
+/** Torso/clothing styles (the workbook's figure-style continuum). */
+export const CHARACTER_SHIRTS = ["vest", "tee", "striped", "solid", "tie", "dress", "hoodie"] as const;
+
+export function listCharacterShirts(): string[] {
+  return [...CHARACTER_SHIRTS];
+}
+
 // ---- built-in poses ------------------------------------------------------------
 
 registerCharacterPose("standing", {
@@ -177,6 +184,116 @@ registerCharacterPose("peering", {
   legL: [[-0.05, 0.55], [-0.09, 0.97]],
   legR: [[0.05, 0.55], [0.07, 0.97]],
 });
+registerCharacterPose("walking", {
+  lean: 0.03,
+  armL: [[-0.10, 0.31], [-0.19, 0.45]],
+  armR: [[0.10, 0.31], [0.19, 0.44]],
+  legL: [[-0.05, 0.55], [-0.13, 0.77], [-0.16, 0.96]],
+  legR: [[0.05, 0.55], [0.14, 0.76], [0.17, 0.96]],
+});
+registerCharacterPose("jumping", {
+  emotion: "excited",
+  armL: [[-0.10, 0.31], [-0.20, 0.18], [-0.24, 0.08]],
+  armR: [[0.10, 0.31], [0.20, 0.18], [0.24, 0.08]],
+  legL: [[-0.05, 0.55], [-0.15, 0.68], [-0.11, 0.80]],
+  legR: [[0.05, 0.55], [0.15, 0.68], [0.11, 0.80]],
+  motion: [
+    [[-0.10, 0.92], [-0.03, 0.92]],
+    [[0.03, 0.95], [0.10, 0.95]],
+    [[-0.04, 0.99], [0.04, 0.99]],
+  ],
+  propAnchor: [0, -0.12],
+  propSize: 0.26,
+});
+registerCharacterPose("pushing", {
+  lean: 0.10,
+  emotion: "determined",
+  armL: [[0.04, 0.32], [0.20, 0.38], [0.33, 0.42]],
+  armR: [[0.10, 0.30], [0.26, 0.33], [0.36, 0.37]],
+  legL: [[-0.05, 0.55], [-0.22, 0.78], [-0.28, 0.97]],
+  legR: [[0.05, 0.55], [0.16, 0.76], [0.14, 0.97]],
+});
+registerCharacterPose("carrying", {
+  armL: [[-0.10, 0.31], [-0.13, 0.42], [-0.04, 0.40]],
+  armR: [[0.10, 0.31], [0.13, 0.42], [0.04, 0.40]],
+  legL: [[-0.05, 0.55], [-0.09, 0.97]],
+  legR: [[0.05, 0.55], [0.09, 0.97]],
+  hands: false,
+  propAnchor: [0, 0.36],
+  propSize: 0.24,
+});
+registerCharacterPose("sitting", {
+  armL: [[-0.10, 0.31], [-0.06, 0.44], [0.06, 0.48]],
+  armR: [[0.10, 0.31], [0.14, 0.44], [0.10, 0.50]],
+  legL: [[-0.05, 0.55], [0.16, 0.70], [0.14, 0.97]],
+  legR: [[0.05, 0.55], [0.22, 0.72], [0.20, 0.97]],
+  propAnchor: [0.16, 0.42],
+  propSize: 0.22,
+});
+registerCharacterPose("meditating", {
+  emotion: "happy",
+  armL: [[-0.10, 0.31], [-0.20, 0.48], [-0.15, 0.58]],
+  armR: [[0.10, 0.31], [0.20, 0.48], [0.15, 0.58]],
+  legL: [[-0.05, 0.55], [-0.24, 0.82], [0.08, 0.88]],
+  legR: [[0.05, 0.55], [0.24, 0.82], [-0.08, 0.88]],
+  propAnchor: [0, -0.14],
+  propSize: 0.24,
+});
+registerCharacterPose("facepalm", {
+  lean: 0.02,
+  emotion: "sad",
+  armL: [[-0.10, 0.31], [-0.14, 0.48]],
+  armR: [[0.10, 0.31], [0.17, 0.20], [0.055, 0.125]],
+  legL: [[-0.05, 0.55], [-0.08, 0.97]],
+  legR: [[0.05, 0.55], [0.08, 0.97]],
+});
+registerCharacterPose("arms-crossed", {
+  emotion: "determined",
+  armL: [[-0.10, 0.31], [-0.02, 0.40], [0.10, 0.37]],
+  armR: [[0.10, 0.31], [0.02, 0.42], [-0.10, 0.39]],
+  legL: [[-0.05, 0.55], [-0.09, 0.97]],
+  legR: [[0.05, 0.55], [0.09, 0.97]],
+  hands: false,
+  propAnchor: [0.26, 0.12],
+  propSize: 0.22,
+});
+registerCharacterPose("halting", {
+  emotion: "determined",
+  armL: [[-0.10, 0.31], [-0.15, 0.48]],
+  armR: [[0.10, 0.30], [0.31, 0.29]],
+  legL: [[-0.05, 0.55], [-0.10, 0.97]],
+  legR: [[0.05, 0.55], [0.08, 0.97]],
+  propAnchor: [0.40, 0.26],
+  propSize: 0.2,
+});
+registerCharacterPose("searching", {
+  lean: 0.06,
+  armL: [[-0.10, 0.31], [-0.20, 0.42]],
+  armR: [[0.10, 0.31], [0.21, 0.15], [0.135, 0.08]],
+  legL: [[-0.05, 0.55], [-0.08, 0.97]],
+  legR: [[0.05, 0.55], [0.10, 0.97]],
+  propAnchor: [-0.26, 0.44],
+  propSize: 0.24,
+});
+registerCharacterPose("climbing", {
+  emotion: "determined",
+  armL: [[-0.10, 0.31], [-0.16, 0.38]],
+  armR: [[0.10, 0.31], [0.14, 0.10], [0.12, -0.02]],
+  legL: [[-0.05, 0.55], [-0.08, 0.97]],
+  legR: [[0.05, 0.55], [0.20, 0.62], [0.16, 0.78]],
+});
+registerCharacterPose("falling", {
+  lean: 0.16,
+  emotion: "surprised",
+  armL: [[-0.08, 0.31], [0.08, 0.18], [0.16, 0.10]],
+  armR: [[0.10, 0.30], [0.26, 0.20], [0.32, 0.12]],
+  legL: [[-0.05, 0.55], [-0.18, 0.62], [-0.28, 0.53]],
+  legR: [[0.05, 0.55], [0.14, 0.78], [0.10, 0.95]],
+  motion: [
+    [[-0.34, 0.30], [-0.46, 0.34]],
+    [[-0.32, 0.42], [-0.46, 0.44]],
+  ],
+});
 
 // ---- rendering ------------------------------------------------------------------
 
@@ -189,6 +306,10 @@ export interface CharacterOptions {
   prop?: string;
   /** Accent color for the prop (defaults to the figure color). */
   propColor?: string;
+  /** Torso/clothing style — see listCharacterShirts() (default "vest"). */
+  shirt?: string;
+  /** Fill/accent for the shirt (solid fill, stripes, tie; default = figure color). */
+  shirtColor?: string;
   /** Mirror the pose left↔right. */
   flip?: boolean;
   z?: number;
@@ -203,6 +324,8 @@ export function drawCharacter(ctx: VizContext, cx: number, groundY: number, h: n
   const pose = POSES.get(opts.pose ?? "standing") ?? POSES.get("standing")!;
   const emotion = opts.emotion ?? pose.emotion ?? "neutral";
   const color = opts.color ?? ctx.ink;
+  const shirt = opts.shirt ?? "vest";
+  const shirtColor = opts.shirtColor ?? color;
   const flip = opts.flip ? -1 : 1;
   const y0 = groundY - h;
   const X = (u: number) => cx + u * flip * h;
@@ -210,29 +333,102 @@ export function drawCharacter(ctx: VizContext, cx: number, groundY: number, h: n
   const P = (p: Pt): Pt => [X(p[0]), Y(p[1])];
   const lw = Math.max(1.7, h * 0.017);
   const z = opts.z;
-
-  // head (kept "white inside" so background lines never cross the face)
   const lean = (pose.lean ?? 0) * flip;
+  const dot = (px: number, py: number, r: number, c = color) => ctx.shape("circle", px - r, py - r, r * 2, r * 2, { stroke: c, fill: c, fillStyle: "solid", strokeWidth: 1, roughness: 0.4 }, { z: (z ?? 0) + 1, role: "character" });
+
+  // ---- layer 1: legs (drawn first so clothing can sit over the hip joint)
+  const limb = (pts: Pt[], hand: boolean) => {
+    ctx.line(pts.map(P), { color, width: lw, z });
+    if (hand) {
+      const end = P(pts[pts.length - 1]);
+      dot(end[0], end[1], Math.max(1.6, h * 0.02));
+    }
+  };
+  limb(pose.legL, false);
+  limb(pose.legR, false);
+  // feet ticks (grounded feet only — a kicked-up heel keeps its bare end)
+  for (const leg of [pose.legL, pose.legR]) {
+    const end = leg[leg.length - 1];
+    if (end[1] < 0.9) continue;
+    const f = P(end);
+    ctx.line([[f[0], f[1]], [f[0] + 0.05 * h * flip, f[1]]], { color, width: lw, z });
+  }
+
+  // ---- layer 2: the shirt (torso) — style variants from the workbook
+  const tL = Math.min(X(-0.10), X(0.10));
+  const torso = (fill: string | null, fillStyle: "none" | "solid" = fill ? "solid" : "none") =>
+    ctx.shape("round-rectangle", tL, Y(0.25), 0.20 * h, 0.30 * h, { stroke: color, fill, fillStyle, strokeWidth: lw, roughness: Math.min(1.1, ctx.preset.roughness), roundness: Math.max(3, h * 0.03) }, { z, role: "character" });
+  const sleeve = (side: -1 | 1) =>
+    ctx.line([P([side * 0.10, 0.30]), P([side * 0.155, 0.335]), P([side * 0.145, 0.385])], { color, width: lw, z });
+  switch (shirt) {
+    case "tee":
+      torso(ctx.preset.background);
+      sleeve(-1);
+      sleeve(1);
+      break;
+    case "striped":
+      torso(ctx.preset.background);
+      sleeve(-1);
+      sleeve(1);
+      for (const sy of [0.35, 0.41, 0.47]) ctx.line([P([-0.095, sy]), P([0.095, sy])], { color: shirtColor, width: lw * 0.7, z: (z ?? 0) + 1 });
+      break;
+    case "solid":
+      torso(shirtColor);
+      break;
+    case "tie":
+      torso(ctx.preset.background);
+      // collar V + tie
+      ctx.line([P([-0.045, 0.25]), P([0, 0.30]), P([0.045, 0.25])], { color, width: lw * 0.8, z: (z ?? 0) + 1 });
+      ctx.poly([P([0, 0.30]), P([0.028, 0.345]), P([0, 0.46]), P([-0.028, 0.345])], { stroke: shirtColor, fill: shirtColor, fillStyle: "solid", strokeWidth: 1, roughness: 0.6 }, { z: (z ?? 0) + 1, role: "character" });
+      break;
+    case "dress": {
+      const pts: Pt[] = [[-0.10, 0.25], [0.10, 0.25], [0.17, 0.62], [-0.17, 0.62]];
+      ctx.poly(pts.map(P), { stroke: color, fill: ctx.preset.background, fillStyle: "solid", strokeWidth: lw, roughness: Math.min(1.1, ctx.preset.roughness) }, { z, role: "character" });
+      break;
+    }
+    case "hoodie": {
+      // hood arc behind the head (the head's background fill covers the inside)
+      const hrr = 0.14 * h;
+      const hcx = X(lean);
+      const hcy = Y(0.105);
+      const arc: Pt[] = [];
+      for (let a = 200; a <= 340; a += 14) arc.push([hcx + Math.cos((a * Math.PI) / 180) * hrr, hcy + Math.sin((a * Math.PI) / 180) * hrr]);
+      ctx.line(arc, { color, width: lw, z });
+      torso(ctx.preset.background);
+      ctx.line([P([-0.05, 0.47]), P([-0.05, 0.53]), P([0.05, 0.53]), P([0.05, 0.47])], { color, width: lw * 0.7, z: (z ?? 0) + 1 }); // pocket
+      dot(X(-0.02), Y(0.29), Math.max(1, h * 0.009));
+      dot(X(0.02), Y(0.29), Math.max(1, h * 0.009));
+      break;
+    }
+    default:
+      torso(null);
+  }
+
+  // ---- layer 3: arms over the shirt
+  const showHands = pose.hands !== false;
+  limb(pose.armL, showHands);
+  limb(pose.armR, showHands);
+
+  // ---- layer 4: neck + head + face (background-filled head keeps faces clean)
+  ctx.line([P([lean * 0.9, 0.205]), P([lean * 0.25, 0.25])], { color, width: lw, z });
   const hx = X(lean);
   const hr = 0.105 * h;
   const hy = Y(0.105);
   ctx.shape("circle", hx - hr, hy - hr, hr * 2, hr * 2, { stroke: color, fill: ctx.preset.background, fillStyle: "solid", strokeWidth: lw, roughness: Math.min(1, ctx.preset.roughness) }, { z, role: "character" });
 
-  // face: two dot eyes + emotion mouth (+ brows/extras per emotion)
   const ex = 0.035 * h;
   const eyeY = hy - 0.015 * h;
   const dotR = Math.max(1.1, h * 0.012);
-  const dot = (px: number, py: number, r = dotR) => ctx.shape("circle", px - r, py - r, r * 2, r * 2, { stroke: color, fill: color, fillStyle: "solid", strokeWidth: 1, roughness: 0.4 }, { z: (z ?? 0) + 1, role: "character" });
   const stroke = (pts: Pt[], w = lw * 0.8) => ctx.line(pts, { color, width: w, z: (z ?? 0) + 1 });
   if (emotion === "surprised") {
     dot(hx - ex, eyeY, dotR * 1.5);
     dot(hx + ex, eyeY, dotR * 1.5);
   } else if (emotion === "thinking") {
-    dot(hx - ex, eyeY - 0.01 * h);
-    dot(hx + ex, eyeY - 0.01 * h);
+    dot(hx - ex, eyeY - 0.01 * h, dotR);
+    dot(hx + ex, eyeY - 0.01 * h, dotR);
   } else {
-    dot(hx - ex, eyeY);
-    dot(hx + ex, eyeY);
+    dot(hx - ex, eyeY, dotR);
+    dot(hx + ex, eyeY, dotR);
   }
   const my = hy + 0.045 * h;
   const mw = 0.035 * h;
@@ -264,35 +460,8 @@ export function drawCharacter(ctx: VizContext, cx: number, groundY: number, h: n
   }
   if (emotion === "confused") stroke([[hx + hr + 0.015 * h, hy - 0.04 * h], [hx + hr + 0.035 * h, hy + 0.01 * h]]);
 
-  // neck + vest torso (outline, not a bare stick)
-  ctx.line([P([lean * 0.9, 0.205]), P([lean * 0.25, 0.25])], { color, width: lw, z });
-  ctx.shape("round-rectangle", Math.min(X(-0.10), X(0.10)), Y(0.25), 0.20 * h, 0.30 * h, { stroke: color, fill: null, fillStyle: "none", strokeWidth: lw, roughness: Math.min(1.1, ctx.preset.roughness), roundness: Math.max(3, h * 0.03) }, { z, role: "character" });
-
-  // limbs + blobs
-  const limb = (pts: Pt[], hand: boolean) => {
-    ctx.line(pts.map(P), { color, width: lw, z });
-    if (hand) {
-      const end = P(pts[pts.length - 1]);
-      dot(end[0], end[1], Math.max(1.6, h * 0.02));
-    }
-  };
-  const showHands = pose.hands !== false;
-  limb(pose.armL, showHands);
-  limb(pose.armR, showHands);
-  limb(pose.legL, false);
-  limb(pose.legR, false);
-  // feet ticks (grounded feet only — a kicked-up heel keeps its bare end)
-  for (const leg of [pose.legL, pose.legR]) {
-    const end = leg[leg.length - 1];
-    if (end[1] < 0.9) continue;
-    const f = P(end);
-    ctx.line([[f[0], f[1]], [f[0] + 0.05 * h * flip, f[1]]], { color, width: lw, z });
-  }
-
-  // motion lines
+  // ---- layer 5: motion lines + prop
   for (const [a, b] of pose.motion ?? []) ctx.line([P(a), P(b)], { color, width: lw * 0.8, z });
-
-  // prop: any registered icon, held at the pose's anchor
   if (opts.prop && iconEntry(opts.prop)) {
     const anchor = pose.propAnchor ?? pose.armR[pose.armR.length - 1];
     const size = (pose.propSize ?? 0.3) * h;
@@ -303,8 +472,8 @@ export function drawCharacter(ctx: VizContext, cx: number, groundY: number, h: n
   const xs: number[] = [];
   const ys: number[] = [0, 1];
   for (const l of [pose.armL, pose.armR, pose.legL, pose.legR]) for (const p of l) { xs.push(p[0]); ys.push(p[1]); }
-  const minX = Math.min(-0.14, ...xs) - 0.04;
-  const maxX = Math.max(0.14, ...xs) + 0.04;
+  const minX = Math.min(-0.18, ...xs) - 0.04; // ±0.18 covers the widest shirts (dress)
+  const maxX = Math.max(0.18, ...xs) + 0.04;
   const minY = Math.min(-0.14, ...ys);
   return { x: cx + (flip > 0 ? minX : -maxX) * h, y: y0 + minY * h, w: (maxX - minX) * h, h: (1 - minY) * h };
 }

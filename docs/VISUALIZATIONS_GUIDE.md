@@ -162,7 +162,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 |---|---|---|
 | `mindmap` (+ `mindmap-left`, `-right`, `-horizontal`, `-vertical`) | nested `item`s; root = title, a lone parent item, or a `root` entry | — |
 | `key-ideas` (`ideas`) | `item "Focus" "description"` lightbulbs | — |
-| `personas` (`team`, `cast`) | `item "The Builder" "detail" { pose: confident, emotion: happy, prop: wrench }` characters | — |
+| `personas` (`team`, `cast`) | `item "The Builder" "detail" { pose: confident, emotion: happy, prop: wrench, shirt: tie }` characters | — |
 | `quote` (`big-quote`) | title = the quote; `by:` attribution; a character presents it | `by:`, `pose:`, `emotion:`, `prop:` |
 | `clouds` (`idea-clouds`) | `item "Theme" "detail" { icon }` scattered thought-cloud islands | — |
 | `head-thoughts` (`in-their-head`) | `item "Will it save time?" { icon }` thoughts inside a profile head | `who:` caption |
@@ -353,20 +353,25 @@ bullet-head figure (circle head + dot eyes + emotion mouth, vest-outline torso,
 curved limbs with hand blobs, motion lines) drawn parametrically, preset-aware,
 and deterministic like everything else.
 
-- **Poses**: `standing waving pointing presenting cheering running confident
-  thinking holding-overhead shrugging pulling peering` (plus any you register).
+- **Poses (24 movements)**: `standing waving pointing presenting cheering
+  running confident thinking holding-overhead shrugging pulling peering
+  walking jumping pushing carrying sitting meditating facepalm arms-crossed
+  halting searching climbing falling` (plus any you register).
 - **Emotions**: `neutral happy sad surprised angry excited confused thinking
   determined` — the workbook's mouth+eyes grid.
+- **Shirts (7 styles)**: `vest tee striped solid tie dress hoodie` — the
+  figure-style continuum (vest outline → filled silhouette → triangle person),
+  via `shirt:` (+ `shirtColor:` for the fill/stripes/tie accent).
 - **Props**: ANY icon name (§5), held at the pose's anchor — `prop: trophy`
   puts a trophy overhead in `holding-overhead`, `prop: star` crowns `cheering`.
 
 In the DSL, characters appear through templates: `personas` renders one per
-item (`{ pose: confident, emotion: happy, prop: wrench }`), `quote` adds a
+item (`{ pose: confident, emotion: happy, prop: wrench, shirt: tie }`), `quote` adds a
 presenting figure, and `vision`/`hole`/`tug-of-war` use them internally. From
 generator code (see EXTENDING_GUIDE):
 
 ```ts
-ctx.character("cheering", cx, groundY, 120, { color: role.color, prop: "trophy" });
+ctx.character("cheering", cx, groundY, 120, { color: role.color, prop: "trophy", shirt: "striped" });
 registerCharacterPose("dabbing", { armL: […], armR: […], legL: […], legR: […] });
 ```
 

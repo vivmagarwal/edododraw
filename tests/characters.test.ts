@@ -100,3 +100,50 @@ describe("sketchnote container shapes", () => {
     }
   });
 });
+
+// ---- full combination matrix (poses × shirts × flip, all emotions) -----------------
+
+import { listCharacterShirts } from "@engine/viz/characters.js";
+
+describe("character matrix — every pose × shirt × flip", () => {
+  const finite = (ctx: VizContext) =>
+    ctx.nodes.every((n) => [n.x, n.y, n.w, n.h].every(Number.isFinite));
+
+  it("renders every combination with sane geometry", () => {
+    for (const pose of listCharacterPoses()) {
+      for (const shirt of listCharacterShirts()) {
+        for (const flip of [false, true]) {
+          const ctx = ctxOf();
+          const b = drawCharacter(ctx, 0, 100, 100, { pose, shirt, flip, prop: "star" });
+          expect(ctx.nodes.length, `${pose}/${shirt}/flip=${flip}`).toBeGreaterThanOrEqual(10);
+          expect(finite(ctx), `${pose}/${shirt}/flip=${flip} has NaN geometry`).toBe(true);
+          expect(b.w, `${pose}/${shirt} bounds`).toBeGreaterThan(20);
+          expect(b.h).toBeGreaterThan(80);
+          // every element stays inside a sane envelope around the figure
+          for (const n of ctx.nodes) {
+            expect(n.x, `${pose}/${shirt} stray x`).toBeGreaterThan(-160);
+            expect(n.x + n.w).toBeLessThan(160);
+            expect(n.y).toBeGreaterThan(-60);
+            expect(n.y + n.h).toBeLessThan(115);
+          }
+        }
+      }
+    }
+  });
+
+  it("renders every emotion on every shirt", () => {
+    for (const emotion of listCharacterEmotions()) {
+      for (const shirt of listCharacterShirts()) {
+        const ctx = ctxOf();
+        drawCharacter(ctx, 0, 100, 100, { emotion, shirt });
+        expect(ctx.nodes.length, `${emotion}/${shirt}`).toBeGreaterThanOrEqual(9);
+        expect(finite(ctx)).toBe(true);
+      }
+    }
+  });
+
+  it("ships the full movement + shirt vocabulary", () => {
+    expect(listCharacterPoses().length).toBeGreaterThanOrEqual(24);
+    expect(listCharacterShirts()).toEqual(["vest", "tee", "striped", "solid", "tie", "dress", "hoodie"]);
+  });
+});
