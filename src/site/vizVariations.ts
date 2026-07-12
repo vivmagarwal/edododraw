@@ -271,6 +271,45 @@ const BUILDERS: Record<string, () => Variation[]> = {
       const rows = range(n).map((i) => `  tier "${tiers[i]}" ${[0, 29, 59, 99][i]} {${i === 1 ? " highlight: true" : ""}\n${feats[i].map((f) => `    item "${f}"`).join("\n")}\n  }`);
       return block("pricing-tiers", "Plans", rows, ['  period: "/mo"']);
     }),
+
+  // ---- Planning & analysis (tier 2, 2026-07) ----------------------------------
+  okr: () =>
+    counts([2, 3, 4], "key results", (n, long) => {
+      const krs = ["NPS above 60", "P95 latency under 200ms", "10k weekly active teams", "Churn below 2%"];
+      return block("okr", "Objective: Best-loved dev tool", range(n).map((i) => `  kr "${krs[i]}"${long ? ` "${LONG}"` : ""} ${[0.72, 0.45, 0.31, 0.6][i]}`));
+    }, 3),
+  kanban: () =>
+    counts([2, 3, 4], "columns", (n) => {
+      const cols = ["To do", "Doing", "Review", "Done"];
+      return block("kanban", "Sprint", range(n).map((i) => `  column "${cols[i]}" {\n${range(2 + (i % 2)).map((j) => `    item "${NAMES[(i * 3 + j) % NAMES.length]}"`).join("\n")}\n  }`));
+    }),
+  "decision-tree": () =>
+    counts([2, 3], "branches", (n) =>
+      block("decision-tree", "", [
+        `  item "Build or buy?" {\n${range(n).map((i) => `    item "${["Build in-house", "Buy a vendor", "Partner instead"][i]}" { when: "${["build", "buy", "partner"][i]}", icon: ${["wrench", "dollar", "handshake"][i]} }`).join("\n")}\n  }`,
+      ]),
+    ),
+  heatmap: () =>
+    counts([2, 4, 6], "rows", (n) => {
+      const rows = ["API", "Web", "Billing", "Auth", "Search", "Mobile"];
+      return block("heatmap", "Incidents", [
+        '  cols: ["Q1", "Q2", "Q3", "Q4"]',
+        ...range(n).map((i) => `  row "${rows[i]}" [${range(4).map((c) => (i * 7 + c * 3) % 7).join(", ")}]`),
+      ]);
+    }),
+  "slope-chart": () =>
+    counts([2, 4, 6], "series", (n) => {
+      const names = ["Billing", "Onboarding", "API", "Other", "Search", "Auth"];
+      return block("slope-chart", "Ticket Volume", [
+        '  left: "2026"',
+        '  right: "2027"',
+        ...range(n).map((i) => `  item "${names[i]}" ${340 - i * 45} ${120 + ((i * 67) % 180)}`),
+      ]);
+    }),
+  "tug-of-war": () => [
+    { label: "Left winning", code: block("tug-of-war", "Ship now vs. polish", [`  side "Ship now" 3 {\n    item "Market window closing"\n    item "Team is burning out"\n  }`, `  side "Keep polishing" 1 {\n    item "Two rough edges left"\n  }`]) },
+    { label: "Balanced", code: block("tug-of-war", "Rewrite vs. refactor", ["  tilt: balanced", `  side "Rewrite" {\n    item "Clean slate"\n  }`, `  side "Refactor" {\n    item "Keep shipping"\n  }`]) },
+  ],
 };
 
 function vennCode(n: number, long: boolean): string {

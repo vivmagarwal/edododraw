@@ -14,6 +14,7 @@ import { registerVizAlias } from "./registry.js";
 export const VIZ_ALIASES: Record<string, string[]> = {
   // ---- Process --------------------------------------------------------------
   flowchart: ["workflow", "flow-chart", "steps-flow"],
+  kanban: ["board", "task-board", "kanban-board"],
   sequence: ["sequential", "step-by-step", "procedure"],
   stairs: ["steps", "step-up", "climb"],
   journey: ["journey-map", "user-journey", "path"],
@@ -35,6 +36,8 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   "dumbbell-horizontal": ["goal-progress", "kpi-bars"],
   sankey: ["flow-diagram", "sankey-diagram", "flows"],
   radar: ["spider", "spider-chart", "radar-chart", "capability-map", "skills-chart"],
+  heatmap: ["heat-map", "intensity-grid", "risk-matrix", "skills-grid"],
+  "slope-chart": ["slope", "slopegraph", "before-after-lines", "rank-change"],
 
   // ---- Timelines ------------------------------------------------------------
   timeline: ["milestones", "chronology", "history"],
@@ -48,11 +51,12 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   balance: ["tradeoff", "trade-off", "weigh"],
   relationship: ["ecosystem", "network", "hub"],
   podium: ["ranking", "leaderboard", "winners", "top-three"],
-  decision: ["decision-tree", "choose", "options"],
+  decision: ["choose", "options"],
   spectrum: ["range", "continuum", "scale-range"],
   quadrant: ["four-quadrant", "grid-2x2"],
   venn: ["venn-diagram", "overlap", "sets", "intersection"],
   "pricing-tiers": ["pricing", "plans", "pricing-table", "packages"],
+  "decision-tree": ["decision-flow", "yes-no", "branching", "choice-tree"],
 
   // ---- Business Frameworks --------------------------------------------------
   swot: ["swot-analysis", "strengths-weaknesses"],
@@ -62,7 +66,9 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   bullseye: ["concentric", "priorities", "rings"],
   funnel: ["sales-funnel", "conversion-funnel", "pipeline"],
   flywheel: ["momentum", "growth-loop", "virtuous-cycle", "growth-engine"],
+  okr: ["okrs", "objectives", "goal-tree", "key-results"],
   "value-chain": ["porter-value-chain", "chevron-process", "delivery-chain"],
+  "tug-of-war": ["force-field", "push-pull", "tension"],
 
   // ---- Brainstorming / Parts of a whole -------------------------------------
   mindmap: ["mind-map", "brainstorm", "topics"],

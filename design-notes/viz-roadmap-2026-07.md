@@ -29,7 +29,7 @@ declared on the def.
 6. **`pricing-tiers`** — 2–4 plan cards, feature bullets, one `highlight: true`
    tier lifted/accented. Data: `tier "Pro" 29 { item "SSO"; item "API" }`.
 
-## Tier 2 — strong candidates
+## Tier 2 — SHIPPED 2026-07-12 in 0.5.0 (all six)
 
 7. **`okr` / `goal-tree`** — objective node branching into key results with
    progress bars (`item "NPS > 60" 0.7`). Values drive bar fill; `showValues`
@@ -57,7 +57,7 @@ declared on the def.
 18. **`bullet-chart`** — classic KPI-vs-target bars (complements `performance`).
 19. **`magnet`** — attraction/retention: horseshoe magnet pulling item chips.
 
-## Polish pass on existing templates
+## Polish pass — DONE 2026-07-12 in 0.5.0 (all four below)
 
 `vision` and `root-causes` were reworked in July 2026 (stepped silhouette +
 figure + ascent arrow + light rays; scalloped canopy + per-cause colored roots

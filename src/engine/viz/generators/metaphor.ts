@@ -261,74 +261,88 @@ function gapSpanGenerator(variant: "hurdles" | "planks") {
   return (spec: VizSpec, ctx: VizContext): void => {
     const items = itemsOf(spec, "item", "step", "challenge", "plank");
     const n = Math.max(items.length, 1);
-    const archW = variant === "planks" ? 190 : 212;
-    const gap = 14;
-    const W = n * archW + (n - 1) * gap;
-    const base = 380;
     const from = spec.items.find((i) => i.kind === "from");
     const to = spec.items.find((i) => i.kind === "to");
     const action = optStr(spec.options, "action");
-    // open panels (colored outline, no fill) with gently wavy tops and a
-    // concave arch cut into the bottom edge — the negative space under the
-    // row reads as bridge arches.
+
+    // a literal gap: two cliff platforms with a plank bridge arched across it,
+    // the steps as numbered stones on the deck
+    const cliffW = 190;
+    const gapW = Math.max(370, n * 132);
+    const W = cliffW * 2 + gapW;
+    const topY = 240;
+    const botY = 404;
+    const bow = variant === "planks" ? 84 : 64;
+
+    const cliff = (edgeX: number, dir: 1 | -1): void => {
+      // top surface out to the diagram edge
+      ctx.line([[dir === 1 ? -36 : edgeX, topY], [dir === 1 ? edgeX : W + 36, topY]], { color: ctx.ink, width: 2.6 });
+      // ragged face dropping into the gap
+      const pts: Array<[number, number]> = [[edgeX, topY]];
+      for (let k = 1; k <= 6; k++) pts.push([edgeX - dir * Math.abs(jit(k * (dir + 3), 10)), topY + (botY - topY) * (k / 6)]);
+      ctx.line(pts, { color: ctx.ink, width: 2.2 });
+      // hatch ticks on the face
+      for (let k = 0; k < 5; k++) {
+        const hy = topY + 24 + k * 28;
+        ctx.line([[edgeX - dir * (8 + (k % 2) * 5), hy], [edgeX - dir * (26 + (k % 3) * 7), hy + 11]], { color: ctx.mutedInk, width: 1.4 });
+      }
+    };
+    cliff(cliffW, 1);
+    cliff(W - cliffW, -1);
+    // chasm depth marks
+    for (const fx of [0.28, 0.5, 0.72]) {
+      const gx = cliffW + gapW * fx;
+      ctx.line([[gx, botY - 40], [gx, botY - 4]], { color: ctx.mutedInk, width: 1.3, dash: true });
+    }
+
+    // from / to stand ON the cliffs
+    const placeSide = (it: VizItem, cx: number): void => {
+      if (it.icon) ctx.icon(it.icon, cx, topY - 118, 34, ctx.ink);
+      ctx.labelBlock(it.label, it.detail, cx, topY - 18, { color: ctx.ink, align: "center", maxW: cliffW - 26, vAnchor: "bottom", size: 19 });
+    };
+    if (from) ctx.item(from.id, () => placeSide(from, cliffW / 2));
+    if (to) ctx.item(to.id, () => placeSide(to, W - cliffW / 2));
+
+    // arched plank deck spanning the gap
+    const x0 = cliffW - 8;
+    const x1 = W - cliffW + 8;
+    const deck = (t: number): [number, number] => {
+      const x = lerp(x0, x1, t);
+      const y = topY + 2 - Math.sin(Math.PI * t) * bow;
+      return [x, y];
+    };
+    const topLine: Array<[number, number]> = [];
+    const botLine: Array<[number, number]> = [];
+    for (let s = 0; s <= 30; s++) {
+      const [px, py] = deck(s / 30);
+      topLine.push([px, py]);
+      botLine.push([px, py + 10]);
+    }
+    ctx.line(topLine, { color: ctx.ink, width: 2.4, id: ctx.uid("deck") });
+    ctx.line(botLine, { color: ctx.ink, width: 2 });
+    for (let s = 1; s < 30; s += 2) {
+      const [px, py] = deck(s / 30);
+      ctx.line([[px, py], [px, py + 10]], { color: ctx.mutedInk, width: 1.3 });
+    }
+
+    // the steps: numbered stones on the deck, labels staggered above
     items.forEach((item, i) =>
       ctx.item(item.id, () => {
-      const role = ctx.role(i, { n, color: item.color });
-      const stroke = roleStroke(ctx, role);
-      const x = i * (archW + gap);
-      const mid = (n - 1) / 2;
-      const t = n === 1 ? 0 : (i - mid) / Math.max(mid, 0.5); // -1 (left) … 1 (right)
-      const h = (variant === "planks" ? 276 : 264) + 78 * Math.sin((Math.PI * (i + 0.5)) / n);
-      const top = base - h;
-      // outer panels' tops tilt up toward the diagram center; central panels bow up
-      const tilt = 32 * Math.abs(t);
-      const topL = top + (t < 0 ? tilt : 0);
-      const topR = top + (t > 0 ? tilt : 0);
-      const bow = 24 * Math.max(0, 1 - Math.abs(t) * 1.2);
-      const archDepth = 40 + 24 * Math.max(0, 1 - Math.abs(t)); // deeper arch mid-row
-      const pts: Array<[number, number]> = [
-        [x, base],
-        [x, topL],
-      ];
-      // wavy top edge, left → right (small sine wobble over the tilt/bow line)
-      for (let s = 1; s <= 9; s++) {
-        const u = s / 10;
-        pts.push([x + archW * u, lerp(topL, topR, u) - Math.sin(Math.PI * u) * bow + Math.sin(u * 5 + i * 2) * 3]);
-      }
-      pts.push([x + archW, topR], [x + archW, base]);
-      // concave arch cut into the bottom edge, right → left
-      for (let s = 1; s <= 9; s++) {
-        const u = s / 10;
-        pts.push([x + archW * (1 - u), base - Math.sin(Math.PI * u) * archDepth]);
-      }
-      ctx.poly(pts, { stroke, fill: null, fillStyle: "none", strokeWidth: 2.2, roughness: ctx.preset.roughness }, { id: ctx.uid(item.id) });
-      const cxA = x + archW / 2;
-      ctx.label(String(i + 1), cxA, top + 46, { size: 28, color: role.color, weight: 700, font: "heading" });
-      ctx.label(ctx.wrap(item.label, archW - 32, 19, "heading", 3), cxA, top + 96, {
-        size: 19,
-        color: role.color,
-        weight: ctx.preset.fonts.headingWeight,
-        font: "heading",
-      });
-      if (item.detail) {
-        ctx.label(ctx.wrap(item.detail, archW - 36, 14, "body", 5), cxA, top + 128, { size: 14, color: ctx.ink, vAnchor: "top" });
-      }
-      if (item.icon) ctx.icon(item.icon, cxA, base - archDepth - 30, 34, role.color);
+        const role = ctx.role(i, { n, color: item.color });
+        const [px, py] = deck((i + 1) / (n + 1));
+        const D = 44;
+        ctx.shape("circle", px - D / 2, py - 6 - D, D, D, role, { id: ctx.uid(item.id) });
+        if (item.icon) ctx.icon(item.icon, px, py - 6 - D / 2, 24, role.textColor);
+        else ctx.label(String(i + 1), px, py - 6 - D / 2, { size: 20, color: role.textColor, weight: 700, font: "heading" });
+        // two-row stagger keeps neighboring labels clear of each other
+        const row = i % 2;
+        const anchorY = py - D - 18 - row * 64;
+        if (row) ctx.line([[px, py - D - 12], [px, anchorY + 8]], { color: ctx.preset.edge, width: 1.3 });
+        ctx.labelBlock(item.label, item.detail, px, anchorY, { color: role.color, align: "center", maxW: 168, vAnchor: "bottom" });
       }),
     );
-    // gray from/to boxes fully clear below the OUTER panels
-    const boxW = archW + 4;
-    const boxH = 96;
-    const boxY = base + 26;
-    const placeBox = (it: VizItem, cx: number): void => {
-      ctx.shape("round-rectangle", cx - boxW / 2, boxY, boxW, boxH, { stroke: ctx.mutedInk, fill: null, fillStyle: "none", strokeWidth: 1.6, roughness: ctx.preset.roughness }, { id: ctx.uid(it.id) });
-      ctx.labelBlock(it.label, it.detail, cx, boxY + boxH / 2, { color: ctx.ink, align: "center", maxW: boxW - 28, size: 19 });
-    };
-    if (from) ctx.item(from.id, () => placeBox(from, archW / 2));
-    if (to) ctx.item(to.id, () => placeBox(to, W - archW / 2));
-    // action caption below the from/to boxes so it's always clear of them
-    // (at 2 steps the boxes meet in the middle, so a centered caption collides)
-    if (action) ctx.label(ctx.wrap(action, W - 40, 26, "heading", 2), W / 2, boxY + boxH + 30, { size: 26, color: ctx.ink, weight: 700, font: "heading" });
+
+    if (action) ctx.label(ctx.wrap(action, W - 60, 22, "heading", 2), W / 2, botY + 40, { size: 22, color: ctx.ink, weight: 700, font: "heading" });
   };
 }
 
@@ -498,6 +512,26 @@ registerViz({
       wall.push([px + jit(s, 5) * ragged, py + jit(s + 11, 4) * ragged]);
     }
     ctx.line(wall, { color: ctx.ink, width: 2.4, id: ctx.uid("pit") });
+    // depth hatching just inside the walls so the pit reads deep
+    for (let k = 0; k < 9; k++) {
+      const t = 0.1 + (0.8 * k) / 8;
+      const [px, py] = wallPt(t);
+      const inw = px < pitCx ? 1 : -1;
+      ctx.line(
+        [
+          [px + inw * 6, py - 4],
+          [px + inw * 21, py - 15],
+        ],
+        { color: ctx.mutedInk, width: 1.4 },
+      );
+    }
+    // a figure at the rim, peering in — someone is about to fall for this
+    const fx = pitL - 52;
+    ctx.shape("circle", fx + 2, -76, 16, 16, { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 2, roughness: ctx.preset.roughness });
+    ctx.line([[fx + 8, -60], [fx, -28]], { color: ctx.ink, width: 2.2 }); // torso leaning toward the pit
+    ctx.line([[fx + 5, -48], [fx + 26, -38]], { color: ctx.ink, width: 2 }); // arm pointing in
+    ctx.line([[fx, -28], [fx - 11, 0]], { color: ctx.ink, width: 2.2 }); // legs
+    ctx.line([[fx, -28], [fx + 8, 0]], { color: ctx.ink, width: 2.2 });
     // ground = grass line either side of the mouth + a couple of tufts
     const grass = ctx.role(0, { n: 2 }).color;
     ctx.line(
@@ -650,40 +684,44 @@ registerViz({
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "racer", "kart");
     const n = Math.max(items.length, 1);
-    const trackY = 240;
+    const laneH = 96;
     const kw = 112;
     const kh = 58;
-    const fronts = items.map((_, i) => n * 150 - i * 158 - Math.abs(jit(i, 14)));
-    const startX = (fronts.length ? Math.min(...fronts) : 150) - kw - 60;
-    const gate1 = n * 150 + 60;
-    const gate2 = gate1 + 72;
-    // track line with arrowhead, then the finish gate
-    ctx.arrow(startX, trackY, gate2 + 96, trackY, { color: ctx.ink, width: 2.4 });
-    const postTop = trackY - 128;
-    ctx.line(
-      [
-        [gate1, trackY],
-        [gate1, postTop],
-      ],
-      { color: ctx.ink, width: 2.4 },
-    );
-    ctx.line(
-      [
-        [gate2, trackY],
-        [gate2, postTop],
-      ],
-      { color: ctx.ink, width: 2.4 },
-    );
-    const banner = ctx.role(0, { neutral: true });
-    ctx.shape("rectangle", gate1 - 14, postTop - 34, gate2 - gate1 + 28, 34, banner);
-    ctx.label(optStr(spec.options, "finish") ?? "FINISH", (gate1 + gate2) / 2, postTop - 17, { size: 16, color: banner.textColor, weight: 700, font: "heading" });
-    // karts, first at the line
+    // name column on the left, one lane per racer, checkered strip at the line
+    const labelW = 52 + Math.max(120, ...items.map((it) => ctx.measureLabelBlock(it.label, it.detail, { maxW: 170, size: 18 }).w));
+    const finishX = labelW + 470;
+    const H = n * laneH;
+
+    // lane separators (solid track edges, dashed inner lines)
+    for (let i = 0; i <= n; i++) {
+      const y = i * laneH;
+      if (i === 0 || i === n) ctx.line([[labelW - 16, y], [finishX + 54, y]], { color: ctx.ink, width: 2.2 });
+      else ctx.line([[labelW - 16, y], [finishX + 54, y]], { color: ctx.mutedInk, width: 1.3, dash: true });
+    }
+
+    // checkered finish strip across every lane + the banner word
+    const sq = 12;
+    for (let r = 0; r < Math.ceil(H / sq); r++) {
+      for (let c = 0; c < 2; c++) {
+        if ((r + c) % 2 === 0) {
+          ctx.shape("rectangle", finishX + c * sq, r * sq, sq, Math.min(sq, H - r * sq), { stroke: ctx.ink, fill: ctx.ink, fillStyle: "solid", strokeWidth: 0.8, roughness: 0.5 });
+        }
+      }
+    }
+    ctx.shape("rectangle", finishX, 0, sq * 2, H, { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 1.6, roughness: ctx.preset.roughness });
+    ctx.label(optStr(spec.options, "finish") ?? "FINISH", finishX + sq, -22, { size: 16, color: ctx.ink, weight: 700, font: "heading" });
+
+    // karts, ranked: first place noses the line, each next further back
     items.forEach((item, i) =>
       ctx.item(item.id, () => {
-      const role = ctx.role(i, { n, color: item.color });
-      const front = fronts[i];
-      ctx.path(KART_D, 102, 60, front - kw, trackY - kh + 7, kw, kh, role, { id: ctx.uid(item.id) });
-      ctx.labelBlock(item.label, item.detail, front - kw / 2, trackY + 28, { color: role.color, align: "center", maxW: 150, vAnchor: "top" });
+        const role = ctx.role(i, { n, color: item.color });
+        const cy = i * laneH + laneH / 2;
+        const front = finishX - 22 - i * 82 - Math.abs(jit(i, 12));
+        ctx.path(KART_D, 102, 60, front - kw, cy - kh / 2 + 4, kw, kh, role, { id: ctx.uid(item.id) });
+        // speed streaks trailing the kart
+        ctx.line([[front - kw - 30, cy - 8], [front - kw - 10, cy - 8]], { color: ctx.mutedInk, width: 1.6 });
+        ctx.line([[front - kw - 22, cy + 7], [front - kw - 5, cy + 7]], { color: ctx.mutedInk, width: 1.6 });
+        ctx.labelBlock(item.label, item.detail, 0, cy, { color: role.color, align: "left", maxW: labelW - 40, size: 18 });
       }),
     );
   },
@@ -806,6 +844,7 @@ registerViz({
     { name: "count", type: "number", description: "upstream circle count, 6-28 (default 16)" },
     { name: "in", type: "string", description: "caption over the wide inlet" },
     { name: "out", type: "string", description: "caption over the outlet" },
+    { name: "neck", type: "string", description: "caption naming the constraint, arrowed at the neck" },
   ],
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item");
@@ -844,6 +883,14 @@ registerViz({
       const by = -clear + ((k * 37.3) % (clear * 2));
       ctx.shape("circle", bx - 6, by - 6, 12, 12, role);
     }
+    // …pile up hard where the pipe narrows (the queue at the constraint)…
+    for (let k = 0; k < 8; k++) {
+      const bx = aEnd - 26 + ((k * 29.3) % (neckL - aEnd + 4));
+      const clear = half(bx) - 12;
+      if (clear < 9) continue;
+      const by = -clear + ((k * 23.7) % (clear * 2));
+      ctx.shape("circle", bx - 6, by - 6, 12, 12, role);
+    }
     // …go single-file through the neck…
     for (const [ex, ey] of [
       [258, -4],
@@ -868,6 +915,13 @@ registerViz({
     const outLabel = optStr(spec.options, "out");
     if (inLabel) ctx.label(inLabel, -47, -halfIn - 24, { size: 16, color: ctx.ink, maxW: 150 });
     if (outLabel) ctx.label(outLabel, W + 47, -halfOut - 24, { size: 16, color: ctx.ink, maxW: 150 });
+    // name the constraint: an arrow pointing straight at the neck
+    const neckCap = optStr(spec.options, "neck");
+    if (neckCap) {
+      const ncx = (neckL + neckR) / 2;
+      ctx.arrow(ncx, halfNeck + 92, ncx, halfNeck + 18, { color: ctx.ink, width: 2 });
+      ctx.label(ctx.wrap(neckCap, 220, 17, "heading", 2), ncx, halfNeck + 112, { size: 17, color: ctx.ink, weight: 700, font: "heading", vAnchor: "top" });
+    }
   },
 });
 

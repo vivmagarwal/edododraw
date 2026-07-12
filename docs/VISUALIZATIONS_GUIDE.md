@@ -1,6 +1,6 @@
 # Visualizations Guide (`viz` templates)
 
-EDodoDraw ships **68 visualization templates** — funnels, pyramids, venns, charts, timelines, mindmaps, business frameworks, visual metaphors — each generated **100% from text**. A `viz` block declares *data*; the template turns it into ordinary diagram elements, so everything else in EDodoDraw (camera beats, annotations, direct editing, export, style presets) works on visualizations exactly as on hand-drawn scenes.
+EDodoDraw ships **74 visualization templates** — funnels, pyramids, venns, charts, timelines, mindmaps, business frameworks, visual metaphors — each generated **100% from text**. A `viz` block declares *data*; the template turns it into ordinary diagram elements, so everything else in EDodoDraw (camera beats, annotations, direct editing, export, style presets) works on visualizations exactly as on hand-drawn scenes.
 
 > Browse every template live (in every style) on the site's **Visualizations** page. Styling is a separate axis — see [STYLES_GUIDE.md](STYLES_GUIDE.md).
 
@@ -76,6 +76,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `journey` (`roadmap`) | `item` / `stage` — one ribbon-road segment per stage | — |
 | `cycle` (`loop`) | `item` / `phase` — circles on a ring with swept arrows (3–4 big nodes; 5+ switches to dots) | — |
 | `gantt` | `task "Name" start end` | `scale: ["Wk 1", …]`, `deadline: n`, `deadlineLabel:` |
+| `kanban` (`board`) | `column "Doing" { item "Checkout flow" }` — cards per column | — |
 
 ### Data
 
@@ -93,6 +94,8 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `dumbbell-horizontal` (`progress-bars`) | `item "Docs" 80 "80%"` — track + value bar + tag | — |
 | `sankey` | `flow "Coal" -> "Industry" 25` | — |
 | `radar` (`spider`) | `axis "Security"` + `series "Today" [3, 4, 2]` (or plain `item "X" 3`) | `max:` scale ceiling |
+| `heatmap` (`risk-matrix`) | `row "API" [1, 3, 5]` intensity cells | `cols: ["Q1", …]`, `max:`, `showValues:` |
+| `slope-chart` (`slopegraph`) | `item "Billing" 340 120` — before/after per line | `left:`, `right:` headers, `showValues:` |
 
 ### Timelines
 
@@ -117,6 +120,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `quadrant` (`2x2`, `matrix`) | 4 `item`s in order TL, TR, BL, BR (+ children bullets) | `xLabels: [neg, pos]`, `yLabels: [neg, pos]` |
 | `venn` | `set "Name" "desc" { icon }` (2–7 sets) + `overlap all "Label"` / `overlap [a, b] "Label"` | — |
 | `pricing-tiers` (`pricing`, `plans`) | `tier "Pro" 29 { highlight: true; item "SSO" }` — price + feature list cards | `period:`, `currency:`, `showValues:` |
+| `decision-tree` (`yes-no`) | nested `item`s branching left→right; `{ when: "yes" }` labels the edge | — |
 
 ### Business Frameworks
 
@@ -130,6 +134,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `funnel` | `item "Stage" [value]` | `input:`, `output:` captions |
 | `flywheel` (`growth-loop`) | `item "More sellers" { icon: users }` ring segments + optional `center` entry | `center:` wheel label |
 | `value-chain` (`chevron-process`) | `item "Build" { icon: wrench }` chevrons + `support "…"` bars above | — |
+| `okr` (`goal-tree`) | `kr "NPS above 60" 0.72` progress cards under one objective | `objective:`, `showValues:` |
 
 ### Brainstorming / Parts of a whole
 
@@ -165,6 +170,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `dialogue` (`conversation`) | `msg "…" { speaker: a\|b }` bubbles | `a:`, `b:` speaker names |
 | `prism` | `input "One thing" { icon }` + `item` outputs | — |
 | `pillar` (`pillars`) | `item "Trust" "description" { icon }` columns | — |
+| `tug-of-war` (`force-field`) | two `side "Name" [weight] { item "force" … }` teams | `tilt: left\|right\|balanced` |
 
 ---
 
@@ -234,6 +240,12 @@ EDodoDraw is a **text→visualization generator**: it renders whatever you give 
 | `milestone-path` | 3–6 milestones | + one `goal` flag; labels alternate sides of the trail |
 | `value-chain` | 3–6 chevrons | + 0–3 `support` bars above the band |
 | `pricing-tiers` | 2–4 tiers × ≤6 features | one `highlight: true` tier lifts + gets the badge |
+| `okr` | 2–4 key results | values ≤1 read as fractions, else percentages |
+| `kanban` | 2–4 columns × 1–6 cards | panels share the tallest column's height |
+| `decision-tree` | 2–3 branches, depth ≤3 | one top-level item = the root; several = title becomes the root |
+| `heatmap` | 2–7 rows × 2–8 cols | missing cells render dashed; intensity ramps to `max:` |
+| `slope-chart` | 2–6 lines | close labels self-space vertically |
+| `tug-of-war` | **exactly 2 sides** × 0–4 forces | marker drifts toward the heavier side (`value` or force count) |
 
 **Text length.** Labels are single-line-ish (they wrap, but keep them a few words). Descriptions (`detail:` / trailing string) wrap to a column and the layout expands to fit — but on the compact-side-label templates (`funnel`, `pyramid`, `bullseye`, `spectrum`, `decision`) a stage/level reads best with a **name + one short sentence**; multi-sentence prose is supported but makes those layouts tall. Narrative templates (`sequence`, `journey`, `dialogue`, `iceberg`, `problem-solution`, `transformation`, `root-causes`) comfortably hold 1–2 sentences per item.
 

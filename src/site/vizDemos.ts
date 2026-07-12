@@ -70,6 +70,23 @@ viz gantt "Release Plan" {
   task "Rollout" 4.5 5
 }`),
 
+  d("kanban", "Process", "Kanban", "Named columns of cards — the task board.", `
+viz kanban "Sprint 12" {
+  column "To do" {
+    item "Rate limiting"
+    item "Billing webhooks"
+    item "Dark mode"
+  }
+  column "Doing" {
+    item "Checkout flow" { icon: fire }
+    item "SSO login"
+  }
+  column "Done" {
+    item "Search rework" { icon: check }
+    item "Onboarding tour" { icon: check }
+  }
+}`),
+
   // ---- Data ------------------------------------------------------------------
   d("bar", "Data", "Bar chart", "Columns with per-category colors and value labels.", `
 viz bar "Revenue by Quarter" {
@@ -182,6 +199,24 @@ viz radar "Platform Assessment" {
   axis "DX"
   series "Today" [3, 4, 2, 3, 2]
   series "Target" [5, 4, 4, 4, 5]
+}`),
+
+  d("heatmap", "Data", "Heatmap", "Intensity-shaded matrix cells — risk matrices, skills grids.", `
+viz heatmap "Incidents per Service" {
+  cols: ["Q1", "Q2", "Q3", "Q4"]
+  row "API" [3, 5, 2, 1]
+  row "Web" [1, 2, 1, 0]
+  row "Billing" [4, 6, 5, 2]
+  row "Auth" [0, 1, 3, 1]
+}`),
+  d("slope-chart", "Data", "Slope chart", "Before → after lines, one per series.", `
+viz slope-chart "Ticket Volume" {
+  left: "2026"
+  right: "2027"
+  item "Billing" 340 120
+  item "Onboarding" 210 190
+  item "API" 90 160
+  item "Other" 150 60
 }`),
 
   // ---- Timelines --------------------------------------------------------------
@@ -322,6 +357,17 @@ viz pricing-tiers "Plans" {
   }
 }`),
 
+  d("decision-tree", "Comparison", "Decision tree", "Questions branching through labeled edges to outcomes.", `
+viz decision-tree {
+  item "Build or buy?" {
+    item "Core to product?" { when: "build" } {
+      item "Build in-house" { when: "yes", icon: wrench }
+      item "Open source + contribute" { when: "no", icon: globe }
+    }
+    item "Buy a vendor" { when: "buy", icon: dollar }
+  }
+}`),
+
   // ---- Business Frameworks ------------------------------------------------------
   d("swot", "Business Frameworks", "SWOT", "Strengths, weaknesses, opportunities, threats.", `
 viz swot "SWOT — Acme Corp" {
@@ -399,6 +445,13 @@ viz value-chain "How We Deliver" {
   item "Build" { icon: wrench }
   item "Ship" { icon: rocket }
   item "Support" { icon: heart }
+}`),
+
+  d("okr", "Business Frameworks", "OKR", "One objective branching into key results with progress bars.", `
+viz okr "Objective: Best-loved dev tool" {
+  kr "NPS above 60" 0.72
+  kr "P95 latency under 200ms" 0.45
+  kr "10k weekly active teams" 0.31
 }`),
 
   // ---- Brainstorming ---------------------------------------------------------------
@@ -505,6 +558,7 @@ viz performance "Quarterly KPIs" {
 viz bottleneck "Review Bottleneck" {
   in: "30 PRs/week"
   out: "8 merged"
+  neck: "Two reviewers"
 }`),
   d("hole", "Visual Metaphors", "Hole", "The pit — and the ladder out of it.", `
 viz hole "Technical Debt Trap" {
@@ -551,6 +605,18 @@ viz pillar "Company Pillars" {
   item "Craft" "Quality in every detail" { icon: star }
   item "Pace" "Ship and learn weekly" { icon: rocket }
   item "Care" "Customers and each other" { icon: heart }
+}`),
+
+  d("tug-of-war", "Visual Metaphors", "Tug of war", "Two teams pulling — the marker drifts toward the stronger side.", `
+viz tug-of-war "Ship now vs. polish" {
+  side "Ship now" 3 {
+    item "Market window closing"
+    item "Competitor launched"
+    item "Team is burning out"
+  }
+  side "Keep polishing" 1 {
+    item "Two rough edges left"
+  }
 }`),
 
   // ---- Cause and Effect ------------------------------------------------------------------------
