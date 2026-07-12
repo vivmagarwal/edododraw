@@ -452,6 +452,15 @@ viz funnel "Sales Funnel" {
   item "Won" 38
 }`),
 
+  d("hex-cluster", "Business Frameworks", "Hex cluster", "A honeycomb — one core hexagon ringed by themed cells.", `
+viz hex-cluster "Team Health" {
+  center "Team Health" { icon: heart }
+  item "Clarity" { icon: target }
+  item "Trust" { icon: handshake }
+  item "Pace" { icon: rocket }
+  item "Craft" { icon: gear }
+  item "Growth" { icon: trend-up }
+}`),
   d("flywheel", "Business Frameworks", "Flywheel", "A self-reinforcing momentum loop of ring segments.", `
 viz flywheel "Marketplace Flywheel" {
   center: "Growth"
@@ -534,6 +543,14 @@ viz personas "The Launch Team" {
   item "The Skeptic" "Asks the hard questions" { pose: thinking, emotion: thinking }
   item "The Champion" "Sells the vision" { pose: cheering, prop: star }
   item "The Guide" "Points the way" { pose: pointing, emotion: happy }
+}`),
+  d("head-thoughts", "Brainstorming", "Head thoughts", "A profile-head container — what's going on in someone's mind.", `
+viz head-thoughts "Inside the Customer's Head" {
+  who: "Your customer"
+  item "Will this save me time?" { icon: clock }
+  item "Can I trust it?" { icon: shield }
+  item "What does it cost?" { icon: dollar }
+  item "Is it easy to leave?" { icon: key }
 }`),
   d("quote", "Brainstorming", "Quote", "A big hand-lettered quote with attribution and a presenting character.", `
 viz quote "The best way to predict the future is to invent it." {

@@ -199,3 +199,102 @@ registerViz({
     );
   },
 });
+
+// ---- head-thoughts --------------------------------------------------------------
+
+registerViz({
+  name: "head-thoughts",
+  category: "Brainstorming",
+  summary: "A profile-head container — what's going on in someone's mind.",
+  entryKinds: ["item", "thought"],
+  options: [{ name: "who", type: "string", description: "caption under the head" }],
+  sweetSpot: { min: 2, max: 5 },
+  generate(spec: VizSpec, ctx: VizContext) {
+    const items = itemsOf(spec, "item", "thought").slice(0, 6);
+    const n = Math.max(items.length, 1);
+    // side-profile head (facing right), designed in a 300×360 box
+    const HEAD_D =
+      "M150 10 C 220 10 268 58 272 128 C 274 162 264 180 276 196 L 292 218 L 272 226 " +
+      "L 274 252 C 274 268 260 274 240 270 L 218 266 C 214 292 206 318 182 340 L 96 340 " +
+      "C 60 300 30 260 30 180 C 30 80 80 10 150 10 Z";
+    const W = 330;
+    const H = 396;
+    ctx.path(HEAD_D, 300, 360, 0, 0, W, H, { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 2.6, roughness: ctx.preset.roughness }, { id: ctx.uid("head") });
+
+    // thoughts stacked inside the cranium
+    const slots: Array<[number, number]> = [
+      [142, 90],
+      [146, 156],
+      [142, 222],
+      [134, 288],
+      [148, 122],
+      [146, 190],
+    ];
+    const order = n <= 4 ? [0, 1, 2, 3] : [4, 5, 2, 3, 0, 1];
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n, color: item.color });
+        const [sx, sy] = slots[n <= 4 ? order[i] : order[i % order.length]];
+        const px = (sx / 300) * W;
+        const py = (sy / 360) * H;
+        if (item.icon) {
+          ctx.icon(item.icon, px - 62, py, 24, role.color);
+          ctx.label(ctx.wrap(item.label, 118, 14, "heading", 2), px - 44, py, { size: 14, color: role.color, weight: ctx.preset.fonts.headingWeight, font: "heading", align: "left" });
+        } else {
+          ctx.shape("circle", px - 66, py - 4, 8, 8, { stroke: role.color, fill: role.color, fillStyle: "solid", strokeWidth: 1, roughness: 0.5 });
+          ctx.label(ctx.wrap(item.label, 128, 14, "heading", 2), px - 50, py, { size: 14, color: role.color, weight: ctx.preset.fonts.headingWeight, font: "heading", align: "left" });
+        }
+      }),
+    );
+    const who = optStr(spec.options, "who");
+    if (who) ctx.label(who, W * 0.42, H + 26, { size: 17, color: ctx.mutedInk, weight: 700, font: "heading" });
+  },
+});
+
+// ---- hex-cluster ----------------------------------------------------------------
+
+registerViz({
+  name: "hex-cluster",
+  category: "Business Frameworks",
+  summary: "A honeycomb — one core hexagon ringed by up to six themed cells.",
+  entryKinds: ["item", "cell", "center"],
+  options: [{ name: "center", type: "string", description: "core cell label (or use a `center` entry)" }],
+  sweetSpot: { min: 3, max: 6 },
+  generate(spec: VizSpec, ctx: VizContext) {
+    const items = itemsOf(spec, "item", "cell").slice(0, 6);
+    const n = Math.max(items.length, 1);
+    const centerEntry = spec.items.find((i) => i.kind === "center");
+    const centerLabel = centerEntry?.label ?? optStr(spec.options, "center") ?? spec.title;
+    if (!centerEntry && centerLabel === spec.title && spec.title) ctx.titleHandled = true;
+
+    const w = 172;
+    const h = 150;
+    const ringR = h * 1.06;
+    const cell = (cx: number, cy: number, role: ReturnType<typeof ctx.role>, id?: string) =>
+      ctx.shape("hexagon", cx - w / 2, cy - h / 2, w, h, role, { id });
+
+    // core
+    const coreRole = ctx.role(0, { neutral: true });
+    const drawCore = () => {
+      cell(0, 0, coreRole, ctx.uid(centerEntry?.id ?? "core"));
+      if (centerEntry?.icon) ctx.icon(centerEntry.icon, 0, -22, 30, coreRole.textColor);
+      ctx.label(ctx.wrap(centerLabel ?? "Core", w - 60, 17, "heading", 3), 0, centerEntry?.icon ? 14 : 0, { size: 17, color: coreRole.textColor, weight: 700, font: "heading" });
+    };
+    if (centerEntry) ctx.item(centerEntry.id, drawCore);
+    else drawCore();
+
+    // ring cells at 60° steps, starting top
+    items.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = ctx.role(i, { n, color: item.color });
+        const ang = -90 + (i * 360) / Math.max(n, 3);
+        const cx = Math.cos((ang * Math.PI) / 180) * ringR * 1.35;
+        const cy = Math.sin((ang * Math.PI) / 180) * ringR;
+        cell(cx, cy, role, ctx.uid(item.id));
+        if (item.icon) ctx.icon(item.icon, cx, cy - 26, 26, role.textColor);
+        ctx.label(ctx.wrap(item.label, w - 56, 15, "heading", 3), cx, cy + (item.icon ? 12 : 0), { size: 15, color: role.textColor, weight: ctx.preset.fonts.headingWeight, font: "heading" });
+        if (item.detail) ctx.label(ctx.wrap(item.detail, w + 10, 13, "body", 2), cx, cy + h / 2 + 20, { size: 13, color: ctx.mutedInk, role: "detail" });
+      }),
+    );
+  },
+});

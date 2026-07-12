@@ -347,6 +347,16 @@ const BUILDERS: Record<string, () => Variation[]> = {
       return block("fishbone", "Why It Breaks", range(n).map((i) => `  bone "${cats[i]}" {\n    item "${NAMES[i * 2]}"\n    item "${NAMES[i * 2 + 1]}"\n  }`));
     }),
 
+  "head-thoughts": () =>
+    counts([2, 4, 5], "thoughts", (n) => {
+      const th = ["Will this save time?", "Can I trust it?", "What does it cost?", "Is it easy to leave?", "Who else uses it?"];
+      return block("head-thoughts", "In Their Head", [`  who: "The buyer"`, ...range(n).map((i) => `  item "${th[i]}" { icon: ${ICONS[i]} }`)]);
+    }),
+  "hex-cluster": () =>
+    counts([3, 5, 6], "cells", (n, long) =>
+      block("hex-cluster", "Core Values", [`  center "Values" { icon: heart }`, ...itemLines(n, { icon: true, detail: long, long })]),
+    6),
+
   "tug-of-war": () => [
     { label: "Left winning", code: block("tug-of-war", "Ship now vs. polish", [`  side "Ship now" 3 {\n    item "Market window closing"\n    item "Team is burning out"\n  }`, `  side "Keep polishing" 1 {\n    item "Two rough edges left"\n  }`]) },
     { label: "Balanced", code: block("tug-of-war", "Rewrite vs. refactor", ["  tilt: balanced", `  side "Rewrite" {\n    item "Clean slate"\n  }`, `  side "Refactor" {\n    item "Keep shipping"\n  }`]) },

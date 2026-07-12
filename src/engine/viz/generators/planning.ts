@@ -382,21 +382,21 @@ registerViz({
 
     const ropeY = 150;
     const midX = 280;
-    const knotX = midX + bias * 120;
+    const knotX = midX + bias * 88; // clamped so the pennant clears the nearest figure
 
     // center reference + rope with a slight sag at the marker knot
     ctx.line([[midX, ropeY - 40], [midX, ropeY + 52]], { color: ctx.mutedInk, width: 1.3, dash: true });
-    ctx.line([[92, ropeY - 4], [knotX, ropeY + 5]], { color: ctx.ink, width: 3 });
-    ctx.line([[knotX, ropeY + 5], [468, ropeY - 4]], { color: ctx.ink, width: 3 });
-    // marker ribbon on the knot
-    ctx.line([[knotX, ropeY + 5], [knotX, ropeY + 34]], { color: ctx.ink, width: 2 });
+    ctx.line([[92, ropeY - 2], [knotX, ropeY + 3]], { color: ctx.ink, width: 2.6 });
+    ctx.line([[knotX, ropeY + 3], [468, ropeY - 2]], { color: ctx.ink, width: 2.6 });
+    // marker pennant hanging from the knot
+    ctx.line([[knotX, ropeY + 3], [knotX, ropeY + 36]], { color: ctx.ink, width: 1.8 });
     ctx.poly(
       [
-        [knotX, ropeY + 12],
-        [knotX + 26, ropeY + 19],
-        [knotX, ropeY + 26],
+        [knotX, ropeY + 14],
+        [knotX + 20, ropeY + 20.5],
+        [knotX, ropeY + 27],
       ],
-      { stroke: ctx.ink, fill: ctx.ink, fillStyle: "solid", strokeWidth: 1.4, roughness: ctx.preset.roughness },
+      { stroke: ctx.ink, fill: ctx.ink, fillStyle: "solid", strokeWidth: 1.2, roughness: 0.7 },
     );
 
     // character-library figures hauling backward (pose "pulling" grips toward
@@ -410,8 +410,8 @@ registerViz({
       ctx.item(side.id, () => {
         const role = ctx.role(si, { n: 2, color: side.color });
         const away = (si === 0 ? -1 : 1) as -1 | 1;
-        figure(si === 0 ? 200 : 360, away, role.color);
-        figure(si === 0 ? 148 : 412, away, role.color);
+        figure(si === 0 ? 202 : 358, away, role.color);
+        figure(si === 0 ? 128 : 432, away, role.color);
         // side label + its forces beneath the team
         const lx = si === 0 ? 40 : 520;
         const align = si === 0 ? "left" : "right";

@@ -1,6 +1,6 @@
 # Visualizations Guide (`viz` templates)
 
-EDodoDraw ships **85 visualization templates** — funnels, pyramids, venns, charts, timelines, mindmaps, business frameworks, visual metaphors — each generated **100% from text**. A `viz` block declares *data*; the template turns it into ordinary diagram elements, so everything else in EDodoDraw (camera beats, annotations, direct editing, export, style presets) works on visualizations exactly as on hand-drawn scenes.
+EDodoDraw ships **87 visualization templates** — funnels, pyramids, venns, charts, timelines, mindmaps, business frameworks, visual metaphors — each generated **100% from text**. A `viz` block declares *data*; the template turns it into ordinary diagram elements, so everything else in EDodoDraw (camera beats, annotations, direct editing, export, style presets) works on visualizations exactly as on hand-drawn scenes.
 
 > Browse every template live (in every style) on the site's **Visualizations** page. Styling is a separate axis — see [STYLES_GUIDE.md](STYLES_GUIDE.md).
 
@@ -150,6 +150,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `bullseye` (`target`) | `item` rings, **outermost first** | — |
 | `funnel` | `item "Stage" [value]` | `input:`, `output:` captions |
 | `flywheel` (`growth-loop`) | `item "More sellers" { icon: users }` ring segments + optional `center` entry | `center:` wheel label |
+| `hex-cluster` (`honeycomb`) | `center "Core"` + `item "Cell" { icon }` hexagons on a ring | `center:` |
 | `value-chain` (`chevron-process`) | `item "Build" { icon: wrench }` chevrons + `support "…"` bars above | — |
 | `okr` (`goal-tree`) | `kr "NPS above 60" 0.72` progress cards under one objective | `objective:`, `showValues:` |
 | `business-model-canvas` (`bmc`) | 9 kind-keyed sections (`value { item "…" }`, `segments`, `costs`, …) | — |
@@ -164,6 +165,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `personas` (`team`, `cast`) | `item "The Builder" "detail" { pose: confident, emotion: happy, prop: wrench }` characters | — |
 | `quote` (`big-quote`) | title = the quote; `by:` attribution; a character presents it | `by:`, `pose:`, `emotion:`, `prop:` |
 | `clouds` (`idea-clouds`) | `item "Theme" "detail" { icon }` scattered thought-cloud islands | — |
+| `head-thoughts` (`in-their-head`) | `item "Will it save time?" { icon }` thoughts inside a profile head | `who:` caption |
 | `list` | `item "Value" "detail" { icon }` — vertical ≤5 items, horizontal 6+ | `orientation:` |
 | `diverge` | question = title + `item` options radiating on block arrows | — |
 | `converge` / `lens` | `item` inputs + `output "Result" { icon }` | — |
@@ -283,6 +285,8 @@ EDodoDraw is a **text→visualization generator**: it renders whatever you give 
 | `quote` | exactly 1 quote | `pose: none` hides the figure |
 | `clouds` | 3–7 clouds | staggered rows sized by the largest cloud |
 | `fishbone` | 2–6 bones × ≤4 causes | bones alternate above/below the spine |
+| `head-thoughts` | 2–5 thoughts | fixed slots inside the cranium |
+| `hex-cluster` | 3–6 cells | + one core; details sit below their cell |
 
 **Text length.** Labels are single-line-ish (they wrap, but keep them a few words). Descriptions (`detail:` / trailing string) wrap to a column and the layout expands to fit — but on the compact-side-label templates (`funnel`, `pyramid`, `bullseye`, `spectrum`, `decision`) a stage/level reads best with a **name + one short sentence**; multi-sentence prose is supported but makes those layouts tall. Narrative templates (`sequence`, `journey`, `dialogue`, `iceberg`, `problem-solution`, `transformation`, `root-causes`) comfortably hold 1–2 sentences per item.
 

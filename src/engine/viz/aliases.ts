@@ -72,6 +72,7 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   "business-model-canvas": ["bmc", "business-canvas", "model-canvas"],
   ecosystem: ["orbits", "stakeholder-map", "ecosystem-map"],
   "value-chain": ["porter-value-chain", "chevron-process", "delivery-chain"],
+  "hex-cluster": ["honeycomb", "hexagon-cluster", "hex-grid"],
   "tug-of-war": ["force-field", "push-pull", "tension"],
 
   // ---- Brainstorming / Parts of a whole -------------------------------------
@@ -79,6 +80,7 @@ export const VIZ_ALIASES: Record<string, string[]> = {
   personas: ["team", "cast", "roles", "characters", "people"],
   quote: ["quotation", "big-quote", "saying", "callout-quote"],
   clouds: ["idea-clouds", "thought-clouds", "sticky-ideas", "scattered-ideas"],
+  "head-thoughts": ["in-their-head", "mind-of", "empathy-map-mind", "whats-on-their-mind"],
   "key-ideas": ["highlights", "takeaways", "key-points"],
   list: ["bullets", "checklist", "items", "bullet-list"],
   diverge: ["diverging", "branch-out", "fan-out"],

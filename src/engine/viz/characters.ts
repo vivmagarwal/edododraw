@@ -111,16 +111,16 @@ registerCharacterPose("cheering", {
   propSize: 0.26,
 });
 registerCharacterPose("running", {
-  lean: 0.10,
+  lean: 0.13,
   emotion: "determined",
-  armL: [[-0.08, 0.31], [0.06, 0.36], [0.16, 0.28]],
-  armR: [[0.10, 0.31], [-0.02, 0.40], [-0.12, 0.34]],
-  legL: [[-0.03, 0.55], [0.14, 0.70], [0.20, 0.90]],
-  legR: [[0.05, 0.55], [-0.10, 0.72], [-0.20, 0.88]],
+  armL: [[0.09, 0.30], [0.24, 0.33], [0.32, 0.24]],
+  armR: [[-0.09, 0.32], [-0.24, 0.40], [-0.30, 0.50]],
+  legL: [[0.05, 0.55], [0.20, 0.74], [0.24, 0.95]],
+  legR: [[-0.05, 0.55], [-0.24, 0.66], [-0.34, 0.58]],
   motion: [
-    [[-0.30, 0.40], [-0.42, 0.40]],
-    [[-0.28, 0.50], [-0.44, 0.50]],
-    [[-0.30, 0.60], [-0.40, 0.60]],
+    [[-0.38, 0.28], [-0.52, 0.28]],
+    [[-0.40, 0.38], [-0.56, 0.38]],
+    [[-0.38, 0.48], [-0.50, 0.48]],
   ],
 });
 registerCharacterPose("confident", {
@@ -144,12 +144,12 @@ registerCharacterPose("thinking", {
 });
 registerCharacterPose("holding-overhead", {
   emotion: "happy",
-  armL: [[-0.10, 0.31], [-0.11, 0.14], [-0.07, 0.015]],
-  armR: [[0.10, 0.31], [0.11, 0.14], [0.07, 0.015]],
+  armL: [[-0.10, 0.31], [-0.17, 0.12], [-0.11, -0.05]],
+  armR: [[0.10, 0.31], [0.17, 0.12], [0.11, -0.05]],
   legL: [[-0.05, 0.55], [-0.11, 0.97]],
   legR: [[0.05, 0.55], [0.11, 0.97]],
-  propAnchor: [0, -0.10],
-  propSize: 0.32,
+  propAnchor: [0, -0.175],
+  propSize: 0.30,
   hands: false,
 });
 registerCharacterPose("shrugging", {
@@ -162,13 +162,12 @@ registerCharacterPose("shrugging", {
   propSize: 0.24,
 });
 registerCharacterPose("pulling", {
-  lean: -0.08,
+  lean: -0.06,
   emotion: "determined",
-  armL: [[-0.08, 0.31], [0.10, 0.36], [0.24, 0.40]],
-  armR: [[0.10, 0.31], [0.22, 0.37], [0.30, 0.42]],
+  armL: [[0.04, 0.33], [0.18, 0.45], [0.28, 0.545]],
+  armR: [[0.10, 0.31], [0.24, 0.46], [0.33, 0.555]],
   legL: [[-0.05, 0.55], [-0.20, 0.75], [-0.26, 0.96]],
   legR: [[0.05, 0.55], [-0.04, 0.78], [-0.06, 0.97]],
-  hands: false,
 });
 registerCharacterPose("peering", {
   lean: 0.07,
@@ -266,8 +265,8 @@ export function drawCharacter(ctx: VizContext, cx: number, groundY: number, h: n
   if (emotion === "confused") stroke([[hx + hr + 0.015 * h, hy - 0.04 * h], [hx + hr + 0.035 * h, hy + 0.01 * h]]);
 
   // neck + vest torso (outline, not a bare stick)
-  ctx.line([P([lean * 0.5, 0.21]), P([0, 0.25])], { color, width: lw, z });
-  ctx.shape("round-rectangle", X(-0.10), Y(0.25), 0.20 * h, 0.30 * h, { stroke: color, fill: null, fillStyle: "none", strokeWidth: lw, roughness: Math.min(1.1, ctx.preset.roughness), roundness: Math.max(3, h * 0.03) }, { z, role: "character" });
+  ctx.line([P([lean * 0.9, 0.205]), P([lean * 0.25, 0.25])], { color, width: lw, z });
+  ctx.shape("round-rectangle", Math.min(X(-0.10), X(0.10)), Y(0.25), 0.20 * h, 0.30 * h, { stroke: color, fill: null, fillStyle: "none", strokeWidth: lw, roughness: Math.min(1.1, ctx.preset.roughness), roundness: Math.max(3, h * 0.03) }, { z, role: "character" });
 
   // limbs + blobs
   const limb = (pts: Pt[], hand: boolean) => {
@@ -282,9 +281,11 @@ export function drawCharacter(ctx: VizContext, cx: number, groundY: number, h: n
   limb(pose.armR, showHands);
   limb(pose.legL, false);
   limb(pose.legR, false);
-  // feet ticks
+  // feet ticks (grounded feet only — a kicked-up heel keeps its bare end)
   for (const leg of [pose.legL, pose.legR]) {
-    const f = P(leg[leg.length - 1]);
+    const end = leg[leg.length - 1];
+    if (end[1] < 0.9) continue;
+    const f = P(end);
     ctx.line([[f[0], f[1]], [f[0] + 0.05 * h * flip, f[1]]], { color, width: lw, z });
   }
 
