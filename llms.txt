@@ -1,0 +1,27 @@
+# edododraw
+
+> A 100% code/syntax-to-diagram engine with the Excalidraw hand-drawn aesthetic, magic-move camera, scriptable + real-time annotations, animated arrows, and first-class Mermaid import.
+
+Everything an LLM needs in ONE file: https://vivmagarwal.github.io/edododraw/llms-full.txt
+
+## Docs
+- [Language reference](https://vivmagarwal.github.io/edododraw/#/docs/language)
+- [Visualizations](https://vivmagarwal.github.io/edododraw/#/docs/visualizations)
+- [Style presets](https://vivmagarwal.github.io/edododraw/#/docs/styles)
+- [Camera & timeline](https://vivmagarwal.github.io/edododraw/#/docs/camera-timeline)
+- [Annotations](https://vivmagarwal.github.io/edododraw/#/docs/annotations)
+- [Import & export](https://vivmagarwal.github.io/edododraw/#/docs/import-export)
+- [Embed in your app](https://vivmagarwal.github.io/edododraw/#/docs/integration)
+- [Extend & make plugins](https://vivmagarwal.github.io/edododraw/#/docs/extending)
+- [Architecture](https://vivmagarwal.github.io/edododraw/#/docs/architecture)
+- [Development standards](https://vivmagarwal.github.io/edododraw/#/docs/development)
+
+## Visualizations (87 templates × 9 style presets)
+All usable as `viz <name> { item "Label" ... }`; full reference with runnable examples in llms-full.txt:
+clouds, converge, diverge, head-thoughts, key-ideas, list, personas, quote, business-model-canvas, ecosystem, flywheel, funnel, hex-cluster, okr, pestel, porters, swot, value-chain, domino, fishbone, impact, root-causes, balance, decision, decision-tree, podium, pricing-tiers, pros-and-cons, quadrant, relationship, spectrum, table, venn, versus, area, bar, bar-horizontal, bullet-chart, drop-off, dumbbell-horizontal, dumbbell-vertical, gauge, heatmap, line, pie, radar, sankey, slope-chart, stacked-bar, stacked-bar-horizontal, waterfall, bullseye, pyramid, mindmap, mindmap-horizontal, mindmap-left, mindmap-right, mindmap-vertical, iceberg, bridge, challenges, problem-solution, transformation, cycle, flowchart, gantt, journey, kanban, sequence, stairs, swimlane-flow, milestone-path, roadmap-lanes, timeline, bottleneck, dialogue, hole, lens, lighthouse, magnet, performance, pillar, prism, race, trend, tug-of-war, vision
+
+## Links
+- Full docs (single file): https://vivmagarwal.github.io/edododraw/llms-full.txt
+- Playground: https://vivmagarwal.github.io/edododraw/#/playground
+- npm: https://www.npmjs.com/package/edododraw
+- Repo: https://github.com/vivmagarwal/edododraw

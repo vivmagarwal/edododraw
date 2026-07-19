@@ -1,0 +1,4275 @@
+# EDodoDraw — complete documentation (v0.12.0)
+
+> A 100% code/syntax-to-diagram engine with the Excalidraw hand-drawn aesthetic, magic-move camera, scriptable + real-time annotations, animated arrows, and first-class Mermaid import.
+>
+> This ONE file is the full, LLM-consumable documentation for EDodoDraw. It
+> concatenates every guide and every runnable example, generated verbatim
+> from the source repo — nothing is summarised or omitted.
+
+- Live site (rendered docs + live demos): https://vivmagarwal.github.io/edododraw/
+- npm package: https://www.npmjs.com/package/edododraw  (`npm i edododraw`)
+- Source repo: https://github.com/vivmagarwal/edododraw
+
+What EDodoDraw is: a 100% code/syntax-to-diagram engine with the Excalidraw
+hand-drawn look, a magic-move camera, scriptable + real-time annotations,
+animated arrows, and first-class Mermaid import. You write `.edd` source; it
+renders a diagram. Use it via the DSL (see "Language reference") and/or embed
+it in an app via the `EdodoDraw` facade (see "Embed in your app").
+
+## Contents
+
+1. Language reference
+2. Visualizations
+3. Style presets
+4. Camera & timeline
+5. Annotations
+6. Import & export
+7. Embed in your app
+8. Extend & make plugins
+9. Architecture
+10. Development standards
+11. Runnable examples (.edd)
+
+==============================================================================
+
+# ═══ Language reference  (docs/DSL_LANGUAGE_GUIDE.md) ═══
+
+# EDodoDraw Language Guide (`.edd`)
+
+The complete reference for **EDodoDraw code** — the text syntax that compiles 100% to a diagram. Written to be equally readable by humans and generatable by LLMs.
+
+> Implementation: `src/engine/dsl/` (lexer → parser → compiler). This guide documents what the compiler **actually accepts today**. Runnable examples live in `examples/`.
+
+---
+
+## 1. Mental model
+
+A program has two halves:
+
+1. **Structure** — declared once inside `scene { … }`: nodes, edges, groups, styles, layout. Mermaid-friendly (arrow glyphs, `id[Label]` sugar, `:::class`) with clean `{ key: value }` attribute blocks for styling.
+2. **Choreography** (optional) — a `timeline { … }` of ordered `beat`s. Each beat is a keyframe of **camera** (fit/focus/zoom/pan), **annotate** (highlight/underline/point-at/…), and **reveal** (show/hide). The engine "magic-moves" between beats.
+
+Minimal program:
+
+```edd
+scene {
+  a[Start] --> b[Do work] --> c{OK?}
+  c -->|yes| d(Done)
+  c -->|no|  a
+}
+```
+
+Everything else is optional layering on top.
+
+---
+
+## 2. Top-level statements
+
+| Statement | Purpose |
+|---|---|
+| `edd 1.0` | Optional version marker (first line). |
+| `meta { title: "…", background: "#…", style: chalkboard }` | Diagram metadata; `style:` applies a [style preset](STYLES_GUIDE.md). |
+| `theme name { tokens { $x: #hex, … } }` | Named theme + reusable `$tokens`. |
+| `style .name { … }` / `style .name extends .other { … }` | Reusable style class. |
+| `defaults { node { … } edge { … } }` | Defaults applied to every node/edge. |
+| `scene [name] { … }` | Structure. Multiple `scene` blocks merge. |
+| `viz <type> [id] ["Title"] { … }` | A data-driven visualization template — 87 built-in types (see §12 and VISUALIZATIONS_GUIDE.md). |
+| `annotate ["label"] { … }` | Always-on annotations (outside the timeline). |
+| `timeline [name] { … }` | Choreography (beats). |
+| `overrides { id at (x, y) [size (w, h)] … }` | Pinned positions/sizes (usually machine-written by direct editing — see §11). |
+| `mermaid """ … """` | Import a raw Mermaid diagram (see IMPORT_AND_EXPORT_GUIDE.md). |
+
+A theme whose **name contains `dark`** renders in dark mode (near‑black canvas, light default ink, dark grid). An embedder can override the diagram's declared theme at the view level — `EdodoDraw.setColorScheme("dark")`, `<EdodoDrawView colorScheme>`, or `compileEdd(src, { mode })` — so the same source follows a host app's light/dark toggle (see INTEGRATION_GUIDE.md). Colors you set explicitly are always kept; only *default* ink adapts for contrast.
+
+Comments: `// line`, `%% line` (Mermaid-style), `/* block */` (nestable).
+
+---
+
+## 3. Nodes — three equivalent forms
+
+```edd
+// 1. Mermaid sugar (shape from the bracket kind)
+db[(Postgres)]          // cylinder
+q{{Load Balancer}}      // hexagon
+ok([Success])           // pill / stadium
+
+// 2. Keyword form (explicit shape keyword first) — best for LLMs
+cylinder db "Postgres"
+hexagon  lb "Load Balancer"
+
+// 3. Explicit form
+node db "Postgres" as cylinder
+```
+
+### Shape sugar table
+
+| Sugar | Shape | Sugar | Shape |
+|---|---|---|---|
+| `[x]` | rectangle | `[(x)]` | cylinder |
+| `(x)` | round-rectangle | `((x))` | circle |
+| `([x])` | pill / stadium | `{x}` | diamond |
+| `[[x]]` | rectangle | `{{x}}` | hexagon |
+| `[/x/]` | parallelogram | `[/x\]` | trapezoid |
+
+### Full shape keyword list
+
+`rect` · `round-rect` · `ellipse` · `circle` · `diamond` (`decision`) · `triangle` · `hexagon` · `parallelogram` · `trapezoid` · `cylinder` (`db`) · `cloud` · `document` · `note` · `actor` · `pill` (`stadium`) · `text` · `star`
+
+Unknown shape names resolve through the **shape plugin registry** (`registerShape`) — see DEVELOPMENT_STANDARDS.md.
+
+### Node attributes
+
+```edd
+rect api "API Service" {
+  fill: green            // palette name or #hex → soft bg + matching stroke
+  stroke: #1971c2
+  fillStyle: hachure     // hachure | cross-hatch | solid | zigzag | dots | none
+  strokeWidth: bold      // thin | medium | bold | thick | <number>
+  strokeStyle: dashed    // solid | dashed | dotted
+  roughness: artist      // architect(0) | artist(1) | cartoonist(2) | <number>
+  roundness: 16          // corner radius (px)
+  font: hand             // hand | normal | code
+  fontSize: 22
+  opacity: 0.9           // 0..1 or 0..100
+  at: (1180, 40)         // absolute world position
+  pin: true              // exclude from auto-layout (pinned)
+  size: (180, 80)        // explicit width,height
+  tags: [edge, critical] // selectable via .edge / .critical
+}
+```
+
+Apply style classes with `:::` — `rect api "API" :::card :::critical`.
+
+### Named colors
+
+Stroke palette: `black gray red pink grape violet blue cyan teal green lime yellow orange brown white`.
+`fill: green` yields the pleasant Excalidraw soft-green box with a matching darker-green outline. `transparent`/`none` → no fill.
+
+---
+
+**Sketchnote containers** are ordinary shapes too: `speech-bubble` (dialogue),
+`starburst` (impact statements), `ribbon` (banner titles), `paper-fold`
+(documents) — e.g. `starburst wow "BE GOOD, DO GOOD"`.
+
+## 4. Edges
+
+```edd
+a --> b                      // arrow
+a --> b "label"              // trailing label
+a -->|mid label| b           // Mermaid mid-label
+a -> b -> c                  // chain → two edges
+a -> b & c                   // fan-out → a→b and a→c
+a@(1,0.5) -> b.n             // anchored endpoints (see §7)
+edge e1: a --> b "named"     // give the edge an id
+```
+
+### Glyph table
+
+| Glyph | Line | End arrowhead | Notes |
+|---|---|---|---|
+| `--` `---` | solid | none | plain connector |
+| `->` `-->` | solid | arrow | canonical |
+| `<-` `<--` | solid | arrow at start | reversed |
+| `<->` `<-->` | solid | arrows both | bidirectional |
+| `-.->` | dashed | arrow | async |
+| `..>` | dotted | arrow | dependency |
+| `==>` | solid (thick) | arrow | emphasis |
+| `===` | solid (thick) | none | plain connector (thick) |
+| `~>` | solid (curved) | arrow | **animated `flow` by default** |
+| `--o` `-o` | solid | circle | association |
+| `--x` `-x` | solid | bar | termination |
+
+### Edge attributes
+
+```edd
+a -> b {
+  color: #1971c2
+  strokeWidth: bold
+  strokeStyle: dashed
+  startArrow: dot          // none arrow triangle bar dot circle diamond crow …
+  endArrow: triangle
+  curve: curved            // straight | curved | orthogonal | elbow | bezier | arc
+  animate: dash-march      // see §5
+}
+```
+
+Parallel edges between the same pair automatically fan out so they never overlap.
+
+---
+
+## 5. Animated arrows
+
+Set `animate: <kind>` on any edge. EDodoDraw ships far more than Excalidraw:
+
+| Kind | Effect |
+|---|---|
+| `flow` | dashes flow along the path |
+| `dash-march` | marching ants |
+| `draw-on` | the line draws itself in (loops) |
+| `comet` | bright head with a fading trail + glow |
+| `gradient-flow` | animated multi-color gradient stroke |
+| `electric` | fast jittered dashes |
+| `pulse` | opacity/width pulse |
+
+`glow`→comet, `caravan`→dash-march, `wiggle`→flow are accepted aliases. Speed: `animate: flow { speed: 1.4 }`.
+
+---
+
+## 6. Layout
+
+```edd
+scene {
+  layout dag { direction: down, gap: 64, rankGap: 110 }
+  …
+}
+```
+
+| Kind | Behavior |
+|---|---|
+| `dag` / `tree` / `flow` | layered graph via dagre (respects `direction`) |
+| `grid` | row-major grid |
+| `radial` | hub + ring (`center: id`) |
+| `manual` / `free` | use each node's `at:` position |
+
+`direction`: `down`(TB) · `up`(BT) · `right`(LR) · `left`(RL). Nodes with `pin: true` (or `at:` set) are excluded from auto-layout and kept fixed. Groups are clustered so their members stay together.
+
+---
+
+## 7. Connection anchors (richer than Excalidraw's 4)
+
+Attach an edge endpoint to a specific point on a node with `.anchor` or `@(u,v)`:
+
+- Compass: `.n .s .e .w .ne .nw .se .sw .c` (aliases `.top .bottom .left .right .center`).
+- Side fraction: `.top:0.3` (30% along the top edge), also `.right:0.75`, `.bottom:0.5`, `.left:0.2`.
+- Normalized: `@(0.5, 1.0)` — u,v in 0..1 of the node box.
+- Angle: `.angle:45` — degrees from the center (0 = east, clockwise).
+
+```edd
+gw.s      -> api.n            // bottom of gw → top of api
+api@(1, 0.5) -> db.top:0.3    // right-middle of api → 30% along db's top edge
+```
+
+Omit the anchor for automatic border attachment aimed at the other endpoint.
+
+---
+
+## 8. Groups
+
+```edd
+scene {
+  group services "Application Services" {
+    round-rect auth "Auth"
+    round-rect api  "API"
+  }
+}
+```
+
+Draws a labelled dashed frame around its members. A group is addressable as one target (e.g. `camera focus services`, `spotlight services`).
+
+---
+
+## 9. Annotations
+
+Annotate elements in an always-on `annotate { … }` block or inside a timeline beat.
+
+| Command | Example |
+|---|---|
+| `highlight` | `highlight cdn { color: yellow }` |
+| `underline` | `underline api { color: #2563eb, style: wavy }` |
+| `strike` | `strike legacy { color: red }` |
+| `box` (over a set) | `box [gateway, api, db] "critical path" { color: red }` |
+| `circle-mark` | `circle-mark queue "retry here"` |
+| `point-at` | `point-at gateway "single entry" { from: ne, color: #2563eb }` |
+| `callout` | `callout db "source of truth" { placement: bottom }` |
+| `spotlight` | `spotlight services { dim: 0.72 }` |
+| `note-marker` | `note-marker db "1"` |
+
+`from` / `placement` take a cardinal (`n s e w ne …`). Annotations anchor to their target and track the camera. See ANNOTATIONS_GUIDE.md for the real-time editor and round-trip.
+
+**Targets.** Any node/edge/group id works, plus viz element/item ids with dots — `strike sales.won` resolves against the finished scene (viz items anchor to the union of the item's elements). An explicit attribute form is also accepted: `strike { target: "sales.won" }`. Targets that match nothing raise a `W-ANNOT-TARGET` diagnostic (they never silently no-op).
+
+---
+
+## 10. Timeline (magic-move presentation)
+
+```edd
+timeline story {
+  beat overview "The whole system" {
+    camera fit-all over 800ms
+    reveal { show all with fade-in }
+    narrate: "End-to-end request path."
+  }
+
+  beat data "Where state lives" {
+    camera focus [db, cache, queue] zoom 1.7 ease ease-in-out
+    annotate {
+      callout db "primary of record" { placement: right }
+      spotlight [db, cache, queue] { dim: 0.7 }
+    }
+    narrate: "All writes funnel through Postgres."
+    hold: 2s
+  }
+}
+```
+
+### Camera operations (inline or block form)
+
+| Op | Inline | Block |
+|---|---|---|
+| Frame all | `camera fit-all` | `camera { }` |
+| Focus target(s) | `camera focus [a,b] zoom 1.6` | `camera { focus: [a,b], zoom: 1.6 }` |
+| Absolute zoom | `camera zoom 1.3` | `camera { zoom: 1.3 }` |
+| Pan | `camera pan (x, y)` | `camera { pan: (x,y) }` |
+| Reset | `camera reset` | — |
+
+Shared modifiers: `zoom N` · `over <ms|s>` (alias `duration`) · `ease <easing>` · `pad N`. Op aliases: `fit <target>` / `center <target>` / `follow <target>` all normalize to `focus`; `reset` → `fit-all`. `pan (x,y)` also accepts `pan to (x,y)` / `pan by (x,y)`.
+Easings: `linear ease ease-in ease-out ease-in-out back-out anticipate spring` — plus `magic` / `bounce` (aliases for the tuned spring). `spring(…)` is accepted and animates with the tuned spring; `cubic-bezier(…)` is accepted syntax but currently falls back to the default `ease-in-out` (parameters for both are reserved for a future release).
+An **explicit `zoom N` is applied uncapped** (a beat can zoom past the interactive limits); wheel/gesture zoom is clamped to 0.05–8×. Numeric contracts (fit padding/maxZoom, auto-duration) are in [CAMERA_AND_TIMELINE_GUIDE.md](CAMERA_AND_TIMELINE_GUIDE.md).
+
+### Reveal / hide (with entrance effects)
+
+`reveal { show <targets> }` reveals nodes/edges; `reveal { hide <targets> }` hides them. Visibility is **sticky** across beats until changed. Add an entrance animation with `with <effect>`, replayed each time the beat is entered:
+
+| Effect | `with …` | Also as a verb | Motion |
+|---|---|---|---|
+| Fade | `with fade-in` (alias `fade`) | `fade-in <t>` | opacity 0→1 (~0.4s) |
+| Pop | `with pop` (alias `emphasize`) | `pop <t>` | scale-bounce in (~0.45s) |
+| Draw-on | `with draw-on` (aliases `draw`, `sweep`) | `draw-on <t>` | left-to-right marker sweep (~0.5s) |
+
+```edd
+reveal { show all with fade-in }     // whole diagram fades in
+reveal { show [db, cache] with pop } // pop just these two
+reveal { draw-on [gw] }              // effect-verb form
+reveal { show legacy }               // no `with` -> instant (no animation)
+```
+
+A plain `show`/`hide` with no effect is instant. Effects honor `prefers-reduced-motion`. Beat annotations are cleared at the start of each beat (unless in the always-on `annotate` block).
+
+### Beat & timeline properties
+
+`narrate: "caption"` (speaker note shown under the diagram), `hold: 2s` (dwell before auto-advance during Play; alias `wait:`). At the `timeline { … }` level, `defaultEase: <easing>` sets the fallback easing for every beat that doesn't specify its own `ease`.
+
+---
+
+## 11. Overrides — where direct edits live
+
+The layout engine positions nodes automatically. When you **drag, resize, add, rename, restyle, or delete elements directly on the canvas** (in the playground, or via the editor API — see INTEGRATION_GUIDE.md), those changes are written straight back into the source so the code stays the single source of truth. Geometry lands in an `overrides { … }` block:
+
+```edd
+scene {
+  layout dag { direction: down }
+  rect a "A"
+  rect b "B"
+  a --> b
+}
+
+overrides {
+  a at (120, 40)             // pin a node's top-left corner (world units)
+  b at (120, 220) size (160, 90)   // …and optionally its width/height
+}
+```
+
+- Each entry is `id at (x, y)` with an optional `size (w, h)`. Coordinates are the node's top-left in world units; `id` may be any node — declared, auto-created from an edge, or Mermaid-imported.
+- A pinned node keeps its coordinates; the layout still routes edges and places any *un-pinned* nodes around it.
+- The block is **machine-managed**: dragging a node rewrites its entry, and the engine freezes the other nodes' current positions into the block at the same time so the layout doesn't reshuffle under you. You can hand-edit or delete entries freely — remove the whole block to hand control back to auto-layout.
+- Restyle/rename/add/delete edits patch the node's declaration and edges in place (e.g. a fill swatch upserts `{ fill: green }`); only position/size use `overrides`.
+
+---
+
+## 12. Visualizations (`viz`) & style presets
+
+Declare a chart or diagram template with data instead of drawing it:
+
+```edd
+meta { style: chalkboard }          // optional: one of the built-in styles (default is classic B&W)
+
+viz funnel sales "Sales Funnel" {
+  input: "Potential customers"        // template option
+  item "Awareness" 5000               // data entry: label + value
+  item "Interest" 1800 "Warm leads"   // + trailing string = description
+  item "Won" 38 { icon: trophy }      // + icon / color / detail attributes
+}
+```
+
+87 templates ship built-in — funnel, pyramid, venn, pie, bar/line/area, radar, heatmap, slope-chart, waterfall, sankey, gantt, timeline, roadmap-lanes, kanban, flywheel, okr, decision-tree, mindmap, swot, quadrant, journey, pricing-tiers, iceberg, and many more. Entries are `<kind> [id] ["Label"] [-> target] [values…] [{ attrs }] [{ nested entries }]`; every template accepts `item` plus natural synonyms (`stage`, `flow "A" -> "B" 25`, `task "Design" 0 3`, `set`, `pro`/`con`, …).
+
+Viz output is ordinary scene structure: elements get ids like `sales.won`, so annotations, camera beats, `reveal`, and direct editing all target them — and `sales.won` used as a target addresses the item's **whole element group** (shape + label + icon together). Add `showValues: false` as a block option (or `showValue: false` on one item) to keep values driving the geometry without printing the numbers. `meta { style: <name> }` restyles the *whole* document — viz templates and classic scenes alike — through one of the named styles (`classic-color`, `chalkboard`, `crayon`, `mono-accent`, …).
+
+Full catalog + per-template options: [VISUALIZATIONS_GUIDE.md](VISUALIZATIONS_GUIDE.md). Preset reference: [STYLES_GUIDE.md](STYLES_GUIDE.md).
+
+---
+
+## 13. Diagnostics
+
+The compiler recovers from errors and reports many at once, each with `line:col`, a stable code (`E-EDGE-NOOP`, `E-STMT`, `E-ATTR`, `W-MERMAID-SYNC`, …), and a hint. A bad statement never blanks the diagram — valid statements still render.
+
+---
+
+## 14. LLM authoring tips
+
+- Prefer the **keyword node form** (`cylinder db "…"`) and the **block form** for camera/annotations — they're unambiguous.
+- One statement per line. Attributes are `{ key: value, … }` (commas or newlines both separate).
+- Declare structure once in `scene`; reference ids everywhere else. Forward references are fine.
+- Colors: use palette names (`green`, `blue`) for the Excalidraw look, or `#hex`.
+- To animate a connector, add `animate: flow` (or use the `~>` glyph).
+- To present, add a `timeline` of `beat`s with `camera focus …` — that's the differentiator.
+
+See `examples/*.edd` for complete, runnable programs.
+
+==============================================================================
+
+# ═══ Visualizations  (docs/VISUALIZATIONS_GUIDE.md) ═══
+
+# Visualizations Guide (`viz` templates)
+
+EDodoDraw ships **87 visualization templates** — funnels, pyramids, venns, charts, timelines, mindmaps, business frameworks, visual metaphors — each generated **100% from text**. A `viz` block declares *data*; the template turns it into ordinary diagram elements, so everything else in EDodoDraw (camera beats, annotations, direct editing, export, style presets) works on visualizations exactly as on hand-drawn scenes.
+
+> Browse every template live (in every style) on the site's **Visualizations** page. Styling is a separate axis — see [STYLES_GUIDE.md](STYLES_GUIDE.md).
+
+---
+
+## 1. The `viz` block
+
+```edd
+viz funnel "Sales Funnel" {
+  input: "Potential customers"      // option: key: value
+  item "Awareness" 5000             // data entry: label + value
+  item "Interest" 1800 "Warm leads" // + trailing string = description
+  item "Won" 38 { icon: trophy }    // + attribute block
+}
+```
+
+Anatomy: `viz <type> [id] ["Title"] { options + entries }`.
+
+- **`<type>`** — a template name (catalog below). Unknown names produce a diagnostic listing all known types.
+- **`[id]`** — optional block id; element ids are prefixed with it (`sales.awareness`), so annotations and camera beats can target parts of a visualization: `spotlight sales.won`.
+- **`["Title"]`** — rendered in the preset's title type above the visual (some templates place it themselves).
+- **Options** are `key: value` lines (each template's options listed below).
+- **Entries** are data lines: `<kind> [id] ["Label"] [-> target] [values…] [{ attrs }] [{ nested entries }]`.
+
+### Entry anatomy
+
+```edd
+item apples "Apples" 40                    // ident id + label + value
+item "Berries" 25 "Small but mighty"       // trailing string = description
+flow "Solar" -> "Homes" 30                 // connection entry (sankey)
+task "Design" 0 1.5                        // multiple values (gantt: start end)
+item "Q1" [80, 20, 30]                     // value list (stacked bars)
+item "Root" { item "Child A"; item "Child B" }   // nested children (mindmap, swot…)
+item "Won" 38 { icon: trophy, color: green, detail: "Signed contracts" }
+```
+
+Entry attributes understood everywhere: `icon:` (glyph name, §5), `color:`/`fill:` (override this item's palette color), `detail:`/`note:`/`desc:` (description text), `showValue: false` (suppress this item's printed number). Every template accepts the generic `item` keyword plus natural synonyms (`stage`, `step`, `task`, `set`, `flow`, …) noted below.
+
+**`showValues: false`** (block option, every value-printing template): values still drive the geometry — bar heights, funnel proportions, slice angles — but the numbers themselves aren't printed. For hosts with a "no unsourced numbers on screen" rule, or when the shape alone tells the story.
+
+**`animate:` — auto-choreography (block option, every template).** One line turns any visualization into a narrated, step-by-step build: the compiler synthesizes a timeline with an overview beat (all data items hidden), one beat per item revealing its whole element group with the item's label as the caption, and a closing fit-all. No `timeline {}` needed — but an explicit timeline always wins.
+
+```edd
+viz funnel sales "Pipeline" {
+  animate: pop          // true | fade | pop | draw-on (the reveal effect)
+  hold: 2               // seconds per beat when playing
+  animateCamera: true   // optional: magic-move focus onto each item
+  item "Leads" 1200
+  item "Demos" 240
+  item "Won" 36
+}
+```
+
+Play it with `edd.play()`, scrub it with `next()/prev()`, or drive it frame-accurately from a video host via `stepStateAt()` (see [CAMERA_AND_TIMELINE_GUIDE](CAMERA_AND_TIMELINE_GUIDE.md) and [INTEGRATION_GUIDE §6](INTEGRATION_GUIDE.md)). Nested children (mindmap branches, kanban cards) reveal with their parent item.
+
+Multiple `viz` blocks in one document stack vertically; a `viz` block after a `scene` graph is placed below it.
+
+### Reaching a template by name
+
+Each template has a canonical `<type>` (the catalog below) **plus a generous set of natural-language aliases**, so you can write the intent however you'd phrase it — an unknown type produces a diagnostic listing every canonical name. A few examples:
+
+| you can write… | you get |
+|---|---|
+| `viz leaderboard` / `ranking` / `winners` | `podium` |
+| `viz conversion-funnel` / `sales-funnel` / `pipeline` | `funnel` |
+| `viz cause-effect` / `why` / `causes` | `root-causes` |
+| `viz constraint` / `chokepoint` / `throughput` | `bottleneck` |
+| `viz mind-map` / `brainstorm` / `topics` | `mindmap` |
+| `viz scorecard` / `dashboard` / `kpis` | `performance` |
+| `viz venn-diagram` / `overlap` / `sets` | `venn` |
+| `viz dial` / `meter` / `speedometer` | `gauge` |
+| `viz five-forces` / `porters-five-forces` | `porters` |
+| `viz gap` / `migration` / `span` | `bridge` |
+
+The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ_ALIASES` / `listVizAliases()`).
+
+---
+
+## 2. Catalog
+
+### Process
+
+| type | data | options |
+|---|---|---|
+| `flowchart` (`flow`, `process`) | `item` / `step` — label, icon, detail | `direction: right` for horizontal |
+| `sequence` | `item` / `step` — label + description panels in reading order | `columns: 2..4` |
+| `stairs` (`staircase`) | `item` / `step` — ascending blocks, icon above, label inside | — |
+| `journey` (`roadmap`) | `item` / `stage` — one ribbon-road segment per stage | — |
+| `cycle` (`loop`) | `item` / `phase` — circles on a ring with swept arrows (3–4 big nodes; 5+ switches to dots) | — |
+| `gantt` | `task "Name" start end` | `scale: ["Wk 1", …]`, `deadline: n`, `deadlineLabel:` |
+| `kanban` (`board`) | `column "Doing" { item "Checkout flow" }` — cards per column | — |
+| `swimlane-flow` (`swimlanes`) | `lane "QA" { step "Test" 2 }` — numbered steps flow across lanes | — |
+
+### Data
+
+| type | data | options |
+|---|---|---|
+| `bar` (`column`) | `item "Q1" 120` | `xTitle:`, `yTitle:` |
+| `bar-horizontal` (`hbar`) | `item "Team" 34 { icon: gear }` | — |
+| `stacked-bar` / `stacked-bar-horizontal` | `series "Name"` (legend) + `item "Q1" [a, b, c]` | `xTitle:`, `yTitle:` |
+| `line` / `area` | `item "Jan" 1200` points | `xTitle:`, `yTitle:`, `color:` |
+| `waterfall` | first `item` = start, then signed deltas; `total "Net"` = computed bar | `xTitle:`, `yTitle:` |
+| `gauge` | `value: 87` + `label:` (or one item) | `value:`, `label:` |
+| `pie` (`donut`) | `item "Alpha" 45` slices | `variant: donut` |
+| `drop-off` (`dropoff`) | `item "Visit" 100` — nested shrinking cards | — |
+| `dumbbell-vertical` (`deltas`) | `item "Speed" "+15%" { icon, detail }` | — |
+| `dumbbell-horizontal` (`progress-bars`) | `item "Docs" 80 "80%"` — track + value bar + tag | — |
+| `sankey` | `flow "Coal" -> "Industry" 25` | — |
+| `radar` (`spider`) | `axis "Security"` + `series "Today" [3, 4, 2]` (or plain `item "X" 3`) | `max:` scale ceiling |
+| `heatmap` (`risk-matrix`) | `row "API" [1, 3, 5]` intensity cells | `cols: ["Q1", …]`, `max:`, `showValues:` |
+| `slope-chart` (`slopegraph`) | `item "Billing" 340 120` — before/after per line | `left:`, `right:` headers, `showValues:` |
+| `bullet-chart` (`kpi-vs-target`) | `kpi "Revenue" 74 90` — actual bar vs target tick | `max:`, `showValues:` |
+
+### Timelines
+
+| type | data | options |
+|---|---|---|
+| `timeline` | `item "2019" "What happened" { icon: home }` — teardrop pins alternating up/down | — |
+| `roadmap-lanes` (`product-roadmap`) | `lane "Platform" { task "SSO" 0 1.5; milestone "GA" 3 }` | `scale: ["Q1", …]` column headers |
+| `milestone-path` (`path-to-goal`) | `item "Beta" "May"` milestones + `goal "Launch"` summit flag | `goal:` |
+
+### Comparison
+
+| type | data | options |
+|---|---|---|
+| `pros-and-cons` (`pros-cons`) | `pro "…"` / `con "…"` lines | `proColor:`, `conColor:` |
+| `table` | `header "Feature" ["Free", "Pro"]` + `row "SSO" ["—", "Yes"]` | — |
+| `versus` (`vs`) | `left "A"`, `right "B"`, `criterion "Cost" { icon, left: "…", right: "…" }` | — |
+| `balance` (`scales`) | two `side "Name" { item "…" { icon } … }` blocks | `tilt: left\|right\|level` |
+| `relationship` (`hub-spoke`, `orbit`) | `center "Hub" { icon }` + `item` satellites | — |
+| `podium` | up to 3 `item`s in rank order (2-1-3 arrangement) | — |
+| `decision` | question = title (or `question:`) + `item "Option" "why" { icon }` | — |
+| `spectrum` | `item` / `zone` — first/last get arrow ends | — |
+| `quadrant` (`2x2`, `matrix`) | 4 `item`s in order TL, TR, BL, BR (+ children bullets) | `xLabels: [neg, pos]`, `yLabels: [neg, pos]` |
+| `venn` | `set "Name" "desc" { icon }` (2–7 sets) + `overlap all "Label"` / `overlap [a, b] "Label"` | — |
+| `pricing-tiers` (`pricing`, `plans`) | `tier "Pro" 29 { highlight: true; item "SSO" }` — price + feature list cards | `period:`, `currency:`, `showValues:` |
+| `decision-tree` (`yes-no`) | nested `item`s branching left→right; `{ when: "yes" }` labels the edge | — |
+
+### Business Frameworks
+
+| type | data | options |
+|---|---|---|
+| `swot` | 4 `item "Strengths" { item "…" … }` panels with bullet children | — |
+| `pestel` | `item "Political" "summary" { item "…" }` cards (4–6) | — |
+| `porters` (`forces`) | `item "Rivalry" "description"` forces on a ring | — |
+| `pyramid` | `item` levels, top → bottom | — |
+| `bullseye` (`target`) | `item` rings, **outermost first** | — |
+| `funnel` | `item "Stage" [value]` | `input:`, `output:` captions |
+| `flywheel` (`growth-loop`) | `item "More sellers" { icon: users }` ring segments + optional `center` entry | `center:` wheel label |
+| `hex-cluster` (`honeycomb`) | `center "Core"` + `item "Cell" { icon }` hexagons on a ring | `center:` |
+| `value-chain` (`chevron-process`) | `item "Build" { icon: wrench }` chevrons + `support "…"` bars above | — |
+| `okr` (`goal-tree`) | `kr "NPS above 60" 0.72` progress cards under one objective | `objective:`, `showValues:` |
+| `business-model-canvas` (`bmc`) | 9 kind-keyed sections (`value { item "…" }`, `segments`, `costs`, …) | — |
+| `ecosystem` (`stakeholder-map`) | `center "Core"` + `ring "Partners" { item "…" { icon } }` orbits | — |
+
+### Brainstorming / Parts of a whole
+
+| type | data | options |
+|---|---|---|
+| `mindmap` (+ `mindmap-left`, `-right`, `-horizontal`, `-vertical`) | nested `item`s; root = title, a lone parent item, or a `root` entry | — |
+| `key-ideas` (`ideas`) | `item "Focus" "description"` lightbulbs | — |
+| `personas` (`team`, `cast`) | `item "The Builder" "detail" { pose: confident, emotion: happy, shirt: tie, hair: short, accessory: glasses, fx: idea, prop: wrench }` characters | — |
+| `quote` (`big-quote`) | title = the quote; `by:` attribution; a character presents it | `by:`, `pose:`, `emotion:`, `shirt:`, `hair:`, `accessory:`, `fx:`, `prop:` |
+| `clouds` (`idea-clouds`) | `item "Theme" "detail" { icon }` scattered thought-cloud islands | — |
+| `head-thoughts` (`in-their-head`) | `item "Will it save time?" { icon }` thoughts inside a profile head | `who:` caption |
+| `list` | `item "Value" "detail" { icon }` — vertical ≤5 items, horizontal 6+ | `orientation:` |
+| `diverge` | question = title + `item` options radiating on block arrows | — |
+| `converge` / `lens` | `item` inputs + `output "Result" { icon }` | — |
+| `iceberg` | `above "Visible" "…"` + `below "Hidden" "…"` entries | — |
+
+### Problems & Solutions / Cause & Effect
+
+| type | data | options |
+|---|---|---|
+| `problem-solution` | `problem`, `solution`, `outcome` entries + `support "…"` captions | — |
+| `transformation` (`before-after`) | `before "Label" "desc"` + `after "Label" "desc"` (suspension-bridge scene) | — |
+| `challenges` (`hurdles`) / `bridge` | `from`/`to` states + `item` steps spanning the gap | `action:` caption |
+| `root-causes` (`root-cause`) | problem = title + `item "Cause" "description"` on the roots | — |
+| `domino` (`chain-reaction`) | `item "Config typo" "detail"` tiles toppling into the outcome | — |
+| `fishbone` (`ishikawa`) | title = the effect + `bone "People" { item "cause" … }` categories | — |
+| `impact` | `cause "Driver"` + `item "Effect" "description"` bubbles | — |
+
+### Visual Metaphors
+
+| type | data | options |
+|---|---|---|
+| `vision` | `current "Today" "…"` + `vision "Goal" "…"` (stairs to an open door) | — |
+| `performance` (`kpis`) | `item "Uptime" 99 "desc" { icon }` donut gauges | `summary:` |
+| `bottleneck` | metaphor scene | `in:`, `out:`, `count:` |
+| `hole` (`pit`) | title is the message | `caption:` |
+| `trend` | `item` levels bottom → top on a rising staircase | — |
+| `race` | `item` contestants in rank order | `finish:` banner text |
+| `dialogue` (`conversation`) | `msg "…" { speaker: a\|b }` bubbles | `a:`, `b:` speaker names |
+| `prism` | `input "One thing" { icon }` + `item` outputs | — |
+| `pillar` (`pillars`) | `item "Trust" "description" { icon }` columns | — |
+| `tug-of-war` (`force-field`) | two `side "Name" [weight] { item "force" … }` teams | `tilt: left\|right\|balanced` |
+| `lighthouse` (`beacon`) | `item "Risk" "detail"` rocks under the beam | `ship:` traveler label |
+| `magnet` (`attraction`) | `item "Fast CI" { icon }` chips being pulled in | `label:` magnet caption |
+
+---
+
+## 3. Ranges & limits
+
+EDodoDraw is a **text→visualization generator**: it renders whatever you give it. Each template has a *sweet spot* of item counts and text lengths where it looks its best. Inside the range the layout is polished and self-spacing (side-label rows grow to fit longer descriptions); outside it, it still renders but can crowd. **If you're generating `.edd` (human or LLM), stay inside these ranges.**
+
+| template | items — best | hard behavior at the edges |
+|---|---|---|
+| `flowchart` | 2–8 steps | vertical chain (tall); `direction: right` for a horizontal one |
+| `sequence` | 2–9 steps | 3 per row, boustrophedon; grows downward |
+| `stairs` | 2–6 steps | wider per step; >6 gets very wide |
+| `journey` | 2–7 stages | one ribbon run per stage |
+| `cycle` | 3–8 phases | 3–4 = large icon nodes; **5+ switches to compact dots** |
+| `gantt` | 1–10 tasks | give `scale` enough ticks to cover the last `end` |
+| `bar` | 1–12 bars | — |
+| `bar-horizontal` | 1–8 bars | — |
+| `stacked-bar` / `stacked-bar-horizontal` | 2–5 series × 2–6 categories | legend from `series` entries |
+| `line` / `area` | 2–14 points | — |
+| `waterfall` | 2–8 deltas | plus the start `item` and a `total` |
+| `gauge` | **exactly 1** value (0–100) | one dial |
+| `pie` / `donut` | 2–8 slices (best ≤6) | callouts crowd past ~8 |
+| `drop-off` | 2–5 stages | each card shrinks; >5 gets tiny |
+| `dumbbell-vertical` | 2–6 rows | — |
+| `dumbbell-horizontal` | 2–8 rows | — |
+| `sankey` | 2–5 sources × 2–5 targets | ribbons cross; keep it small |
+| `timeline` | 2–7 events | alternates up/down; grows wide |
+| `pros-and-cons` | 1–6 per side | two panels |
+| `table` | 1–8 rows × 2–6 columns | first column = row label; wide with many columns |
+| `versus` | **exactly 2 sides** × 1–6 criteria | — |
+| `balance` | **exactly 2 sides** × 1–4 items each | — |
+| `relationship` | 3–10 satellites | + one `center` |
+| `podium` | 1–3 ranks | fixed 2-1-3 podium; extra ranks ignored |
+| `decision` | 2–6 options | rows self-space for long descriptions |
+| `spectrum` | 2–6 zones | first/last get arrow ends |
+| `quadrant` | **exactly 4** (TL, TR, BL, BR) | extra items ignored; bullets via children |
+| `venn` | **2–7 sets** | **8+ dropped with a `W-VIZ-VENN` warning** |
+| `swot` | **exactly 4** sections × 1–5 bullets | fixed S/W/O/T |
+| `pestel` | 3–6 cards | — |
+| `porters` | 3–7 forces | on a ring |
+| `pyramid` | 2–7 levels | bands grow to fit long slope labels |
+| `bullseye` | 2–5 rings | **outermost first**; left labels self-space |
+| `funnel` | 2–7 stages | bands grow to fit long side labels |
+| `mindmap` (+ variants) | 2–7 branches × 0–5 children | balanced across sides |
+| `key-ideas` | 2–5 ideas | lightbulbs in a row |
+| `list` | 2–9 items | **vertical ≤5, horizontal ≥6** (or `orientation:`) |
+| `diverge` | 2–4 options | 4 arrow slots; a 5th+ becomes a straight ray |
+| `converge` / `lens` | 2–6 inputs | + one `output` |
+| `iceberg` | 1 above + 1–5 below | first `above`, rest `below` |
+| `problem-solution` | fixed + 0–3 supports | problem / solution / outcome |
+| `transformation` | **exactly** before + after | — |
+| `challenges` / `bridge` | 2–5 steps | + `from` / `to` states |
+| `root-causes` | 2–5 causes | tree: crown + roots |
+| `impact` | 2–5 effects | + one `cause` |
+| `vision` | **exactly** current + vision | — |
+| `performance` | 1–4 metrics | donut cards |
+| `bottleneck` | fixed scene | `in:` / `out:` labels only |
+| `hole` | title (+ `caption:`) | no items |
+| `trend` | 2–6 levels | rising staircase |
+| `race` | 2–4 racers | rank order |
+| `dialogue` | 2–8 turns | **exactly 2 speakers** (`a:` / `b:`) |
+| `prism` | 2–6 outputs | + one `input` |
+| `pillar` | 2–5 columns | — |
+| `flywheel` | 3–6 segments | arrowheads spin clockwise; center label optional |
+| `radar` | 4–8 axes × 1–3 series | values clamp to `max:`; legend appears with 2+ series |
+| `roadmap-lanes` | 2–5 lanes × 1–4 rows each | `scale` sets the columns; `milestone` renders a diamond |
+| `milestone-path` | 3–6 milestones | + one `goal` flag; labels alternate sides of the trail |
+| `value-chain` | 3–6 chevrons | + 0–3 `support` bars above the band |
+| `pricing-tiers` | 2–4 tiers × ≤6 features | one `highlight: true` tier lifts + gets the badge |
+| `okr` | 2–4 key results | values ≤1 read as fractions, else percentages |
+| `kanban` | 2–4 columns × 1–6 cards | panels share the tallest column's height |
+| `decision-tree` | 2–3 branches, depth ≤3 | one top-level item = the root; several = title becomes the root |
+| `heatmap` | 2–7 rows × 2–8 cols | missing cells render dashed; intensity ramps to `max:` |
+| `slope-chart` | 2–6 lines | close labels self-space vertically |
+| `tug-of-war` | **exactly 2 sides** × 0–4 forces | marker drifts toward the heavier side (`value` or force count) |
+| `business-model-canvas` | 5–9 sections × ≤4 bullets | kind-keyed cells; missing ones render with default titles |
+| `ecosystem` | 2–3 rings × 3–6 members | + one `center`; outer-ring names point outward |
+| `swimlane-flow` | 2–4 lanes × 4–8 steps total | number steps (`step "X" 2`) for cross-lane order |
+| `bullet-chart` | 2–6 KPIs | second value (or `target:`) draws the target tick |
+| `domino` | 3–6 tiles | fallen hardest at the trigger, upright at the outcome |
+| `lighthouse` | 2–4 rocks | + `ship:`; beam sweeps over every rock |
+| `magnet` | 2–5 chips | chips fan toward the poles |
+| `personas` | 2–6 characters | poses cycle when unset; `pose:`/`emotion:`/`shirt:`/`hair:`/`accessory:`/`fx:`/`prop:` per item (§6) |
+| `quote` | exactly 1 quote | `pose: none` hides the figure |
+| `clouds` | 3–7 clouds | staggered rows sized by the largest cloud |
+| `fishbone` | 2–6 bones × ≤4 causes | bones alternate above/below the spine |
+| `head-thoughts` | 2–5 thoughts | fixed slots inside the cranium |
+| `hex-cluster` | 3–6 cells | + one core; details sit below their cell |
+
+**Text length.** Labels are single-line-ish (they wrap, but keep them a few words). Descriptions (`detail:` / trailing string) wrap to a column and the layout expands to fit — but on the compact-side-label templates (`funnel`, `pyramid`, `bullseye`, `spectrum`, `decision`) a stage/level reads best with a **name + one short sentence**; multi-sentence prose is supported but makes those layouts tall. Narrative templates (`sequence`, `journey`, `dialogue`, `iceberg`, `problem-solution`, `transformation`, `root-causes`) comfortably hold 1–2 sentences per item.
+
+---
+
+## 4. Composing with everything else
+
+Viz output is plain Scene IR, so the rest of the language applies:
+
+```edd
+meta { style: chalkboard }
+
+viz funnel sales "Pipeline" {
+  item "Leads" 1200
+  item "Demos" 240
+  item "Won" 36
+}
+
+annotate { circle-mark sales.won "focus here" }
+
+timeline {
+  beat all { camera fit-all }
+  beat close "The close" { camera focus sales.won zoom 2 }
+}
+```
+
+- Element ids are `<blockId>.<itemId>` (item id = explicit ident, else a slug of the label).
+- `reveal all` in a beat covers viz elements too.
+- Direct manipulation: viz elements are pinned nodes — drag/restyle writes overrides like any node.
+
+### Addressing one data item as a unit
+
+A template usually emits **several** elements per data entry (shape + label +
+detail + icon). Every one of them is tagged with its item, so the whole entry
+can be addressed with the single key `<blockId>.<itemId>`:
+
+- **Scene IR**: members carry `data.vizItem: "sales.won"` and a semantic
+  `data.vizRole` (`"shape" | "label" | "detail" | "icon" | "value" | "line" |
+  "edge" | "title"`). Query them with `vizItemMembers(scene, "sales.won")` /
+  `listVizItems(scene)`.
+- **DOM**: each member `<g>` gets `data-viz-item="sales.won"` and
+  `data-viz-role="…"` attributes — select
+  `[data-viz-item="sales.won"]` to choreograph the item from host code.
+- **Language**: the key works as an annotation target (`strike sales.won`),
+  in timeline `reveal`/`hide` (all members reveal together), and in `camera
+  focus` (frames the whole item, label included). A target that matches
+  nothing raises `W-ANNOT-TARGET` / `W-STEP-TARGET` instead of silently
+  no-oping.
+
+### Machine-readable catalog
+
+`listVizTemplates()` returns `{ name, aliases, category, summary, entryKinds,
+options, sweetSpot }` for every template — the tables above, as data — so
+tooling can validate `.edd` before rendering.
+
+## 5. Icons
+
+`icon:` accepts a built-in line-glyph name; unknown names render nothing (layouts don't depend on them). Available: `check x plus minus arrow-up arrow-down arrow-right arrow-left trend-up trend-down star heart flag target bulb gear user users clock calendar rocket trophy medal search warning dollar chart pie doc mail chat home globe lock key leaf fire drop cloud database shield eye book wrench phone megaphone handshake scale puzzle diamond circle` (plus aliases like `idea`, `growth`, `money`, `team`, `award` — see `src/engine/viz/icons.ts`).
+
+## 6. Characters
+
+A reusable **sketchnote character library** ships with the engine — the classic
+bullet-head figure (circle head + dot eyes + emotion mouth, torso outline,
+curved limbs with hand blobs, motion lines) drawn parametrically, preset-aware,
+and deterministic like everything else. It has **six independent axes** — mix
+and match one figure into millions of distinct characters. Browse them all live
+on the [Characters page](https://vivmagarwal.github.io/edododraw/#/characters).
+
+- **Poses (44 movements)** — `pose:`: `standing confident arms-crossed leaning
+  strolling waving waving-both pointing presenting offering halting hands-up
+  shrugging thinking chin-thinking listening facepalm peering searching cheering
+  victory holding-overhead reaching-up dancing stretching star-pose walking
+  marching tiptoeing running jumping kicking pushing pulling carrying throwing
+  bending climbing sitting kneeling meditating bowing balancing falling`. The
+  upper body shears with each pose's forward `lean` so leaning figures (running,
+  pushing, falling…) stay whole; feet stay planted on the ground line.
+- **Emotions (26 expressions)** — `emotion:`: `neutral happy sad surprised angry
+  excited confused thinking determined wink love starstruck sleeping dizzy
+  laughing grin content calm worried scared crying furious stressed smug curious
+  embarrassed` — the workbook's mouth+eyes grid, extended with heart/star eyes,
+  tears, blush, and slanted brows.
+- **Shirts (14 styles)** — `shirt:` (+ `shirtColor:`): `vest tee striped solid
+  tie dress hoodie crew buttoned blazer labcoat overalls turtleneck scarf`.
+- **Hair (13 styles)** — `hair:` (+ `hairColor:`): `short spiky messy curly bob
+  long pigtails bun ponytail afro mohawk side-part bald`.
+- **Accessories (12)** — `accessory:` (+ `accessoryColor:`): `glasses sunglasses
+  monocle hat cap beard mustache bowtie headphones earrings crown mask`.
+- **Effects (14 emanata)** — `fx:` (+ `fxColor:`): `sweat question
+  double-question alarm exclaim idea anger excited stars hearts music zzz dizzy
+  sightline` — floating state marks near the head.
+- **Props**: ANY icon name (§5), held at the pose's anchor — `prop: trophy`
+  puts a trophy overhead in `holding-overhead`, `prop: star` crowns `cheering`.
+
+In the DSL, characters appear through templates: `personas` renders one per
+item (`{ pose: dancing, emotion: happy, shirt: hoodie, hair: afro, accessory: headphones, fx: music, prop: star }`),
+`quote` adds a presenting figure, and `vision`/`hole`/`tug-of-war` use them
+internally. From generator code (see EXTENDING_GUIDE):
+
+```ts
+ctx.character("cheering", cx, groundY, 120, { color: role.color, prop: "trophy", shirt: "striped", hair: "spiky", fx: "stars" });
+```
+
+Every axis is a **runtime registry** — extend any of them without touching the
+engine (the gallery and `llms.txt` pick up your additions automatically):
+
+```ts
+import { registerCharacterPose, registerCharacterEmotion, registerCharacterHair } from "edododraw";
+registerCharacterPose("dabbing", { armL: […], armR: […], legL: […], legR: […] });
+registerCharacterEmotion("smirk", (f) => { f.dot(f.face.eyeL, f.face.eyeY, 2); /* … */ });
+registerCharacterHair("mohawk-xl", (f) => { /* draw on f.head with f.stroke/f.fill/f.arc */ });
+```
+
+Container shapes from the same vocabulary are first-class node shapes usable
+anywhere in the DSL: `speech-bubble` (tail via `dir`), `starburst` (impact),
+`ribbon` (banner titles), `paper-fold` (documents) — plus the existing `cloud`,
+`note`, and `document`.
+
+## 7. Extending
+
+Register your own template and it's immediately usable from the DSL — no grammar change:
+
+```ts
+import { registerViz, type VizSpec, type VizContext } from "edododraw";
+
+registerViz({
+  name: "my-viz",
+  category: "Custom",
+  summary: "What it shows.",
+  generate(spec: VizSpec, ctx: VizContext) {
+    spec.items.forEach((item, i) => {
+      const role = ctx.role(i, { n: spec.items.length, color: item.color });
+      ctx.shape("circle", i * 120, 0, 90, 90, role, { id: ctx.uid(item.id) });
+      ctx.labelBlock(item.label, item.detail, i * 120 + 45, 120, { color: role.color, align: "center" });
+    });
+  },
+});
+```
+
+`VizContext` gives you preset-aware colors (`ctx.role`), measured/wrapped text (`ctx.label`, `ctx.labelBlock`), primitives (`ctx.poly`, `ctx.line`, `ctx.path`, sectors, block arrows), and icons (`ctx.icon`). See [EXTENDING_GUIDE.md](EXTENDING_GUIDE.md).
+
+==============================================================================
+
+# ═══ Style presets  (docs/STYLES_GUIDE.md) ═══
+
+# Styles Guide (style presets)
+
+A **style preset** is a whole-diagram visual identity: an ordered color palette, a fill treatment, stroke behavior, typography, and a canvas. One line restyles everything — classic node/edge scenes and [viz templates](VISUALIZATIONS_GUIDE.md) alike:
+
+```edd
+meta { style: chalkboard }
+```
+
+The presets were reverse-engineered from a professional reference set, so each one is a coherent designed system, not just a palette swap.
+
+---
+
+## 1. Applying a style
+
+- **In the source:** `meta { style: <name> }`.
+- **Per-view (embedders):** `EdodoDraw.setStylePreset("chalkboard")` or `compileEdd(src, { stylePreset })` — overrides the declared style without editing the source (see [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md)).
+- No `style:` at all → the classic Excalidraw-style hand-drawn look.
+
+Unknown names emit a `W-STYLE-PRESET` warning and keep the classic look. A dark preset switches the whole scene to dark mode; an explicit `setColorScheme` still wins.
+
+## 2. The built-in styles
+
+There are **9 curated styles**. `classic` — the black-and-white hand-drawn look — is the **default applied to every diagram** unless you pick another.
+
+| name | canvas | character |
+|---|---|---|
+| `classic` | white | **Default.** Black-and-white hand-drawn ink: bold wobbly outlines, hand lettering, no fills. |
+| `classic-color` | white | The colored hand-drawn look: soft pastel fills, matching outlines, Excalifont. |
+| `colorful-lines` | white | Clean line-art; each item's outline takes its palette color. |
+| `neutral-lines` | white | Neutral gray line-art; color lives in labels, icons, accents. |
+| `earthy-gradient` | pale sage | Muted earthy gradient fills unified by a dark-slate outline. |
+| `crayon` | parchment | Crayon-and-ink sketchbook: translucent dabs in heavy wobbly outlines. |
+| `chalkboard` | chalkboard blue | White-chalk wobbly outlines and handwriting on blue. |
+| `fine-line` | white | Austere 1px black wireframe; hierarchy by weight alone. |
+| `mono-accent` | white | Gallery grayscale with one terracotta spotlight and serif headings. |
+
+Renamed styles keep working under their old ids (`vibrant-strokes`→`neutral-lines`, `pragmatic-shades`→`earthy-gradient`, `artistic-flair`→`crayon`, `sketch-notes`→`chalkboard`, `elegant-outline`→`fine-line`, `silver-beam`→`mono-accent`). A hidden `classic-dark` is the automatic black-and-white variant when a diagram is viewed in dark mode.
+
+Two palette architectures are modeled:
+
+- **Multi-hue wheel** — items cycle through an ordered 10-hue palette (`colorful-lines`, `neutral-lines`, `classic-color`).
+- **Single-accent opacity ramp** — one color whose fill opacity encodes the series (`mono-accent`).
+
+Some styles use **seam strokes** — shapes are outlined in the *canvas* color, so adjacent solids read as flat cut-outs. The engine recomputes seams automatically if the background changes.
+
+## 3. What a preset controls
+
+- **Scene theme** — canvas background, light/dark mode, default ink, grid tint.
+- **Plain nodes** — a node that declares **no color of its own** cycles through the preset palette with the preset's fill treatment (`autoColorNodes`); nodes with explicit `fill:`/`stroke:` always keep them. Font, stroke width, roughness, and corner radius defaults also come from the preset.
+- **Edges** — connector color, width, roughness, label font, label background.
+- **Viz templates** — every item's shape/label/icon color resolves through the preset's role system, including ramp opacities, seam strokes, gradient fills, and per-shape contrast text.
+- **Typography** — body/heading/title font stacks (webfont on the site, with system fallbacks everywhere else) and weights (e.g. `classic` sets everything bold).
+
+Label colors are contrast-assured: a pastel palette color is automatically pulled toward the ink until it reads on the canvas.
+
+## 4. Extending
+
+```ts
+import { registerStylePreset } from "edododraw";
+
+registerStylePreset({
+  name: "my-brand",
+  label: "My Brand",
+  description: "…",
+  mode: "light",
+  background: "#ffffff",
+  palette: ["#0055ff", "#ff7733", "#11aa66"],
+  neutral: "#a3a3a3",
+  fillMode: "soft",        // solid | soft | outline | translucent | gradient | ramp
+  fillStyle: "solid",      // rough.js fill technique
+  strokeMode: "same",      // darken | same | ink | seam | none
+  strokeWidth: 2,
+  roughness: 0.6,
+  fonts: { body: '"Inter", sans-serif', heading: '"Inter", sans-serif', headingWeight: 700 },
+  ink: "#1a1a2e",
+  mutedInk: "#5a5a6e",
+  edge: "#1a1a2e",
+  autoColorNodes: true,
+  cornerRadius: 10,
+});
+```
+
+Then `meta { style: my-brand }` works everywhere. Full field reference: `src/engine/style/presets.ts` (`StylePreset`, `roleStyle`).
+
+==============================================================================
+
+# ═══ Camera & timeline  (docs/CAMERA_AND_TIMELINE_GUIDE.md) ═══
+
+# Camera & Timeline Guide
+
+How EDodoDraw does "magic-move" — smooth, scriptable camera moves and step-by-step presentations.
+
+## Architecture
+
+The camera is a `{ cx, cy, zoom }` transform (world point centered in the viewport). It is applied as the SVG `transform` on the world `<g>`:
+
+```
+translate(vw/2, vh/2) · scale(zoom) · translate(-cx, -cy)
+```
+
+- **Math** — `src/engine/camera/fit.ts` (`cameraForBBox`: frame any bbox with padding).
+- **Easing** — `src/engine/camera/easing.ts` (`linear ease ease-in ease-out ease-in-out back-out anticipate spring`; `spring` is a tuned overshoot for magic-move).
+- **Controller** — `src/engine/camera/controller.ts` drives interruptible, retargetable rAF tweens. Position eases linearly; **zoom interpolates in log space** so fast/slow zooms feel natural. Duration auto-scales with travel distance + zoom ratio when not specified.
+
+```ts
+const controller = new CameraController(renderer);
+await controller.fitAll(scene, { padding: 80 });           // frame everything
+await controller.focus(scene, ["db", "cache"], { zoom: 1.7, easing: "spring" });
+await controller.focusBBox({ minX, minY, maxX, maxY }, { zoom: 2 }); // frame an arbitrary world box
+controller.zoomBy(1.2, screenPoint);   // wheel zoom around cursor (relative)
+controller.panByScreen(dx, dy);         // drag pan
+```
+
+Mid-flight `animateTo` retargets smoothly from the current interpolated state — no snap.
+
+### Numeric contracts
+
+The behaviors an author or embedder can rely on (all from `controller.ts` / `fit.ts`):
+
+| Contract | Value |
+|---|---|
+| Zoom = scale factor | `1.0` = 100% (1 world unit = 1 screen px); `zoom: 1.7` = 170%. |
+| Wheel / `zoomBy` clamp | **0.05–8×** (5%–800%). |
+| Fit clamp | `fitAll`/`focusBBox` cap at **2.5×**; `focus`'s *computed* framing caps at **4×**. |
+| Explicit `zoom` | **Bypasses all clamps** — a passed `zoom` (DSL `camera … zoom N`, or `focus(..,{zoom})`) is applied as-is, so a beat can exceed the interactive limits. |
+| Auto-duration | When `over`/`durationMs` is omitted: `clamp(420 + dist·0.12 + |ln(zoomTo/zoomFrom)|·320, 420, 1300)` ms. |
+| Padding defaults | `fitAll` 80px, `focus`/`focusBBox` 90px, bare `cameraForBBox` 64px. |
+| Default easing | Compiled DSL beats default to **`ease-in-out`** (via `mapEasing`); a raw programmatic `animateTo` with no `easing` defaults to **`spring`**. |
+
+## Interaction (built into the canvas)
+
+- **Wheel** → zoom around the cursor.
+- **Drag** → pan.
+- Any user gesture pauses the timeline player.
+
+## Timeline player
+
+`src/engine/timeline/player.ts` plays `scene.steps` (compiled from a `timeline { beat … }` block — see [DSL_LANGUAGE_GUIDE §10](DSL_LANGUAGE_GUIDE.md)). Each beat diffs against the running state:
+
+| Channel | Rule |
+|---|---|
+| Camera | **Sticky** — a beat with no `camera` keeps the current one. |
+| Visibility (`show`/`hide`) | **Sticky** until changed. |
+| Reveal effect (`with fade-in`/`pop`/`draw-on`) | **Beat-scoped** — replayed each time the beat is entered (only when animating). |
+| Annotations | **Beat-scoped** — replaced each beat (always-on `annotate` block persists underneath). |
+
+API: `player.load(scene)`, `play()`, `pause()`, `next()`, `prev()`, `restart()`, `goto(i)`. It emits `PlayerState { index, total, caption, stepName, playing }` for the UI. **`index === -1`** is the home/overview state (before any beat; `stepName` is `"Overview"`) — `prev()` from beat 0 returns there and re-fits. Auto-advance uses each beat's `hold:` (default 3.2s).
+
+```edd
+timeline story {
+  beat overview "All"  { camera fit-all over 800ms; narrate: "the system" }
+  beat focus  "Detail" { camera focus [db, queue] zoom 1.7 ease spring; hold: 2s
+                         annotate { spotlight [db, queue] { dim: 0.7 } } }
+}
+```
+
+In the app, the bottom **player bar** shows Fit / Restart / Prev / Play / Next, the step indicator, and the caption. `⤢ Fit` reframes the whole diagram at any time.
+
+## Auto-choreography for visualizations
+
+Any `viz` block becomes a timeline with one option — no beats to write:
+
+```edd
+viz pyramid brand "Brand Pyramid" {
+  animate: fade          // or pop / draw-on; hold: <s>; animateCamera: true
+  item "Essence"; item "Benefits"; item "Features"
+}
+```
+
+The compiler synthesizes: an **Overview** beat hiding every data item, a beat
+per item (its `data-viz-item` group reveals with the chosen effect, the item
+label becomes the caption, `animateCamera: true` adds a per-item `camera
+focus`), and a closing fit-all. The result is ordinary `scene.steps`, so the
+player, `stepStateAt()`, and video hosts treat it exactly like a hand-written
+timeline. An explicit `timeline {}` in the same document always wins.
+
+## Frame-driven playback (pure step state)
+
+The player is a thin rAF/clock loop over **pure functions** in
+`src/engine/timeline/stepState.ts` — hosts that own time (video renderers,
+scrubbers, bake pipelines) call these directly and drive the exact same
+semantics with no clock or DOM:
+
+```ts
+import { stepStateAt, resolveCameraDirective, mixCameras, easingByName } from "edododraw";
+
+const state = stepStateAt(scene, i);
+// { hidden, annotations, revealFx, caption, camera, effectiveCamera, autoAdvanceMs, … }
+// hidden        — sticky visibility through step i (same math as the player)
+// annotations   — always-on + this beat's, in render order
+// effectiveCamera — the directive in force (camera is sticky across beats)
+
+const cam = resolveCameraDirective(scene, state.effectiveCamera, { w: 1920, h: 1080 });
+// concrete { cx, cy, zoom } — same fit/focus math and padding defaults as the player
+
+// interpolate a magic-move yourself (zoom mixes in log space, like the controller):
+mixCameras(fromCam, toCam, easingByName("ease-in-out")(t));
+```
+
+`index -1` is the overview (nothing hidden, always-on annotations, fit-all).
+Apply a state with `renderer.applyVisibility(new Set(state.hidden))` +
+`annotationLayer.render(scene, state.annotations, false)` + `renderer.applyCamera(cam)` —
+or in one call via the facade: `edd.applyStepState(edd.stepState(i))`. Pair with
+`{ static: true }` (no wall-clock CSS) — see
+[INTEGRATION_GUIDE §6](INTEGRATION_GUIDE.md) for the full video-pipeline recipe,
+including `setRevealProgress()` for host-driven draw-on.
+
+==============================================================================
+
+# ═══ Annotations  (docs/ANNOTATIONS_GUIDE.md) ═══
+
+# Annotations Guide
+
+Annotations are the layer of **highlights, underlines, arrows, callouts, spotlights** on top of a diagram — authored in code **or** drawn live, unified under one model (`Annotation` in `src/engine/scene/types.ts`).
+
+## One model, two sources
+
+- **Scripted** — from a top-level `annotate { … }` block (always-on) or inside a timeline `beat` (beat-scoped). Compiled into `scene.annotations` / `step.annotations`.
+- **Live** — drawn interactively by the user. Kept by `LiveAnnotationController` in a separate `live` layer.
+
+Both are the same `Annotation` record and both render through `AnnotationLayer` (`src/engine/annotate/layer.ts`), which draws hand-drawn (rough.js) marks in **world space** so they track the camera and their anchored element.
+
+### Anchoring
+
+`Annotation.target` is a ref to a node/edge/group id (tracks that element), a set (`options.members`), or an absolute world point. When the camera moves or layout changes, the annotation follows because it lives in the transformed world layer and re-resolves its target bbox on render.
+
+**Dotted ids & viz items.** Viz element/item ids contain dots (`sales.won`), which the target syntax parses as id + anchor part. The compiler resolves this after viz generation: when the bare ref matches nothing but the joined id does, the dotted id wins — so `strike sales.won` just works (legitimate parts like `underline a.label` are untouched). An explicit form is also available: `strike { target: "sales.won" }`. A viz **item** key anchors to the union bbox of all the item's elements. Targets that resolve to nothing emit a **`W-ANNOT-TARGET`** diagnostic instead of silently not drawing (timeline reveal/camera targets likewise emit `W-STEP-TARGET`).
+
+## Kinds
+
+`highlight` (marker) · `underline` (solid/double/wavy) · `strike` · `box` (over a set, labelled) · `circle-mark` · `point-at` (hand-drawn pointer + label) · `callout` (leader + bubble) · `spotlight` (dims everything but the target via an SVG mask) · `note-marker` · `connector` (free arrow) · `sticky` (note). See the table in [DSL_LANGUAGE_GUIDE §9](DSL_LANGUAGE_GUIDE.md).
+
+## Real-time editing
+
+The floating toolbar (left of the canvas) selects a tool; `LiveAnnotationController` (`src/engine/annotate/interact.ts`) handles pointer events:
+
+| Tool | Gesture | Result |
+|---|---|---|
+| Select | click a mark → select; drag a **point-anchored** mark (sticky note / free arrow) → move; Delete → remove | edit existing |
+| Highlight / Underline / Box / Circle | click an element | anchored annotation (tracks its element; can't be dragged) |
+| Arrow | drag; endpoints snap to elements | `point-at` / free connector |
+| Text | click | sticky note (inline text input) |
+
+Undo/redo (`⌘Z` / `⇧⌘Z`) is a snapshot stack. All interaction is smooth and reversible; nothing mutates the source until you commit.
+
+## Round-trip: commit to code
+
+The **⤓ code** button serializes live annotations back into an `annotate "live" { … }` block and appends it to the editor, then clears the live layer — so what you drew becomes part of the program and re-renders as scripted:
+
+```edd
+annotate "live" {
+  highlight idea { color: yellow }
+  underline vibe { color: #1971c2 }
+  circle-mark edit { color: #e8590c }
+  point-at hello { from: s, color: #1971c2 }
+}
+```
+
+Element-anchored annotations serialize exactly; free-form marks (a floating arrow with no element under either end) are emitted as a comment noting they aren't representable by id. See `LiveAnnotationController.commitToCode` and `tests/annotations.test.ts` for the round-trip contract.
+
+## Animated arrows
+
+The connector animations (`flow`, `dash-march`, `draw-on`, `comet`, `gradient-flow`, `electric`, `pulse`) are a CSS overlay path over the hand-drawn stroke — see `animationOverlay` in `src/engine/render/edges.ts` and the keyframes in `src/engine/render/theme.css.ts`. Set on any edge with `animate:` or the `~>` glyph.
+
+==============================================================================
+
+# ═══ Import & export  (docs/IMPORT_AND_EXPORT_GUIDE.md) ═══
+
+# Import & Export Guide
+
+## Mermaid import
+
+EDodoDraw imports raw Mermaid and re-renders it in the hand-drawn style, **preserving node ids** so you can choreograph and annotate the result.
+
+```edd
+mermaid """
+flowchart LR
+  app[App Servers] --> otel[OTel Collector]
+  otel --> prom[Prometheus]
+  prom --> grafana[Grafana]
+"""
+
+timeline walkthrough {
+  beat collect "Collection" {
+    camera focus [app, otel] zoom 1.7        // references the mermaid ids
+    annotate { point-at otel "single ingestion point" { from: s } }
+  }
+}
+```
+
+### How it works
+
+`src/engine/import/mermaid.ts` wraps `@excalidraw/mermaid-to-excalidraw`. Mermaid rendering needs the browser, so import is **async and app-side**:
+
+1. `extractMermaidBlocks(source)` pulls the `mermaid """ … """` bodies (pure string fn — unit-testable).
+2. `convertMermaid(body, mode = "light")` runs the Mermaid → Excalidraw-skeleton converter and maps each element to Scene IR: vertices → pinned nodes (mermaid id preserved), arrows → edges bound by `start.id`/`end.id`. The `mode` (`"light"` | `"dark"`) is the active color scheme, so imported nodes/edges are created for that theme; the facade passes `scene.theme.mode` automatically.
+3. `injectMermaid(scene, fragment)` merges the fragment into the compiled scene, so `id:::class` re-tags and timeline/annotate references resolve against the imported nodes.
+
+Supported: flowcharts (and other mermaid graph types the converter emits as elements). The synchronous DSL compiler stays DOM-free; only the app awaits conversion.
+
+## Export
+
+Top toolbar, in the **export:** group (left side, by the examples picker): **SVG · PNG · JSON · Copy**. SVG/PNG/JSON are implemented in `src/engine/export.ts` (`downloadSVG`/`downloadPNG`/`downloadJSON`); **Copy** writes the `.edd` source to the clipboard directly in the app (`src/app/App.tsx`). (The top-right holds the theme toggle and the Show code / Focus-mode button.)
+
+| Format | Notes |
+|---|---|
+| **SVG** | Standalone, framed to the content bbox (independent of the current camera). The hand-drawn font is **embedded as base64**, so the file renders correctly anywhere. |
+| **PNG** | The SVG rasterized to a 2× canvas. |
+| **JSON** | The full `Scene` IR — round-trippable, inspectable. |
+| **Copy** | The `.edd` source to the clipboard. |
+
+```ts
+await downloadSVG(renderer, scene);
+await downloadPNG(renderer, scene);
+downloadJSON(scene);
+```
+
+Screen-space overlays (player bar, selection outlines, hidden elements) are stripped from exports; the background is the scene/theme background.
+
+==============================================================================
+
+# ═══ Embed in your app  (docs/INTEGRATION_GUIDE.md) ═══
+
+# Integrating EDodoDraw
+
+How to embed the `edododraw` engine in your own app — vanilla JS, any framework,
+React, or a server. Everything here is checked against the published API in
+`src/lib/` and `src/engine/`.
+
+> Want to _extend_ the engine (new shapes, animations, layouts)? See
+> [EXTENDING_GUIDE.md](EXTENDING_GUIDE.md). For the diagram source language, see
+> [DSL_LANGUAGE_GUIDE.md](DSL_LANGUAGE_GUIDE.md).
+
+---
+
+## 1. Install
+
+```bash
+npm i edododraw
+```
+
+- **Runtime dependencies install automatically:** `roughjs` (hand-drawn strokes)
+  and `@dagrejs/dagre` (auto-layout).
+- **Mermaid import** (`@excalidraw/mermaid-to-excalidraw`) ships as an
+  _optionalDependency_: it's installed by default, but install won't fail if it's
+  unavailable, and it's **lazy-loaded** only when a `mermaid` block is actually
+  rendered. See [§7](#7-mermaid-note).
+- **React is optional.** It's a _peer_ dependency needed only for the
+  `edododraw/react` entry. For the core `edododraw` entry you don't need React at
+  all.
+
+The package is **ESM-only** (`"type": "module"`, `exports` expose `import` only)
+and targets **Node ≥ 18**. Two entry points:
+
+| Import | What you get |
+|---|---|
+| `edododraw` | The core: `EdodoDraw` facade + the whole engine (`compileEdd`, `SvgRenderer`, `registerShape`, Scene IR types, …). |
+| `edododraw/react` | `EdodoDrawView` React component (thin wrapper over the facade). |
+
+---
+
+## 2. Quick start (vanilla / any framework)
+
+Give the engine a sized container element and hand it EDodoDraw source. The
+`EdodoDraw` facade mounts an `<svg>`, compiles + renders, and exposes camera,
+timeline, live annotations, and export behind one object.
+
+```html
+<!doctype html>
+<div id="diagram" style="width: 100%; height: 500px;"></div>
+<script type="module">
+  import { EdodoDraw } from "edododraw";
+
+  const el = document.getElementById("diagram");
+  const edd = new EdodoDraw(el, { interactive: true });
+
+  await edd.render(`
+    scene {
+      a[Client] --> b[API] --> c[(Database)]
+    }
+    timeline {
+      beat intro "Overview" { camera fit-all, reveal { show a } }
+      beat call  "Trace the call" { camera focus b zoom 1.4, reveal { show b, c } }
+    }
+  `);
+
+  edd.play();   // drives the timeline (magic-move). No-op if the source has no timeline.
+</script>
+```
+
+The **container must have a height** — the facade sets `position` and
+`overflow: hidden` for you but never a size, and `autoFit` needs a measurable
+viewport. A `0px`-tall div renders nothing.
+
+`render()` is async (a `mermaid` block may need the lazy runtime) and safe to call
+on every keystroke — stale runs are discarded. It resolves to
+`{ scene, diagnostics }`.
+
+---
+
+## 3. `EdodoDraw` API reference
+
+```ts
+import { EdodoDraw } from "edododraw";
+new EdodoDraw(container: HTMLElement, options?: EdodoDrawOptions)
+```
+
+### Options (`EdodoDrawOptions`)
+
+| Option | Type | Default | Effect |
+|---|---|---|---|
+| `interactive` | `boolean` | `true` | Enable pan (drag), zoom (wheel), and live-annotation pointer/keyboard handling. Set `false` for a static embed. |
+| `grid` | `boolean` | `true` | Draw a dotted grid that pans/zooms with the camera (a CSS background on the container). |
+| `autoFit` | `boolean` | `true` | Fit the whole diagram into view after each `render()`. |
+| `padding` | `number` | `80` | Screen-px padding used when fitting. |
+| `static` | `boolean` | `false` | **Deterministic frame rendering**: disables ALL wall-clock CSS (visibility transitions, animated arrows — the overlay isn't even emitted —, reveal animations) so screenshot/video consumers never capture a frame mid-transition. See [Frame-driven / video integration](#6-frame-driven--video-integration-remotion-capture-pipelines). |
+| `startHidden` | `boolean` | `false` | Mount with every node/edge hidden and no annotations, so choreographed embeds never flash the full diagram before the host applies its first state. |
+
+### Render / scene
+
+| Method | Signature | Notes |
+|---|---|---|
+| `render` | `(source: string) => Promise<RenderResult>` | Compile + render. `RenderResult = { scene: Scene; diagnostics: Diagnostic[] }`. |
+| `appendSource` | `(fragment: string) => Promise<RenderResult>` | Append a DSL fragment to the current source and re-render — grow a diagram at runtime while the text stays the single source of truth. |
+| `renderScene` | `(scene: Scene) => void` | Render a programmatic Scene directly (skip the DSL) — pair with `vizToScene()`/`runViz()` to create visualizations on the fly. Canvas editing is inert for such scenes (no source to round-trip). |
+| `getScene` | `() => Scene` | The current rendered scene (Scene IR). |
+| `getSource` | `() => string` | The last source string passed to `render`. |
+| `setColorScheme` | `(mode: "light" \| "dark" \| null) => void` | Force light/dark rendering, overriding the diagram's declared theme. Re-themes the canvas background, the dotted grid, and the diagram's default ink (strokes/text adapt for contrast on the dark canvas; **explicit** colors are kept). `null` falls back to the DSL's own theme. Idempotent + re-renders the current source. |
+| `getColorScheme` | `() => "light" \| "dark" \| null` | The current forced scheme (`null` = follow the DSL). |
+
+**Light / dark theming.** A diagram's theme comes from the DSL (`theme dark { … }` / `use theme …`); `setColorScheme` / the `colorScheme` prop *override* it for the view, so you can wire EDodoDraw straight to your app's theme toggle. In dark mode the canvas goes near‑black, the dotted grid follows `theme.gridColor`, and **default** ink flips to light for contrast — but any color **you** set (`fill: green`, `stroke: red`, `textColor:`) is preserved. One nuance: because the default fill style is hand‑drawn *hachure* (the dark canvas shows through), labels on unfilled and hachure‑filled nodes use light ink; only a **solid** light fill (`fillStyle: solid`) keeps dark ink. Forcing a scheme also re‑themes exports (`downloadSVG`/`PNG`) — you export what you see.
+
+### Camera
+
+| Method | Signature | Notes |
+|---|---|---|
+| `fit` | `(animate?: boolean) => void` | Fit the whole diagram (default `animate = true`). |
+| `focus` | `(ids: string[], opts?: { zoom?: number; padding?: number }) => Promise<void>` | Animate to frame the given node/group/edge ids. |
+| `zoomBy` | `(factor: number) => void` | Multiply zoom around the viewport centre (e.g. `1.2` in, `0.8` out). |
+| `reset` | `() => void` | Animate back to fit-all. |
+| `camera` | `get camera(): CameraController` | The underlying controller for advanced moves (`animateTo`, `panByScreen`, …). |
+
+### Timeline (magic-move presentation)
+
+Only meaningful when the source contains a `timeline { … }` — otherwise these
+no-op. State changes emit via `on("state", …)`.
+
+| Method | Signature | Notes |
+|---|---|---|
+| `play` | `() => void` | Auto-advance through beats. No-op if the scene has no steps. |
+| `pause` | `() => void` | Stop auto-advance. |
+| `next` / `prev` | `() => void` | Step forward / back one beat. |
+| `goto` | `(i: number) => void` | Jump to beat index `i` (0-based). |
+| `restart` | `() => void` | Go to the first beat. |
+| `timeline` | `get timeline(): TimelinePlayer` | The underlying player (`hasTimeline`, current index, …). |
+
+### Tools — direct editing & annotation
+
+`setTool` selects the active pointer tool and switches the engine between its two
+interactive **modes**. All of this requires `interactive: true`.
+
+| Method | Signature | Notes |
+|---|---|---|
+| `setTool` | `(tool: string) => void` | **Edit tools** (mode `edit`): `"select"`, `"hand"`, `"rect"`, `"ellipse"`, `"diamond"`, `"text"`, `"arrow"`. **Annotate tools** (mode `annotate`): `"highlight"`, `"underline"`, `"mark-box"`, `"mark-circle"`, `"point"`, `"note"`. |
+
+**Direct editing (canvas → code).** In `edit` mode, pointer gestures manipulate the
+diagram and every change is patched back into the source (emitted as the `"edit"`
+event — see below), keeping the code the single source of truth:
+
+- **select** — click a node to select it (dashed box). **Shift-click** adds/removes a
+  node from the selection; **drag on empty canvas** rubber-bands a marquee over several
+  nodes; **⌘/Ctrl-A** selects all. Clicking one node in a multi-selection collapses to it.
+- **move** — drag any selected node; the whole selection moves together.
+- **resize** — drag a handle (shown only for a single selection). The cursor reflects
+  the gesture: `move` over a node, directional resize over a handle.
+- **nudge** — arrow keys move the selection 1px (**Shift** = 10px).
+- **rename** — double-click a node, type, `Enter`.
+- **duplicate / copy / paste** — **⌘/Ctrl-D** duplicates in place; **⌘/Ctrl-C** then
+  **⌘/Ctrl-V** copies and pastes (offset so copies don't stack).
+- **add** — pick `rect`/`ellipse`/`diamond`/`text` and drag on empty canvas; `arrow` drags between two nodes to connect them.
+- **edit an arrow** — click an arrow to select it (highlighted, with a handle at each
+  end). **Drag an endpoint** onto another node to reconnect it; **double-click** the
+  arrow to edit its label; `Delete` removes it. Deleting an arrow keeps its nodes.
+  (Canvas-drawn arrows are simple two-node edges; for a fan/chain edge written in code
+  — `a, b -> c` or `a -> b -> c` — deleting on canvas removes the whole statement.)
+- **delete** — `Delete`/`Backspace` removes the whole selection (nodes or the arrow).
+- **undo / redo** — **⌘/Ctrl-Z** and **⇧⌘/Ctrl-Z** (or **Ctrl-Y**) step through the
+  diagram-edit history. History is per-document: typing in your own code editor, or
+  loading a new document, resets it (your editor owns text undo).
+
+Move/resize/nudge write an `overrides { … }` block (see DSL_LANGUAGE_GUIDE §11); the
+other ops surgically patch declarations. All of it round-trips to the `.edd` source.
+
+| Method | Signature | Notes |
+|---|---|---|
+| `applyStyle` | `(id, { fill?, stroke?, shape? }) => void` | Upsert style attrs on a node's declaration (e.g. `{ fill: green }`). |
+| `applyStyleMany` | `(ids, { fill?, stroke?, shape? }) => void` | Same, across several nodes in **one** undo step (drives multi-select restyle). |
+| `duplicateSelected` | `() => void` | Clone the selection in place (fresh ids, small offset). |
+| `renameSelected` | `() => void` | Open the rename field for the current selection's primary node. |
+| `deleteSelected` | `() => void` | Delete the whole selection (node decls + their edges + overrides). |
+| `undo` / `redo` | `() => void` | Step the active mode's history — **diagram edits** in `edit` mode, annotations in `annotate` mode. |
+| `editUndo` / `editRedo` | `() => boolean` | Explicitly step the diagram-edit history (returns `false` when the stack is empty). |
+| `clearEditHistory` | `() => void` | Drop the diagram-edit undo/redo stacks (e.g. after loading a document). |
+| `fitNext` | `() => void` | Fit the whole diagram on the next render (e.g. after loading a new document). |
+| `editor` | `get editor(): EditController` | The underlying edit controller (`clearSelection`, `getSelected`, `getTool`, …). |
+
+### Live annotations
+
+| Method | Signature | Notes |
+|---|---|---|
+| `clearAnnotations` | `() => void` | Remove all live annotations. |
+| `annotationsToCode` | `() => string` | Serialize live annotations back to an `annotate { … }` DSL block. |
+| `annotator` | `get annotator(): LiveAnnotationController` | The underlying controller. |
+
+### Export
+
+| Method | Signature | Notes |
+|---|---|---|
+| `toSVG` | `() => Promise<string>` | Standalone SVG string with the hand-drawn font **embedded** (renders offline). |
+| `toPNG` | `() => Promise<Blob>` | Rasterised PNG (2× by default). |
+| `toJSON` | `() => Scene` | The Scene IR (the same object `getScene` returns). |
+| `downloadSVG` / `downloadPNG` | `() => Promise<void>` | Trigger a browser download. |
+| `downloadJSON` | `() => void` | Download the Scene IR as JSON. |
+
+### Lifecycle
+
+| Method | Signature | Notes |
+|---|---|---|
+| `resize` | `() => void` | Re-measure the container and re-apply the camera. Called automatically on container resize when `interactive: true` (via `ResizeObserver`); call it yourself otherwise. |
+| `destroy` | `() => void` | Remove listeners, the SVG, and the timeline; clears event subscribers. Always call on teardown. |
+
+### Events — `on(event, cb): () => void`
+
+`on` returns an **unsubscribe** function. Six events:
+
+| Event | Payload | Fires when |
+|---|---|---|
+| `"render"` | `RenderResult` `{ scene, diagnostics }` | After each successful `render()`. |
+| `"diagnostics"` | `Diagnostic[]` | After each `render()`, with compile diagnostics. |
+| `"state"` | `PlayerState` `{ index, total, caption, playing, stepName }` | Timeline position/playing changes. `index === -1` is the home/overview state (before any beat; `stepName` is `"Overview"`). |
+| `"live"` | `LiveState` `{ tool, count, canUndo, canRedo, selected }` | Live-annotation tool/selection/undo state changes. |
+| `"edit"` | `source: string` | A direct-manipulation edit patched the source. Re-render with this new source (and mirror it into your code editor). |
+| `"editstate"` | `EditState` `{ tool, selected: string[], selectedEdge, canUndo, canRedo }` | Edit-mode tool, node selection (an array — supports multi-select), selected edge id, or undo/redo availability changes (drive a property panel / toolbar). |
+
+A `Diagnostic` has `{ severity: "error"|"warning"|"info", code, message, line, col,
+start, end, expected?, found?, hint? }` (see `src/engine/dsl/diagnostics.ts`).
+
+```ts
+const off = edd.on("diagnostics", (diags) => {
+  const errors = diags.filter((d) => d.severity === "error");
+  if (errors.length) console.warn(errors.map((d) => `${d.code}: ${d.message}`).join("\n"));
+});
+// later: off();  // unsubscribe
+edd.on("state", (s) => console.log(s.index < 0 ? "Overview" : `beat ${s.index + 1}/${s.total} — ${s.stepName}`));
+
+// Direct-edit round-trip: the diagram is editable, and edits flow back to code.
+let source = "scene { rect a \"A\"\n a --> b }";
+edd.on("edit", (next) => {
+  source = next;              // keep your source of truth in sync…
+  void edd.render(next);      // …and re-render (also mirror `next` into your code editor)
+});
+edd.setTool("select");        // enable move/resize/rename/delete on the canvas
+```
+
+---
+
+## 4. React
+
+`edododraw/react` exports `EdodoDrawView`, a thin wrapper that owns an `EdodoDraw`
+instance for the lifetime of the component.
+
+```tsx
+import { EdodoDrawView } from "edododraw/react";
+import type { EdodoDraw } from "edododraw/react";
+
+export function Diagram() {
+  return (
+    <div style={{ height: 500 }}>
+      <EdodoDrawView
+        source={`scene { a[Hello] --> b[World] }`}
+        interactive
+        grid={false}
+        style={{ borderRadius: 8 }}
+        onReady={(edd: EdodoDraw) => edd.on("state", (s) => console.log(s.stepName))}
+        onDiagnostics={(diags) => console.log(diags)}
+        onState={(state) => console.log(state.index)}
+      />
+    </div>
+  );
+}
+```
+
+### Props (`EdodoDrawViewProps`)
+
+`EdodoDrawViewProps` extends `EdodoDrawOptions` (so `interactive`, `grid`,
+`autoFit`, `padding` are all valid props), plus:
+
+| Prop | Type | Notes |
+|---|---|---|
+| `source` | `string` (required) | EDodoDraw source. Re-renders whenever it changes. |
+| `className` | `string` | On the host `<div>`. |
+| `style` | `CSSProperties` | Merged onto the host (which defaults to `width/height: 100%`). |
+| `colorScheme` | `"light" \| "dark" \| null` | Force light/dark rendering (see `setColorScheme`). Reactive — flip it to follow your app's theme. Omit/`null` follows the DSL's own theme. |
+| `onReady` | `(edd: EdodoDraw) => void` | Called **once** after mount with the imperative instance — use it to subscribe to events or grab a ref for camera/export. |
+| `onDiagnostics` | `(diags: Diagnostic[]) => void` | Wired to the `"diagnostics"` event. |
+| `onState` | `(state: PlayerState) => void` | Wired to the `"state"` event. |
+
+The host `<div>` fills its parent (`width/height: 100%`), so wrap it in a **sized**
+element. Note the `EdodoDrawOptions` props (`interactive`, `grid`, …) are read
+**once at mount**; `source` and `colorScheme` are reactive. To change other options
+at runtime, remount (e.g. via a React `key`).
+
+```tsx
+// follow the host app's theme (e.g. a "dark" boolean from your own toggle)
+<EdodoDrawView source={code} colorScheme={dark ? "dark" : "light"} />
+```
+
+---
+
+## 5. Low-level engine usage (SSR / Node-safe)
+
+The DSL compiler is **synchronous and DOM-free**, so you can compile and validate a
+diagram anywhere — Node, an edge function, a build step — without a browser:
+
+```ts
+import { compileEdd } from "edododraw";
+
+const { scene, diagnostics, report } = compileEdd(`scene { a -> b -> c }`);
+// scene       : the Scene IR (nodes/edges/steps/…), JSON-serializable
+// diagnostics : a DiagnosticBag — diagnostics.items is Diagnostic[], .hasErrors, .errors
+// report      : string[] — human-readable, source-annotated diagnostic blocks
+
+if (diagnostics.hasErrors) throw new Error(report.join("\n\n"));
+
+// Force a render mode (overrides the DSL's declared theme). Same knob the
+// facade's setColorScheme / <EdodoDrawView colorScheme> use under the hood:
+const dark = compileEdd(`scene { a -> b }`, { mode: "dark" });
+// dark.scene.theme.mode === "dark"; background + gridColor + default ink adapt.
+```
+
+> `compileEdd` returns `diagnostics` as a **`DiagnosticBag`** (use `.items`,
+> `.hasErrors`, `.errors`). This differs from the facade's `render()`, whose
+> `diagnostics` is already a flat `Diagnostic[]`.
+
+### Programmatic source edits (`.edd` string → string)
+
+`edododraw` also exports the **source-patch API** — pure, synchronous, DOM-free
+transforms that rewrite `.edd` source text (Node/SSR/build-step safe, same as
+`compileEdd`). These are the primitives the interactive editor writes back with
+(see [DSL_LANGUAGE_GUIDE §11 — Overrides](DSL_LANGUAGE_GUIDE.md)), so a script can
+make the same edits a user would by dragging on the canvas:
+
+```ts
+import {
+  writeOverrides, renameNode, styleNode, addNode, addEdge, deleteElements,
+  type OverrideEntry,
+} from "edododraw";
+
+// each takes the current source and returns new source
+writeOverrides(src, [{ id: "db", x: 120, y: 40, w: 160, h: 80 }]); // upsert the overrides {} block (move/resize)
+renameNode(src, "db", "Primary DB");
+styleNode(src, "db", { fill: "green", stroke: "black", shape: "cylinder" });
+addNode(src, { id: "cache", shape: "rect", label: "Cache" });
+addEdge(src, { from: "api", to: "cache", glyph: "-->", label: "reads" });
+deleteElements(src, ["cache"]);
+
+// type OverrideEntry = { id: string; x: number; y: number; w?: number; h?: number }
+```
+
+The full engine is re-exported from `edododraw` for building your own rendering
+pipeline instead of using the `EdodoDraw` facade:
+
+```ts
+import {
+  compileEdd, applyLayout,
+  SvgRenderer, CameraController, TimelinePlayer,
+  AnnotationLayer, LiveAnnotationController,
+  cameraForBBox, sceneBBox,
+  exportSVGString, exportPNGBlob,
+  registerShape, ensureEngineStyles,
+} from "edododraw";
+```
+
+For example, a minimal custom composition (browser): compile → new `SvgRenderer`
+→ `renderer.render(scene)` → drive a `CameraController` yourself. The `EdodoDraw`
+facade in `src/lib/EdodoDraw.ts` is the reference for how these compose.
+
+---
+
+## 6. Frame-driven / video integration (Remotion, capture pipelines)
+
+Hosts that own time — video renderers (Remotion), Puppeteer capture, scrubbers,
+bake pipelines — should not rely on the interactive player's rAF tweens or the
+engine's wall-clock CSS: a frame screenshot can catch a 0.45 s opacity
+transition or an arrow animation mid-flight. The engine has a first-class mode
+for this:
+
+```ts
+const edd = new EdodoDraw(el, {
+  static: true,       // no wall-clock CSS at all — every frame is final
+  startHidden: true,  // nothing flashes before your first applied state
+  interactive: false,
+  autoFit: false,
+});
+await edd.render(source);
+```
+
+**What `static: true` guarantees**
+
+- No `transition:` on nodes/edges (visibility changes are instant).
+- Animated-arrow overlays (`flow`, `draw-on`, `comet`, …) are **not emitted**;
+  the hand-drawn base stroke + arrowheads still render fully.
+- Annotation/beat reveal animations are disabled.
+- Rendering is fully deterministic: node/edge/annotation strokes all use
+  id-hash/fixed rough.js seeds, so the same scene renders stroke-identical
+  across re-renders and worker processes.
+
+**Driving the timeline frame-by-frame.** `timeline { … }` compiles to pure data
+(`scene.steps`); resolve it per frame with the pure helpers (no clock, no DOM):
+
+```ts
+import { stepStateAt, resolveCameraDirective, mixCameras, easingByName } from "edododraw";
+
+// beat index + progress come from YOUR clock (e.g. VO word timestamps)
+const state = edd.stepState(beatIndex);       // = stepStateAt(edd.getScene(), i)
+edd.applyStepState(state);                    // visibility + annotations + sticky camera, instantly
+
+// or by hand, for interpolated magic-move between beats:
+const vp = { w: 1920, h: 1080 };
+const from = resolveCameraDirective(scene, stepStateAt(scene, i - 1).effectiveCamera, vp);
+const to   = resolveCameraDirective(scene, stepStateAt(scene, i).effectiveCamera, vp);
+const cam  = mixCameras(from, to, easingByName("ease-in-out")(progress01)); // zoom mixes in log space
+edd.camera.setImmediate(cam);
+```
+
+`StepState` gives you `hidden` (sticky visibility through this step),
+`annotations` (always-on + beat-scoped), `revealFx`, `caption`,
+`autoAdvanceMs`, and `effectiveCamera` (the directive in force — camera is
+sticky). The interactive `TimelinePlayer` is built on the same functions, so
+one `.edd` file powers docs, playground and video identically.
+
+**Zero-choreography timelines.** Add `animate: true` (plus optional `hold:` /
+`animateCamera:`) to any `viz` block and the compiler synthesizes the beat
+sequence for you — overview, one captioned beat per data item, closing fit-all
+— ready for `stepStateAt()` with no timeline authoring at all (see
+VISUALIZATIONS_GUIDE §1).
+
+**Draw-on progress.** Sweep any element on like it's being hand-drawn — strokes
+first (stroke-dashoffset in draw order), then labels fade:
+
+```ts
+edd.setRevealProgress("api", p);              // node or edge id, p = 0..1
+edd.setRevealProgress("loads.intrinsic", p);  // a whole viz item as one drawing
+// p ≥ 1 restores the untouched rendering (original dash patterns included)
+```
+
+**Choreographing viz internals.** Every element a viz template emits for one
+data entry is tagged with its item — in the Scene IR (`node.data.vizItem =
+"loads.intrinsic"`, plus `data.vizRole`: `"shape" | "label" | "detail" |
+"icon" | "value" | "line" | "edge"`) and in the DOM:
+
+```html
+<g data-node="loads.rectangle_5" data-viz-item="loads.intrinsic" data-viz-role="shape">…</g>
+```
+
+```ts
+import { vizItemMembers, listVizItems } from "edododraw";
+vizItemMembers(scene, "loads.intrinsic");  // -> all member element ids
+listVizItems(scene);                        // -> every "block.item" key in the scene
+```
+
+`block.item` keys work everywhere ids do: annotation targets
+(`strike loads.intrinsic`), timeline `reveal`/`hide`, camera `focus`, and
+`setRevealProgress`. `applyVisibility` is exposed on the facade for direct
+show/hide control (`edd.applyVisibility(hiddenIds)`).
+
+**Validating `.edd` before rendering.** `listVizTemplates()` returns the
+machine-readable template catalog — `{ name, aliases, category, summary,
+entryKinds, options, sweetSpot }` — so tooling can lint viz blocks without a
+browser. Unresolvable annotation or timeline targets surface as
+`W-ANNOT-TARGET` / `W-STEP-TARGET` diagnostics instead of silently no-oping.
+
+---
+
+## 7. Mermaid note
+
+You can embed raw Mermaid inside EDodoDraw source:
+
+```edd
+scene {
+  mermaid """
+  flowchart LR
+    A[Start] --> B{Choice}
+    B -->|yes| C[Do it]
+  """
+}
+```
+
+- The Mermaid engine (`@excalidraw/mermaid-to-excalidraw`) is an **optional
+  dependency, lazy-loaded** via dynamic `import()` on the **first** `mermaid` block
+  rendered — so apps that never use Mermaid don't pay for it (it's heavy).
+- The facade's `render()` extracts `mermaid """ … """` blocks, converts each, and
+  injects the resulting nodes/edges into the scene.
+- **If the package isn't installed**, the lazy import fails; the facade catches it
+  and reports a diagnostic (code `M-PARSE`) for that block. The rest of the diagram
+  still renders — `import { EdodoDraw } from "edododraw"` stays fully functional.
+  Install it explicitly if you need Mermaid: `npm i @excalidraw/mermaid-to-excalidraw`.
+- Mermaid conversion runs in the **browser only** (it renders to a hidden SVG). The
+  pure `compileEdd` path stays synchronous and ignores Mermaid runtime.
+
+Helpers `convertMermaid`, `extractMermaidBlocks`, and `injectMermaid` are also
+exported from `edododraw` if you want to drive the import yourself. See
+[IMPORT_AND_EXPORT_GUIDE.md](IMPORT_AND_EXPORT_GUIDE.md).
+
+---
+
+## 8. SSR / bundler notes
+
+- **The facade needs a DOM.** `new EdodoDraw(el)` and its methods use browser globals
+  — `document`, `window`, `getComputedStyle`, `ResizeObserver`, `requestAnimationFrame`
+  / `cancelAnimationFrame` (camera animation), and `XMLSerializer` (SVG export).
+  Construct and use it in the browser only. In React, create it inside `useEffect`
+  (which is exactly what `EdodoDrawView` does), never during render or on the server.
+- **`compileEdd` is DOM-free.** Use it for server-side validation, computing a scene
+  ahead of time, or CI checks — no browser or jsdom required.
+- **Headless SVG rendering works under jsdom.** `SvgRenderer` needs a DOM but not a
+  *browser*: give it a jsdom document (set the `document`/`window` globals, mount into
+  a div, render, serialize `renderer.svg.outerHTML`) and you can bake SVGs in Node/CI.
+  This repo's visual-QA harness (`scripts/qa/render-viz.mts`) is a working reference —
+  it renders all 87 viz templates headlessly this way. Pair with `{ static: true }`.
+- **Fonts are self-contained.** The hand-drawn font (Excalifont/Virgil) is embedded
+  as a base64 `@font-face` in the engine's injected CSS and in every exported SVG —
+  **no external font file or CDN is needed**. The live canvas injects this CSS once
+  per document via `ensureEngineStyles()` (the facade calls it automatically on
+  mount). The UI/code fonts (Nunito, Cascadia) are best-effort from `/fonts` with
+  system fallbacks and only matter inside the playground app.
+- **ESM only.** There is no CommonJS build; use `import` (or dynamic `import()`),
+  not `require`. Any modern bundler (Vite, webpack 5, esbuild, Rollup, Next.js)
+  resolves the `edododraw` / `edododraw/react` subpath exports directly.
+- **Tree-shaking + built-in shapes.** Built-in plugin shapes (e.g. `star`) are
+  registered from the renderer on `mount()` (via `registerBuiltinShapes()`), so they
+  survive a tree-shaking library build and are always available once you render.
+  `package.json` also lists the `builtins` files under `sideEffects` for the eager
+  registration path. Your own `registerShape(...)` calls run whenever their module is
+  imported — import that module before you render.
+
+---
+
+## 9. Troubleshooting
+
+| Symptom | Likely cause & fix |
+|---|---|
+| Blank canvas, nothing renders | Container has no height. Give it an explicit size (`height: 500px`); the facade sets position/overflow but never a size. |
+| `document is not defined` / crash on the server | The facade needs a DOM. Only construct `EdodoDraw` in the browser; use `compileEdd` for SSR/Node. |
+| `edd.play()` does nothing | The source has no `timeline { … }` — the player no-ops without steps. Add beats, or drive the camera directly with `focus`/`fit`. |
+| Mermaid block shows an `M-PARSE` diagnostic | `@excalidraw/mermaid-to-excalidraw` isn't installed. Run `npm i @excalidraw/mermaid-to-excalidraw`. |
+| Wheel/scroll is hijacked by the diagram | `interactive: true` binds wheel-zoom with `preventDefault`. Use `interactive: false` for a static embed. |
+| React: changing `interactive`/`grid` prop has no effect | Options are read once at mount; only `source` is reactive. Remount (e.g. change the component `key`). |
+| Live-annotation tools do nothing | Live tools require `interactive: true`. |
+| Camera/timeline "jumps" instead of animating | You called an immediate variant (`fit(false)`), or `autoFit` refit after a `render()`. Use `focus(...)`/`fit(true)` for animated moves. |
+| Old instance leaks / duplicate SVGs after re-mount | Call `edd.destroy()` on teardown (the React wrapper does this for you). |
+
+---
+
+See also: [ARCHITECTURE.md](ARCHITECTURE.md) ·
+[DSL_LANGUAGE_GUIDE.md](DSL_LANGUAGE_GUIDE.md) ·
+[CAMERA_AND_TIMELINE_GUIDE.md](CAMERA_AND_TIMELINE_GUIDE.md) ·
+[ANNOTATIONS_GUIDE.md](ANNOTATIONS_GUIDE.md) ·
+[IMPORT_AND_EXPORT_GUIDE.md](IMPORT_AND_EXPORT_GUIDE.md) ·
+[EXTENDING_GUIDE.md](EXTENDING_GUIDE.md)
+
+==============================================================================
+
+# ═══ Extend & make plugins  (docs/EXTENDING_GUIDE.md) ═══
+
+# Extending EDodoDraw
+
+How to add new capabilities to the engine: custom **shapes**, **animated arrows**,
+**annotation kinds**, **layouts**, and **DSL constructs**. This guide is for people
+working _inside_ the repository (or forking it) — every example is copy-paste
+accurate against the current source.
+
+> New to the codebase? Read [ARCHITECTURE.md](ARCHITECTURE.md) first, then
+> [DEVELOPMENT_STANDARDS.md](DEVELOPMENT_STANDARDS.md). To _embed_ EDodoDraw in an
+> app (rather than extend it), see [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md).
+
+---
+
+## 1. The extension philosophy
+
+EDodoDraw is designed to be extended without rewriting the core. Two ideas make
+that possible:
+
+- **The Scene IR is the contract.** Every producer (the DSL compiler, the Mermaid
+  importer, a programmatic caller) emits a `Scene`; the renderer and controllers
+  only consume a `Scene`. See `src/engine/scene/types.ts`. If your extension can be
+  expressed as data on the `Scene`, everything downstream already works.
+- **Open unions + registries.** The presentation-level enums are _open_ string
+  unions: `ShapeKind`, `ArrowheadKind`, `ArrowAnimationKind`, `AnnotationKind`,
+  and `LayoutKind` all end in `| (string & {})` (except `LayoutKind`, whose
+  dispatch has a grid fallback). That means the parser and compiler already accept
+  names they've never seen — an unknown value flows through the pipeline untouched
+  and is _resolved at the last moment_ by a renderer switch or a registry lookup.
+
+The practical consequence: **most extensions need no grammar change** — and
+**every extension seam is a runtime registry**, callable from any consuming app
+with no engine fork:
+
+| Seam | Register with | Usable from DSL text as |
+|---|---|---|
+| Shapes | `registerShape(name, fn)` | `shape: myshape` / the keyword |
+| Visualization templates | `registerViz(def)` | `viz my-viz { … }` |
+| Style presets | `registerStylePreset(preset)` | `meta { style: my-brand }` |
+| Arrow animations | `registerArrowAnimation(kind, def)` | `animate: surge` |
+| Annotation kinds | `registerAnnotation(kind, fn)` | `cross a "text"` (annotate blocks + beats) |
+| Layouts | `registerLayout(name, fn)` | `layout column` |
+| Icons | `registerIcon(name, pathD, opts?)` | `item "X" { icon: mylogo }` |
+| Character poses | `registerCharacterPose(name, pose)` | `item "X" { pose: myname }` (personas et al.) |
+| Character emotions | `registerCharacterEmotion(name, draw)` | `item "X" { emotion: myname }` |
+| Character shirts | `registerCharacterShirt(name, draw)` | `item "X" { shirt: myname }` |
+| Character hair | `registerCharacterHair(name, draw)` | `item "X" { hair: myname }` |
+| Character accessories | `registerCharacterAccessory(name, draw)` | `item "X" { accessory: myname }` |
+| Character effects | `registerCharacterFx(name, draw)` | `item "X" { fx: myname }` |
+
+Registries win over the built-in switches, so a plugin can also *shadow* a
+built-in name. Each is detailed below; there's also a fully **programmatic**
+path — `vizToScene()` + `edd.renderScene()` build and mount diagrams from plain
+data with no DSL text at all, and `edd.appendSource()` grows a live diagram's
+text at runtime (see [§6](#6-add-a-visualization-template) and
+[INTEGRATION_GUIDE](INTEGRATION_GUIDE.md)).
+
+---
+
+## 2. Add a custom shape
+
+Shapes resolve through a **plugin registry** (`src/engine/plugins/registry.ts`).
+You register a function under a name; the renderer calls it whenever a node's
+`shape` matches. No grammar change is needed — `mapShape()` in
+`src/engine/dsl/lower.ts` returns any unknown shape name as-is, and
+`renderShapeBody()` (`src/engine/render/shapes.ts`) falls back to the registry in
+its `default:` case:
+
+```ts
+// src/engine/render/shapes.ts (default branch of renderShapeBody)
+default: {
+  const plugin = getShapePlugin(shape);
+  if (plugin) return plugin(rc, rect, style);
+  // unknown shape -> rounded rectangle so nothing silently disappears
+}
+```
+
+The registry exposes three public functions (all exported from `edododraw`):
+`registerShape(name, fn)`, `getShapePlugin(name)`, and `listShapePlugins(): string[]`
+(the names of all registered shapes — handy for introspection/debugging).
+
+### The plugin contract
+
+```ts
+export type ShapePluginFn = (rc: RoughSVG, rect: ShapeRect, style: NodeStyle) => SVGGElement;
+```
+
+- **`rc`** — a rough.js SVG generator (`ReturnType<typeof rough.svg>`). Use
+  `rc.polygon`, `rc.path`, `rc.ellipse`, `rc.rectangle`, `rc.circle`, `rc.line`,
+  `rc.linearPath`, `rc.curve` — each returns an `SVGGElement` (or `SVGPathElement`)
+  you append.
+- **`rect`** — the node box as **top-left `x`/`y` plus `w`/`h`** (`ShapeRect`), in
+  world coordinates. There is no separate transform: draw directly at these
+  absolute coordinates. The centre is `(rect.x + rect.w/2, rect.y + rect.h/2)`.
+- **`style`** — the node's resolved `NodeStyle` (stroke, fill, `fillStyle`,
+  `strokeWidth`, `roughness`, `seed`, `fontSize`, …).
+- **Return** a single `<g>` (`SVGGElement`). **Do not draw the label** — the
+  renderer overlays text itself after calling you.
+
+`nodeRoughOptions(style, filled)` (exported from `src/engine/render/shapes.ts`)
+maps a `NodeStyle` onto rough.js `Options` (stroke/fill/roughness/seed, dashes,
+hachure gap). Pass `filled = true` for closed bodies so the node's fill and
+`fillStyle` are honoured; `false` for stroke-only accents. Using it keeps the
+deterministic `seed` (so re-renders don't re-jitter) and the hand-drawn look
+consistent with the built-ins.
+
+### Worked example — a "gauge" shape (add to the builtins)
+
+The canonical place to register in-repo shapes is
+`src/engine/plugins/builtins.ts` (the `star` example already lives there). Add your
+shape inside the exported `registerBuiltinShapes()` function — the renderer calls it
+on `mount()` (and it is called eagerly on import), so built-ins survive a
+tree-shaking library build and are always available once you render. Add:
+
+```ts
+// src/engine/plugins/builtins.ts — add this call INSIDE registerBuiltinShapes()
+// (so it survives the tree-shaking library build, like the star above).
+// `nodeRoughOptions` and `registerShape` are already imported in that file.
+
+// A half-circle gauge with a needle — great for "health"/"load" nodes.
+registerShape("gauge", (rc, rect, style) => {
+  const g = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h * 0.72;           // dial sits low in the box
+  const r = Math.min(rect.w, rect.h * 1.4) / 2;
+
+  // The dial arc (semicircle), stroke-only.
+  const arc = `M${cx - r},${cy} A${r},${r} 0 0 1 ${cx + r},${cy}`;
+  g.appendChild(rc.path(arc, nodeRoughOptions(style, false)));
+
+  // Filled body under the arc so fill/fillStyle read through.
+  const body = `M${cx - r},${cy} A${r},${r} 0 0 1 ${cx + r},${cy} Z`;
+  g.appendChild(rc.path(body, nodeRoughOptions(style, true)));
+
+  // The needle, pointing ~70% of the way across the dial.
+  const angle = Math.PI - Math.PI * 0.7;
+  g.appendChild(rc.line(cx, cy, cx + Math.cos(angle) * r * 0.9, cy - Math.sin(angle) * r * 0.9, {
+    stroke: style.stroke,
+    strokeWidth: style.strokeWidth + 0.6,
+    roughness: Math.min(style.roughness, 1),
+    seed: style.seed,
+  }));
+  return g;
+});
+```
+
+### Using it from the DSL
+
+No grammar change — three equivalent ways to reach a registered shape:
+
+```edd
+scene {
+  g1[CPU] { shape: gauge }     // via the `shape:` attribute
+  node g2 "Memory" as gauge    // via the explicit `as <name>` form
+}
+```
+
+Both compile to a node whose `shape` is `"gauge"`, which the renderer resolves via
+`getShapePlugin("gauge")`. (Verified: `g[Gauge] { shape: gauge }` compiles to a
+node with `shape === "gauge"`, and `node x as gauge` likewise.)
+
+To also expose a **short keyword** (so `gauge g1 "CPU"` works as a shape-led node),
+add the word to two internal tables:
+
+1. `SHAPE_KEYWORDS` in `src/engine/dsl/tokens.ts` — so the parser treats
+   `gauge <id>` as a keyword-led node (see `parseKeywordNode` in `parser.ts`).
+2. `SHAPE_MAP` in `src/engine/dsl/lower.ts` — map `gauge: "gauge"` (only needed if
+   the surface word differs from the registered name; identical names pass through
+   `mapShape` unchanged).
+
+### Registering from _outside_ the repo (runtime)
+
+`registerShape` is part of the public package export, so an embedding app can add a
+shape at runtime with no fork:
+
+```ts
+import { registerShape, EdodoDraw } from "edododraw";
+
+// nodeRoughOptions is engine-internal (not re-exported), so build rough options
+// inline from the NodeStyle you're handed:
+registerShape("gauge", (rc, rect, style) => {
+  const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  const opts = {
+    stroke: style.stroke,
+    strokeWidth: style.strokeWidth,
+    roughness: style.roughness,
+    seed: style.seed,
+    fill: style.fill ?? undefined,
+    fillStyle: style.fillStyle,
+  };
+  const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2, r = Math.min(rect.w, rect.h) / 2;
+  g.appendChild(rc.circle(cx, cy, r * 2, opts));
+  return g;
+});
+
+const edd = new EdodoDraw(document.getElementById("app")!);
+await edd.render(`scene { s[Sensor] { shape: gauge } }`);
+```
+
+Register **before** you call `render()` so the plugin is present when the scene
+paints.
+
+---
+
+## 3. Add an animated arrow
+
+An edge draws a hand-drawn base stroke, arrowheads, and (optionally) a clean
+**overlay `<path>`** that carries a CSS animation along the exact same centerline.
+
+### Runtime (package consumers) — `registerArrowAnimation`
+
+No engine fork needed: register the kind and it's immediately usable from DSL
+text (`animate: surge`), including the `{ speed: N }` form:
+
+```ts
+import { registerArrowAnimation } from "edododraw";
+
+registerArrowAnimation("surge", {
+  // keyframes + class, injected once per document (class is always edd-anim-<kind>)
+  css: `@keyframes edd-surge { to { stroke-dashoffset: -18; } }
+        .edd-anim-surge { animation-name: edd-surge; animation-timing-function: ease-in; animation-iteration-count: infinite; }`,
+  // style the overlay path; length/speed are precomputed for you
+  apply(path, edge, { length, speed }) {
+    path.setAttribute("stroke-dasharray", "4 14");
+    path.style.animationDuration = `${0.7 / speed}s`;
+  },
+});
+```
+
+The overlay arrives with stroke/width/linecap defaults matching the edge and
+`--edd-len` / `--edd-speed` CSS variables set. Registered kinds pass through the
+compiler untouched (no fallback to `flow`), are suppressed in `static: true`
+renders, and honor `prefers-reduced-motion` automatically via the blanket
+`.edd-anim` rule.
+
+### Contributing a built-in (in-repo)
+
+Adding a kind to the engine itself is **exactly three edits** plus (optionally)
+widening the type union. We'll add the same `surge` (a fast, short dash sweep).
+
+**Edit 1 — the overlay case** in `animationOverlay()`
+(`src/engine/render/edges.ts`). This configures the SVG path for the new kind; the
+element already has class `edd-anim edd-anim-surge`, and `--edd-len` / `--edd-speed`
+CSS variables are set for you:
+
+```ts
+// src/engine/render/edges.ts — inside animationOverlay's switch (kind)
+case "surge": {
+  p.setAttribute("stroke", stroke);
+  p.setAttribute("stroke-width", String(sw * 1.5));
+  p.setAttribute("stroke-linecap", "round");
+  p.setAttribute("stroke-dasharray", "4 14");
+  style.animationDuration = `${0.7 / speed}s`;
+  break;
+}
+```
+
+**Edit 2 — the keyframe + class** in `src/engine/render/theme.css.ts` (the `CSS`
+string). The class name must be `edd-anim-<kind>` to match the attribute the
+overlay sets:
+
+```css
+@keyframes edd-surge {
+  to { stroke-dashoffset: -18; }
+}
+.edd-anim-surge {
+  animation-name: edd-surge;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+}
+```
+
+`.edd-anim-surge` is already covered by the blanket `.edd-anim` selector in the
+`prefers-reduced-motion` block at the end of the CSS, so motion-sensitive users
+are handled automatically — no extra edit needed there.
+
+**Edit 3 — accept the name in the compiler.** In `mapAnimation()`
+(`src/engine/dsl/lower.ts`), add `surge` to the `known` set so the DSL keeps it
+instead of falling back to `flow`:
+
+```ts
+const known = new Set([
+  "none", "flow", "dash-march", "draw-on", "pulse", "comet",
+  "gradient-flow", "electric", "glow", "caravan", "wiggle",
+  "surge",  // <-- new
+]);
+```
+
+**Optional — widen the type.** Add `| "surge"` to the `ArrowAnimationKind` union in
+`src/engine/scene/types.ts`. The union is open (`| (string & {})`), so this is only
+for editor autocomplete and exhaustiveness, not correctness.
+
+### Using it
+
+```edd
+scene {
+  a[Client] ~> b[Server] { animate: surge }
+  a -> b { animation: surge { speed: 1.6 } }
+}
+```
+
+Both `animate:` and `animation:` are accepted (see `buildEdgeStyle` in
+`compile.ts`); the `{ speed: N }` styled form sets `animationSpeed`, which your
+`animationDuration` divides by. The `~>` glyph is a convenient default that already
+sets `animation: flow` + curved routing — override with the trailing block.
+
+---
+
+## 4. Add an annotation kind
+
+Annotations (scripted _and_ live) are `Annotation` records rendered by
+`AnnotationLayer.draw()` (`src/engine/annotate/layer.ts`).
+
+### Runtime (package consumers) — `registerAnnotation`
+
+Register a draw function and the kind works from DSL text immediately — in
+top-level `annotate { … }` blocks **and** as a bare command inside timeline
+beats/staggers (the parser consults the registry):
+
+```ts
+import { registerAnnotation } from "edododraw";
+
+registerAnnotation("cross", (an, { g, rc, box, label }) => {
+  if (!box) return;
+  const opts = { stroke: an.color || "#e03131", strokeWidth: 3, roughness: 1.6, seed: 33 };
+  g.appendChild(rc.line(box.minX, box.minY, box.maxX, box.maxY, opts));
+  g.appendChild(rc.line(box.minX, box.maxY, box.maxX, box.minY, opts));
+  if (an.text) label(an.text, { x: box.minX, y: box.minY - 8 }, opts.stroke, "start");
+});
+```
+
+```edd
+scene { a[Deprecated] }
+annotate { cross a "kill it" { color: red } }
+timeline t { beat one { cross a } }   // beat context works too
+```
+
+The context gives you `scene`, the rough.js canvas `rc` (always pass a stable
+`seed` so strokes don't re-jitter), the resolved target `box` (nodes, edges,
+groups, and viz-item keys all resolve), `resolveBBox(id)` for secondary
+targets, and the hand-drawn `label()` helper. Everything is drawn in world
+space, so your marks track the camera and their target automatically.
+
+### Contributing a built-in (in-repo)
+
+The `kind` field is an open union, so adding one to the engine is a single
+`case` plus a private draw method. We'll add the same `cross` (a big
+hand-drawn X over an element — distinct from `strike`, which is one horizontal
+line).
+
+**Edit 1 — the `draw` switch** in `AnnotationLayer` (`layer.ts`). `box` is the
+target's world bounding box (already resolved for you from `an.target`):
+
+```ts
+// src/engine/annotate/layer.ts — inside draw()'s switch (an.kind)
+case "cross":
+  if (box) this.drawCross(g, box, an);
+  break;
+```
+
+**Edit 2 — the draw method** (same file), using rough.js with a stable `seed` so it
+doesn't re-jitter:
+
+```ts
+private drawCross(g: SVGGElement, box: BBox, an: Annotation): void {
+  const color = an.color || "#e03131";
+  const opts = { stroke: color, strokeWidth: 3, roughness: 1.6, seed: 33 };
+  g.appendChild(this.rc.line(box.minX, box.minY, box.maxX, box.maxY, opts));
+  g.appendChild(this.rc.line(box.minX, box.maxY, box.maxX, box.minY, opts));
+  if (an.text) this.label(g, an.text, { x: box.minX, y: box.minY - 8 }, color, "start");
+}
+```
+
+That's enough to use it from a scripted `annotate { … }` block — `parseAnnotationCmd`
+reads any leading ident as the `kind`, so no parser change is required:
+
+```edd
+scene { a[Deprecated] }
+annotate {
+  cross a { color: red }
+}
+```
+
+> Note: to use a **bare** annotation command inside a `timeline` beat or a
+> `stagger { … }` block (e.g. `beat { cross a }`), also add `"cross"` to the
+> `ANNOT_KINDS` set at the bottom of `src/engine/dsl/parser.ts` — that set gates
+> which idents are recognised as annotation verbs in beat context. Top-level
+> `annotate { … }` blocks don't consult it.
+
+### Optional — a live tool
+
+To let users draw it interactively, teach `LiveAnnotationController`
+(`src/engine/annotate/interact.ts`):
+
+1. **Widen the `Tool` union:** `export type Tool = "select" | … | "cross";`
+2. **Add a default** to the `DEFAULTS` map — the element-anchored tool path in
+   `pointerDown()` reads it (click an element → annotation created):
+   ```ts
+   const DEFAULTS = {
+     // …existing…
+     cross: { kind: "cross", color: "#e03131", options: {} },
+   };
+   ```
+3. **(Optional) commit-to-code:** add a `case "cross"` to `serialize()` so
+   `annotationsToCode()` round-trips it back to DSL.
+4. **Add a toolbar button** in the playground: `src/app/App.tsx`, the `ANNOT_TOOLS`
+   array — `{ tool: "cross", icon: "✕", label: "Cross out element" }`.
+5. **Route the tool name** in `src/lib/EdodoDraw.ts`: add the button's `tool` string
+   to the `ANNOT_MAP` record — `cross: "cross"` (key = the app tool name, value = the
+   controller `Tool` from `interact.ts`). The facade's `setTool` only acts on names in
+   `EDIT_TOOLS` or `ANNOT_MAP`, so **without this the button is inert**. (App tool names
+   are remapped to controller tools here — that's why `mark-box`→`box`, `point`→`arrow`,
+   `note`→`text`.)
+
+The live layer already handles selection, undo/redo, and camera tracking generically,
+so those come for free.
+
+---
+
+## 5. Add a layout
+
+Auto-layout assigns world positions to non-pinned nodes based on
+`scene.meta.layout` (a `LayoutKind`). See `src/engine/layout/index.ts`.
+
+### Runtime (package consumers) — `registerLayout`
+
+Register the algorithm and `layout <name>` works from DSL text immediately:
+
+```ts
+import { registerLayout } from "edododraw";
+
+registerLayout("column", (scene, movable) => {
+  let y = 0;
+  for (const n of movable) {
+    n.x = -n.w / 2;
+    n.y = y;
+    y += n.h + (scene.meta.spacing?.node ?? 40);
+  }
+});
+```
+
+```edd
+scene { layout column
+  rect a; rect b; rect c }
+```
+
+You receive only the **movable** (non-pinned) nodes; mutate their top-left
+`x`/`y` in place. Your function runs inside applyLayout's never-throw envelope
+(failures fall back to grid) and the result is normalized to a small positive
+margin afterwards — so relative geometry is what matters.
+
+### Contributing a built-in (in-repo)
+
+Adding a mode to the engine is three edits; we'll add the same `column` (a
+single vertical stack).
+
+**Edit 1 — the algorithm.** New file `src/engine/layout/column.ts`, mutating each
+node's top-left `x`/`y` in place (mirror the shape of `grid.ts`/`radial.ts`):
+
+```ts
+// src/engine/layout/column.ts
+import type { SceneNode } from "../scene/types.js";
+
+/** Stack nodes in one centred vertical column, top to bottom. */
+export function layoutColumn(nodes: SceneNode[], gap: number): void {
+  let y = 0;
+  for (const n of nodes) {
+    n.x = -n.w / 2;   // centre each node on x = 0
+    n.y = y;
+    y += n.h + gap;
+  }
+}
+```
+
+**Edit 2 — the dispatch** in `runLayout()` (`layout/index.ts`). Any unknown kind
+already falls back to grid, so this just makes `column` explicit:
+
+```ts
+import { layoutColumn } from "./column.js";
+// …
+switch (kind) {
+  // …existing cases…
+  case "column":
+    layoutColumn(movable, gridGap(scene));
+    return;
+}
+```
+
+**Edit 3 — the type + DSL mapping.**
+
+- Add `"column"` to the `LayoutKind` union in `src/engine/scene/types.ts`.
+- Map the DSL keyword in `resolveLayoutKind()` (`src/engine/dsl/compile.ts`) — this
+  is where `layout <word>` is translated to a `LayoutKind`:
+  ```ts
+  const map: Record<string, LayoutKind> = {
+    dag: "dag", tree: "dag", flow: "dag", force: "dag",
+    grid: "grid", radial: "radial", free: "manual", manual: "manual",
+    column: "column",  // <-- new
+  };
+  ```
+
+### How a layout is chosen
+
+`resolveLayoutKind()` runs at compile time: an explicit `layout <kind>` maps through
+the table above; with no `layout` statement, the compiler defaults to `"dag"` when
+any node is unpinned, else `"manual"`. `applyLayout(scene)` then reads
+`scene.meta.layout` and dispatches. Cross-cutting rules that come for free:
+`pinned` nodes are never moved, the function never throws (falls back to grid), and
+the final result is normalised so the bounding box starts near `(40, 40)`.
+
+### Using it
+
+```edd
+scene {
+  layout column
+  a[One] --> b[Two] --> c[Three]
+}
+```
+
+---
+
+## 6. Add a visualization template
+
+`viz <name> { … }` blocks resolve through the viz registry, so a new template is
+a pure runtime registration — same pattern as shapes:
+
+> Three related runtime seams live nearby:
+>
+> - **`registerIcon(name, pathD, { viewBox?, aliases? })`** — add glyphs usable
+>   from any item's `icon:` attribute. Stroke-only paths (they're sketched by
+>   rough.js); `viewBox` is the square design size (default 24). Registered
+>   icons show up in `listIcons()` and can shadow built-ins.
+>   ```ts
+>   import { registerIcon } from "edododraw";
+>   registerIcon("bolt", "M8 2 L16 12 L10 12 L16 22", { aliases: ["zap"] });
+>   ```
+> - **`vizToScene(specs, { style?, mode? })`** — build visualizations **on the
+>   fly from plain data**, no DSL text: pass `{ type, items: [vizItem("Leads",
+>   1200), …] }` and get a render-ready Scene (same generators, presets, and
+>   `data-viz-item` tagging as the DSL path). Pure and DOM-free, so it also
+>   works in Node/workers. Render it with `edd.renderScene(scene)`.
+> - **`edd.appendSource(fragment)`** — grow a live diagram at runtime while
+>   keeping `.edd` text the single source of truth (compiles `source + "\n" +
+>   fragment` and re-renders).
+>
+> - **Characters**: `ctx.character(pose, cx, groundY, h, { color, emotion,
+>   shirt, hair, accessory, fx, prop, flip })` draws the sketchnote stick figure
+>   anywhere in a generator. Six independent axes, each a runtime registry
+>   (`src/engine/viz/characters/`): `registerCharacterPose(name, { armL, armR,
+>   legL, legR, lean?, … })` takes limb polylines in a unit frame; the other
+>   five (`registerCharacterEmotion` / `Shirt` / `Hair` / `Accessory` / `Fx`)
+>   take a drawer `(f: CharacterFrame) => void` — `f` hands you the sheared/
+>   planted transforms plus `head`/`torso`/`face` anchors and `stroke`/`dot`/
+>   `fill`/`arc` helpers. The upper body shears with the pose's `lean` so
+>   leaning figures stay whole; grounded feet end at `y=1.0`.
+>
+> Declare `entryKinds` / `options` / `sweetSpot` on your `registerViz` def and
+> it appears fully described in `listVizTemplates()` (the machine-readable
+> catalog tooling uses to validate `.edd`).
+
+```ts
+import { registerViz, type VizSpec, type VizContext } from "edododraw";
+
+registerViz({
+  name: "medals",
+  category: "Custom",
+  summary: "A row of medals sized by value.",
+  generate(spec: VizSpec, ctx: VizContext) {
+    spec.items.forEach((item, i) => {
+      const role = ctx.role(i, { n: spec.items.length, color: item.color });
+      const d = 40 + (item.value ?? 1) * 8;
+      ctx.shape("circle", i * 130, 60 - d / 2, d, d, role, { id: ctx.uid(item.id) });
+      ctx.labelBlock(item.label, item.detail, i * 130 + d / 2, 60 + d / 2 + 16, { color: role.color, align: "center", vAnchor: "top" });
+    });
+  },
+});
+```
+
+- `spec` is plain data (`VizSpec`): the block's options + entries, already lowered
+  (labels, values, `detail`, `icon`, `color`, nested `children`).
+- `ctx` (`VizContext`) is the drawing toolkit: preset-aware role colors
+  (`ctx.role`), measured/wrapped text (`ctx.label`, `ctx.labelBlock`),
+  primitives (`ctx.poly`, `ctx.line`, `ctx.path`, `sector`, `block-arrow`, …),
+  icons (`ctx.icon`) and stable ids (`ctx.uid`). Emit nothing but Scene IR — the
+  camera, annotations, editing and export then work automatically.
+- Follow the golden rule: **never hardcode colors** — derive everything from
+  `ctx.role` / `ctx.ink` / `ctx.preset` so all style presets keep working. See
+  `src/engine/viz/generators/*.ts` for 87 worked examples and
+  [VISUALIZATIONS_GUIDE.md](VISUALIZATIONS_GUIDE.md) for the authoring surface.
+
+## 7. Add a style preset
+
+Also a pure runtime registration — see the worked example in
+[STYLES_GUIDE.md §4](STYLES_GUIDE.md) and the `StylePreset` interface in
+`src/engine/style/presets.ts`. The preset supplies the scene theme, node/edge
+defaults, and the `roleStyle` color system that viz templates and auto-colored
+nodes share.
+
+## 8. Add a DSL construct
+
+The DSL is a hand-written recursive-descent parser (`src/engine/dsl/parser.ts`)
+lowered to Scene IR by the compiler (`src/engine/dsl/compile.ts`). Grammar changes
+touch three files — know where each concern lives:
+
+| File | Responsibility | Where to hook in |
+|---|---|---|
+| `dsl/ast.ts` | AST node types | Add your statement's interface + to the relevant union (`TopStmt`, `SceneStmt`, `BeatItem`, …). |
+| `dsl/parser.ts` | tokens → AST | Add a keyword case to `parseTop()` (top level) or `parseSceneStmt()` (inside `scene { }`); write a `parseX()` that returns your AST node. |
+| `dsl/compile.ts` | AST → Scene IR | Handle your node in `compileProgram`'s top-level loop or in `walk()` (scene statements), writing onto the `Scene`. |
+| `dsl/lower.ts` | enum/glyph → IR value tables | Add any surface-word → IR-value mapping here (e.g. new shape/animation/routing names). |
+
+Concretely:
+
+- **A new node/edge attribute** (e.g. `blur: 4`) is the smallest change: no parser
+  edit at all. Attributes are parsed generically by `parseAttrEntry`, so you only add
+  a `case "blur":` to `buildNodeStyle` (or `buildEdgeStyle`) in `compile.ts` and a
+  field to `NodeStyle`/`EdgeStyle` in `scene/types.ts` (then honour it in the
+  renderer). This is the recommended path for most "new knob" requests.
+- **A new top-level keyword** (e.g. `legend { … }`): add `case "legend": return
+  this.parseLegend();` to `parseTop()`, define `parseLegend()` (use
+  `parseAttrBlock()` / `skipBlock()` helpers), add the AST type, and consume it in
+  `compileProgram`'s statement loop. Note `parseTop` already _tolerates_ unknown
+  top-level keywords like `plugin`/`define` by skipping their block — a good template
+  for "parse but ignore for now."
+- **A new scene-level statement** (e.g. `ruler …`): add a `case` to
+  `parseSceneStmt()`'s keyword switch and handle it in `walk()`.
+
+Keep the parser **permissive and recoverable**: report problems via
+`this.error(code, msg, token, …)` (which pushes a `Diagnostic`) and call
+`recoverStmt()` / `skipBlock()` rather than throwing. The compiler accumulates
+`Diagnostic`s and always returns a best-effort `Scene` — see
+[DEVELOPMENT_STANDARDS.md](DEVELOPMENT_STANDARDS.md) ("Diagnostics, not
+exceptions").
+
+For the full user-facing grammar, see
+[DSL_LANGUAGE_GUIDE.md](DSL_LANGUAGE_GUIDE.md).
+
+---
+
+## 9. Testing your extension
+
+Follow the two-stage rule from [DEVELOPMENT_STANDARDS.md](DEVELOPMENT_STANDARDS.md).
+
+**Stage 1 — code-level (fast, Node/jsdom).** The compiler is synchronous and
+DOM-free, so most extensions are unit-testable without a browser. Add a spec under
+`tests/` (vitest) and run:
+
+```bash
+npm test          # vitest run
+npm run typecheck  # tsc -b --noEmit
+```
+
+A shape/animation/annotation test typically compiles a snippet and asserts on the
+resulting `Scene`:
+
+```ts
+import { describe, it, expect } from "vitest";
+import { compileEdd } from "../src/engine/dsl/index.js";
+
+describe("gauge shape", () => {
+  it("passes an unknown shape name through unchanged", () => {
+    const { scene } = compileEdd(`scene { g[CPU] { shape: gauge } }`);
+    expect(scene.nodes[0].shape).toBe("gauge");
+  });
+});
+
+describe("surge animation", () => {
+  it("keeps a registered animation kind", () => {
+    const { scene } = compileEdd(`scene { a -> b { animate: surge } }`);
+    expect(scene.edges[0].style.animation).toBe("surge");
+  });
+});
+```
+
+Existing suites to mirror: `tests/parser.test.ts`, `tests/lowering.test.ts`,
+`tests/layout.test.ts`, `tests/annotations.test.ts`.
+
+**Stage 2 — end-user visual check.** A green unit test does not prove the
+hand-drawn render is correct. Run the app and drive it with `playwright-cli`, then
+**read the screenshots**:
+
+```bash
+npm run dev                 # dev server (see DEVELOPMENT_STANDARDS.md)
+scripts/qa/smoke.sh         # loads every example, screenshots, fails on console errors
+```
+
+Add an example that exercises your extension (an `.edd` file wired into the
+playground's example list) so the smoke test covers it, and confirm no
+per-element render warnings appear in the console — the renderer wraps each
+node/edge so one bad element can't blank the diagram, but it _will_ log a warning
+you should catch.
+
+==============================================================================
+
+# ═══ Architecture  (docs/ARCHITECTURE.md) ═══
+
+# EDodoDraw Architecture
+
+EDodoDraw is a **100% code-to-diagram engine** with the Excalidraw hand-drawn aesthetic, a magic-move camera, and scriptable + real-time annotations. It is built from the ground up (no Excalidraw runtime) on three reused primitives: **rough.js** (hand-drawn strokes), **dagre** (auto-layout), and **@excalidraw/mermaid-to-excalidraw** (Mermaid import). The hand-drawn font is the OFL-licensed **Virgil/Excalifont**.
+
+## The pipeline
+
+```mermaid
+flowchart LR
+  src["EDodoDraw code (.edd)"] --> lex[Lexer]
+  lex --> parse[Parser → AST]
+  parse --> compile[Compiler]
+  compile --> scene["Scene IR"]
+  merm["mermaid ' … '"] -. import .-> scene
+  scene --> layout["Layout (dagre/grid/radial)"]
+  layout --> render["SVG Renderer (rough.js)"]
+  render --> cam[Camera controller]
+  render --> anno[Annotation layer]
+  render --> tl[Timeline player]
+```
+
+Everything flows through the **Scene IR** (`src/engine/scene/types.ts`) — a flat, serializable model of nodes, edges, groups, annotations, and timeline steps. The DSL, the Mermaid importer, and any programmatic caller all produce a `Scene`; the renderer and controllers only consume one. This is the single contract that keeps the system decoupled.
+
+## Modules
+
+| Area | Path | Responsibility | Guide |
+|---|---|---|---|
+| Scene IR | `src/engine/scene/` | Types, palette, factories, anchors, queries | — |
+| DSL | `src/engine/dsl/` | `lexer → parser → ast → compile` + diagnostics | [DSL_LANGUAGE_GUIDE](DSL_LANGUAGE_GUIDE.md) |
+| Viz templates | `src/engine/viz/` | `viz` blocks → Scene IR: registry, generator context, icons, text metrics | [VISUALIZATIONS_GUIDE](VISUALIZATIONS_GUIDE.md) |
+| Style presets | `src/engine/style/` | Named visual identities (palette, fills, seams, typography) + color math | [STYLES_GUIDE](STYLES_GUIDE.md) |
+| Layout | `src/engine/layout/` | dagre/grid/radial → node positions | — |
+| Renderer | `src/engine/render/` | SVG + rough.js, shapes, edges, arrowheads, fonts | — |
+| Camera | `src/engine/camera/` | fit math, easing, animated controller | [CAMERA_AND_TIMELINE_GUIDE](CAMERA_AND_TIMELINE_GUIDE.md) |
+| Timeline | `src/engine/timeline/` | beat player (magic-move) | [CAMERA_AND_TIMELINE_GUIDE](CAMERA_AND_TIMELINE_GUIDE.md) |
+| Annotations | `src/engine/annotate/` | render layer + live interactive editor | [ANNOTATIONS_GUIDE](ANNOTATIONS_GUIDE.md) |
+| Import/Export | `src/engine/import/`, `src/engine/export.ts` | Mermaid in; SVG/PNG/JSON out | [IMPORT_AND_EXPORT_GUIDE](IMPORT_AND_EXPORT_GUIDE.md) |
+| Plugins | `src/engine/plugins/` | shape registry (extension seam) | [DEVELOPMENT_STANDARDS](DEVELOPMENT_STANDARDS.md) |
+| App | `src/app/` | React playground: editor, canvas, toolbar, player | [DEVELOPMENT_STANDARDS](DEVELOPMENT_STANDARDS.md) |
+
+`src/engine/index.ts` is the public barrel; the app imports only from `@engine/*`.
+
+## Key decisions
+
+- **SVG, not Canvas.** The world layer is one `<g>` whose `transform` attribute is the camera. This makes the magic-move camera a single attribute update per frame, GPU-friendly, and lets annotations/animated arrows be DOM elements with CSS animations. Trade-off: not ideal for tens of thousands of elements — fine for diagrams.
+- **Imperative renderer outside React.** `SvgRenderer` owns the SVG DOM directly (like Excalidraw owns its canvas). React only mounts the container and drives high-level state. Full re-render on scene change; camera/animation mutate transforms only.
+- **Deterministic hand-drawn strokes.** Every element gets a stable rough.js `seed` (hash of its id) so re-rendering never re-jitters strokes.
+- **Open unions + a shape registry.** `ShapeKind`, `ArrowAnimationKind`, and `AnnotationKind` are open string unions, so the compiler already accepts unknown values. Only `ShapeKind` is resolved through a plugin registry (`src/engine/plugins/`), so **new shapes need no grammar or core change**. Arrow animations (`render/edges.ts`) and annotation kinds (`annotate/layer.ts`) are still resolved by built-in switches, so adding one of those is a small core change today (an animation/annotation registry is planned, not yet built).
+- **Viz templates compile to plain Scene IR.** A `viz` block is data (`VizSpec`); its registered generator (`src/engine/viz/registry.ts`) emits ordinary pinned nodes/edges via data-driven primitive shapes (`polygon`, `path`, `sector`, `block-arrow`, …). Nothing downstream knows visualizations exist — camera, annotations, editing, and export just see a scene. `registerViz` makes new templates a no-grammar-change addition.
+- **Style presets are one code path for everything.** A preset (`src/engine/style/presets.ts`) provides the scene theme, node/edge defaults under the user cascade, and a role-color system (`roleStyle`) that viz generators and auto-colored plain nodes share — including opacity-ramp palettes, canvas-colored "seam" strokes, and contrast-assured label colors.
+- **Sync compiler, async Mermaid.** The DSL compiler is synchronous and DOM-free (unit-testable in Node). Mermaid rendering needs the browser, so the app awaits `convertMermaid` and injects the fragment — the compiler itself stays pure.
+
+## Rendering layers (bottom → top)
+
+`bg (screen)` · `grid` · `groups` · `edges` · `nodes` · `annotations` (scripted) · `live` (interactive) — the last two sit in the camera-transformed world layer so annotations track the diagram. See `src/engine/render/svgRenderer.ts`.
+
+## Testing
+
+- Unit tests (vitest, jsdom): `tests/` — lexer, parser, compiler, lowering, layout, camera math, anchors, annotations round-trip. Run `npm test`.
+- Visual smoke: `scripts/qa/smoke.sh` drives every example with `playwright-cli` and fails on console errors. Two-stage testing per `docs`-referenced FE guide: code-level first, end-user browser interaction last.
+
+==============================================================================
+
+# ═══ Development standards  (docs/DEVELOPMENT_STANDARDS.md) ═══
+
+# Development Standards
+
+## Setup
+
+```bash
+npm install
+npm run dev        # http://localhost:5273
+npm test           # vitest
+npm run typecheck  # tsc -b --noEmit
+npm run build      # tsc + vite build → dist/
+```
+
+Node ≥ 18 (matches `engines`). The `reference/` directory (Excalidraw + mermaid-to-excalidraw clones, studied during design) is gitignored and excluded from Vite (`vite.config.ts → optimizeDeps.entries` + `server.watch.ignored`).
+
+## Project structure
+
+```
+src/
+  engine/            framework-agnostic engine (no React)
+    scene/           Scene IR: types, palette, defaults, anchors, query, overrides
+    dsl/             lexer, tokens, ast, parser, lower, compile, patch, diagnostics
+    layout/          dagre / grid / radial → node positions
+    render/          svgRenderer, shapes, edges, theme.css, fonts
+    camera/          fit math, easing, controller
+    timeline/        beat player
+    edit/            direct-manipulation edit controller (EditController)
+    annotate/        layer (render) + interact (live editor)
+    import/          mermaid adapter
+    plugins/         registry + builtins
+    export.ts        SVG / PNG / JSON
+    index.ts         public barrel (import from "@engine/…")
+  lib/               published npm package: EdodoDraw facade, react.tsx (EdodoDrawView), index.ts (public exports)
+  app/               React playground (App, CanvasView, examples)
+  site/              marketing + docs site (renders docs/*.md verbatim)
+  main.tsx           SPA entry
+examples/            *.edd sample programs (imported ?raw)
+docs/                this documentation
+tests/               vitest suites
+scripts/qa/          playwright-cli smoke test
+public/fonts/        OFL hand-drawn fonts (Virgil, Excalifont)
+```
+
+The engine is pure TypeScript with no React dependency; the app is a thin shell over it. Import engine code via the `@engine/*` alias with `.js` extensions (bundler resolution maps to `.ts`).
+
+## Conventions
+
+- **Scene IR is the contract.** Anything that produces diagrams emits a `Scene`; anything that draws consumes one. Don't reach around it.
+- **Deterministic seeds.** Element factories (`makeNode`/`makeEdge`) assign a rough.js seed from the id hash. Preserve that when adding element kinds.
+- **Never throw in the lexer/renderer per-element.** The lexer is permissive; the renderer wraps each node/edge so one bad element can't blank the diagram.
+- **Diagnostics, not exceptions.** The compiler accumulates `Diagnostic`s and recovers at statement/block boundaries.
+
+## Extending the engine
+
+### Add a shape
+
+Register a renderer — no grammar change needed (the DSL already accepts any shape name):
+
+```ts
+import { registerShape } from "@engine/index.js";
+import { nodeRoughOptions } from "@engine/render/shapes.js";
+
+registerShape("hexstar", (rc, rect, style) => {
+  const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  g.appendChild(rc.polygon(myPoints(rect), nodeRoughOptions(style, true)));
+  return g;
+});
+```
+
+Then `shape: hexstar` (or a keyword mapped in `src/engine/dsl/lower.ts → SHAPE_MAP`) works. See `src/engine/plugins/builtins.ts` for the built-in `star`.
+
+### Add an animated arrow
+
+Add a `case` in `animationOverlay` (`src/engine/render/edges.ts`) and a keyframe in `src/engine/render/theme.css.ts`, then list it in `mapAnimation` (`src/engine/dsl/lower.ts`).
+
+### Add an annotation kind
+
+Add a `case` in `AnnotationLayer.draw` (`src/engine/annotate/layer.ts`) and, for live editing, a tool in `LiveAnnotationController` (`src/engine/annotate/interact.ts`) + the toolbar in `src/app/App.tsx`.
+
+### Add a DSL construct
+
+Grammar-level changes live in `src/engine/dsl/parser.ts` (recursive descent, keyword-dispatched) and are lowered to Scene IR in `src/engine/dsl/compile.ts`. Add tests in `tests/parser.test.ts`.
+
+## Testing standard
+
+Two stages (mandatory for anything user-facing):
+
+1. **Code-level** — `npm test` (vitest) + `npm run typecheck`.
+2. **End-user** — drive the running app with `playwright-cli` (`scripts/qa/smoke.sh`), screenshot every state, and **read every screenshot**. A route returning the right JSON does not prove the hand-drawn render is correct.
+
+==============================================================================
+
+# ▸ Visualization template reference — all 87 templates (generated from the registry)
+
+Every template below is used as `viz <name> [id] ["Title"] { options + entries }`.
+Universal per-item attributes: `icon:` (glyph), `color:`/`fill:`, `detail:` (description), `showValue: false`.
+Universal block options: `showValues: false` (values drive geometry, numbers not printed) and
+AUTO-CHOREOGRAPHY — `animate: true|fade|pop|draw-on` synthesizes a timeline beat per data item
+(plus `hold: <seconds>` dwell and `animateCamera: true` for per-item magic-move focus), making any
+template a narrated build for the player or a frame-driven video host (stepStateAt()).
+Every element a template emits for one data entry is addressable as `<blockId>.<itemId>` in
+annotations, timeline reveal/hide, and camera focus.
+
+Style presets (any template × any preset, `meta { style: <name> }`): classic, classic-color, colorful-lines, neutral-lines, earthy-gradient, crayon, chalkboard, fine-line, mono-accent.
+Icons (`icon: <name>`): check x plus minus arrow-up arrow-down arrow-right arrow-left trend-up trend-down star heart flag target bulb gear user users clock calendar rocket trophy medal search warning dollar chart pie doc mail chat home globe lock key leaf fire drop cloud database shield eye book wrench phone megaphone handshake scale puzzle diamond circle.
+Characters (personas/quote items: `{ pose: …, emotion: …, shirt: …, hair: …, accessory: …, fx: …, prop: <icon> }`) — poses: standing confident arms-crossed leaning strolling waving waving-both pointing presenting offering halting hands-up shrugging thinking chin-thinking listening facepalm peering searching cheering victory holding-overhead reaching-up dancing stretching star-pose walking marching tiptoeing running jumping kicking pushing pulling carrying throwing bending climbing sitting kneeling meditating bowing balancing falling; emotions: neutral happy sad surprised angry excited confused thinking determined wink love starstruck sleeping dizzy laughing grin content calm worried scared crying furious stressed smug curious embarrassed; shirts: vest tee striped solid tie dress hoodie crew buttoned blazer labcoat overalls turtleneck scarf; hair: short spiky messy curly bob long pigtails bun ponytail afro mohawk side-part bald; accessories: glasses sunglasses monocle hat cap beard mustache bowtie headphones earrings crown mask; fx: sweat question double-question alarm exclaim idea anger excited stars hearts music zzz dizzy sightline.
+Sketchnote container shapes (usable on any node via `shape:` or as keywords): speech-bubble, starburst, ribbon, paper-fold (+ cloud, note, document).
+
+## Brainstorming
+
+### viz clouds
+
+Scattered thought-cloud islands — a loose collection of ideas.
+- aliases: idea-clouds, thought-clouds, sticky-ideas, scattered-ideas  |  entry kinds: item, idea, cloud  |  sweet spot: 3–7 items
+
+```edd
+viz clouds "What We Heard" {
+  item "Onboarding is confusing" { icon: warning }
+  item "Docs are loved" { icon: heart }
+  item "Pricing feels fair" { icon: dollar }
+  item "Mobile is missed" { icon: phone }
+  item "Support is fast" { icon: rocket }
+}
+```
+
+### viz converge
+
+Inputs funnel through a lens into one outcome.
+- aliases: converging, funnel-in, merge, inputs  |  entry kinds: item, input, output, out  |  sweet spot: 2–5 items
+- option `output:` (string) — outcome label when no output entry (else the last item is the output)
+
+```edd
+viz converge "Strategy Inputs" {
+  item "Customer interviews" { icon: chat }
+  item "Usage analytics" { icon: chart }
+  item "Market research" { icon: search }
+  item "Team retros" { icon: users }
+  output "2026 Roadmap" { icon: doc }
+}
+```
+
+### viz diverge
+
+A question radiating thick arrows to option blocks at the corners.
+- aliases: diverging, branch-out, fan-out  |  entry kinds: item, option, question, center  |  sweet spot: 2–4 items
+
+```edd
+viz diverge "How might we grow?" {
+  item "New markets" "Expand geographically" { icon: globe }
+  item "New products" "Adjacent use cases" { icon: bulb }
+  item "Partnerships" "Distribution through allies" { icon: handshake }
+  item "Pricing" "Capture more value" { icon: dollar }
+}
+```
+
+### viz head-thoughts
+
+A profile-head container — what's going on in someone's mind.
+- aliases: in-their-head, mind-of, empathy-map-mind, whats-on-their-mind  |  entry kinds: item, thought  |  sweet spot: 2–5 items
+- option `who:` (string) — caption under the head
+
+```edd
+viz head-thoughts "Inside the Customer's Head" {
+  who: "Your customer"
+  item "Will this save me time?" { icon: clock }
+  item "Can I trust it?" { icon: shield }
+  item "What does it cost?" { icon: dollar }
+  item "Is it easy to leave?" { icon: key }
+}
+```
+
+### viz key-ideas
+
+A row of lightbulbs, one per idea, with label + description below.
+- aliases: ideas, highlights, takeaways, key-points  |  entry kinds: item, idea  |  sweet spot: 2–5 items
+
+```edd
+viz key-ideas "Retreat Themes" {
+  item "Focus" "Fewer projects, finished properly"
+  item "Craft" "Raise the quality bar everywhere"
+  item "Speed" "Ship weekly, learn faster"
+}
+```
+
+### viz list
+
+Styled list — numbered circles + labels (vertical ≤5, horizontal 6+).
+- aliases: bullets, checklist, items, bullet-list  |  entry kinds: item  |  sweet spot: 2–8 items
+- option `orientation:` (horizontal|vertical) — override the ≤5-vertical / 6+-horizontal default
+
+```edd
+viz list "Core Values" {
+  item "Ship it" "Progress over polish theater" { icon: rocket }
+  item "Own it" "No one else is coming" { icon: user }
+  item "Say it" "Direct, kind feedback" { icon: chat }
+  item "Learn it" "Curiosity as default" { icon: book }
+}
+```
+
+### viz personas
+
+A cast of sketchnote characters — one per role/persona, posed and labeled.
+- aliases: team, cast, roles, characters, people  |  entry kinds: item, persona, role  |  sweet spot: 2–6 items
+- option `pose:` (string) — per item: action pose (see the character library; poses cycle when unset)
+- option `emotion:` (string) — per item: facial expression
+- option `shirt:` (string) — per item: clothing style (+ shirtColor)
+- option `hair:` (string) — per item: hair style (+ hairColor)
+- option `accessory:` (string) — per item: glasses / hat / beard … (+ accessoryColor)
+- option `fx:` (string) — per item: floating mark — sweat / question / idea / stars … (+ fxColor)
+- option `prop:` (string) — per item: any icon name, held in hand
+
+```edd
+viz personas "The Launch Team" {
+  item "The Builder" "Ships fast, hates meetings" { pose: confident, prop: wrench }
+  item "The Skeptic" "Asks the hard questions" { pose: thinking, emotion: thinking }
+  item "The Champion" "Sells the vision" { pose: cheering, prop: star }
+  item "The Guide" "Points the way" { pose: pointing, emotion: happy }
+}
+```
+
+### viz quote
+
+A big hand-lettered quote with attribution and a presenting character.
+- aliases: quotation, big-quote, saying, callout-quote  |  entry kinds: quote, by, item  |  sweet spot: 1–1 items
+- option `by:` (string) — attribution line (or use a `by` entry)
+- option `pose:` (string) — character pose (default "presenting"; "none" hides the figure)
+- option `emotion:` (string) — character emotion
+- option `prop:` (string) — icon the character holds
+- option `shirt:` (string) — character shirt style (+ shirtColor)
+- option `hair:` (string) — character hair style (+ hairColor)
+- option `accessory:` (string) — worn accessory — glasses / hat / beard … (+ accessoryColor)
+- option `fx:` (string) — floating state mark — sweat / question / idea / stars …
+
+```edd
+viz quote "The best way to predict the future is to invent it." {
+  by: "Alan Kay"
+  pose: presenting
+}
+```
+
+## Business Frameworks
+
+### viz business-model-canvas
+
+The classic 9-box BMC grid, sections filled with bullet lists.
+- aliases: bmc, business-canvas, model-canvas  |  entry kinds: partners, activities, resources, value, relationships, channels, segments, costs, revenue, item  |  sweet spot: 5–9 items
+
+```edd
+viz business-model-canvas "EDodo, Inc." {
+  partners { item "Cloud provider"; item "Design agencies" }
+  activities { item "Engine development"; item "Community" }
+  resources { item "Rendering engine"; item "Template library" }
+  value { item "Diagrams from plain text"; item "Hand-drawn warmth" }
+  relationships { item "Self-serve"; item "Discord community" }
+  channels { item "npm + docs site"; item "Conference talks" }
+  segments { item "Dev-tool teams"; item "Educators" }
+  costs { item "R&D"; item "Infrastructure" }
+  revenue { item "Pro licenses"; item "Support plans" }
+}
+```
+
+### viz ecosystem
+
+Concentric stakeholder orbits around one center.
+- aliases: orbits, stakeholder-map, ecosystem-map  |  entry kinds: center, ring, orbit, item  |  sweet spot: 2–3 items
+
+```edd
+viz ecosystem "Platform" {
+  center "EDodo Core" { icon: gear }
+  ring "Builders" {
+    item "Plugin devs" { icon: wrench }
+    item "Template authors" { icon: doc }
+    item "Integrators" { icon: puzzle }
+  }
+  ring "Ecosystem" {
+    item "npm" { icon: cloud }
+    item "GitHub" { icon: globe }
+    item "Educators" { icon: book }
+    item "Agencies" { icon: users }
+  }
+}
+```
+
+### viz flywheel
+
+Thick ring segments spinning clockwise — a self-reinforcing momentum loop.
+- aliases: momentum, growth-loop, virtuous-cycle, growth-engine  |  entry kinds: item, stage, center  |  sweet spot: 3–6 items
+- option `center:` (string) — label inside the wheel (or use a `center` entry)
+
+```edd
+viz flywheel "Marketplace Flywheel" {
+  center: "Growth"
+  item "More sellers" { icon: users }
+  item "More selection" { icon: star }
+  item "More buyers" { icon: heart }
+  item "Lower prices" { icon: dollar }
+}
+```
+
+### viz funnel
+
+Narrowing stages with side labels; optional input/output captions.
+- aliases: sales-funnel, conversion-funnel, pipeline  |  entry kinds: item, stage, level  |  sweet spot: 3–6 items
+- option `input:` (string) — caption above the funnel mouth
+- option `output:` (string) — caption below the funnel tip
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz funnel "Sales Funnel" {
+  input: "Potential customers"
+  output: "Closed deals"
+  item "Awareness" 5000
+  item "Interest" 1800
+  item "Evaluation" 420
+  item "Negotiation" 120
+  item "Won" 38
+}
+```
+
+### viz hex-cluster
+
+A honeycomb — one core hexagon ringed by up to six themed cells.
+- aliases: honeycomb, hexagon-cluster, hex-grid  |  entry kinds: item, cell, center  |  sweet spot: 3–6 items
+- option `center:` (string) — core cell label (or use a `center` entry)
+
+```edd
+viz hex-cluster "Team Health" {
+  center "Team Health" { icon: heart }
+  item "Clarity" { icon: target }
+  item "Trust" { icon: handshake }
+  item "Pace" { icon: rocket }
+  item "Craft" { icon: gear }
+  item "Growth" { icon: trend-up }
+}
+```
+
+### viz okr
+
+One objective branching into key-result cards with progress bars.
+- aliases: okrs, objectives, goal-tree, key-results  |  entry kinds: item, kr, objective  |  sweet spot: 2–4 items
+- option `objective:` (string) — objective text (or use an `objective` entry / the title)
+- option `showValues:` (boolean) — print progress percentages (default true)
+
+```edd
+viz okr "Objective: Best-loved dev tool" {
+  kr "NPS above 60" 0.72
+  kr "P95 latency under 200ms" 0.45
+  kr "10k weekly active teams" 0.31
+}
+```
+
+### viz pestel
+
+Vertical category cards — big letter, title, summary, bullets.
+- aliases: pest, pestle, pestel-analysis, macro-environment  |  entry kinds: item, card, category, factor  |  sweet spot: 4–6 items
+
+```edd
+viz pestel "Market Environment" {
+  item "Political" "Trade policy shifts" { item "Tariff changes" }
+  item "Economic" "Rate environment" { item "Consumer spending" }
+  item "Social" "Demographic trends" { item "Remote-first work" }
+  item "Technological" "Rapid AI adoption" { item "Automation pressure" }
+  item "Environmental" "Sustainability rules" { item "Carbon reporting" }
+  item "Legal" "Data protection" { item "Privacy regulation" }
+}
+```
+
+### viz porters
+
+Porter's forces — circles around a center, labels radiating out.
+- aliases: forces, five-forces, porters-five-forces, competitive-forces  |  entry kinds: item, force  |  sweet spot: 4–6 items
+
+```edd
+viz porters "Industry Forces" {
+  item "Rivalry" "Many similar competitors"
+  item "New entrants" "Low barriers to entry"
+  item "Supplier power" "Few key suppliers"
+  item "Buyer power" "Easy to switch"
+  item "Substitutes" "DIY alternatives exist"
+}
+```
+
+### viz swot
+
+Stacked S/W/O/T panels with a big display letter, title and bullets.
+- aliases: swot-analysis, strengths-weaknesses  |  entry kinds: item, section  |  sweet spot: 4–4 items
+
+```edd
+viz swot "SWOT — Acme Corp" {
+  item "Strengths" {
+    item "Loyal customer base"
+    item "Strong brand recognition"
+  }
+  item "Weaknesses" {
+    item "Single revenue stream"
+    item "Aging infrastructure"
+  }
+  item "Opportunities" {
+    item "Emerging markets"
+    item "AI-assisted workflows"
+  }
+  item "Threats" {
+    item "New low-cost entrants"
+    item "Tightening regulation"
+  }
+}
+```
+
+### viz value-chain
+
+Porter-style chevron band; optional support-activity bars above.
+- aliases: porter-value-chain, chevron-process, delivery-chain  |  entry kinds: item, stage, support  |  sweet spot: 3–6 items
+
+```edd
+viz value-chain "How We Deliver" {
+  support "Infrastructure & tooling"
+  support "People & culture"
+  item "Source" { icon: search }
+  item "Build" { icon: wrench }
+  item "Ship" { icon: rocket }
+  item "Support" { icon: heart }
+}
+```
+
+## Cause and Effect
+
+### viz domino
+
+A chain reaction — tiles toppling left to right into the outcome.
+- aliases: chain-reaction, dominoes, cascade-effect, knock-on  |  entry kinds: item, cause, step  |  sweet spot: 3–6 items
+
+```edd
+viz domino "How the Outage Spread" {
+  item "Config typo" "Deployed on Friday"
+  item "Cache stampede"
+  item "API brownout"
+  item "Checkout down" "43 minutes"
+}
+```
+
+### viz fishbone
+
+Ishikawa diagram — cause categories on angled bones along a spine to the effect.
+- aliases: ishikawa, fishbone-diagram, cause-categories  |  entry kinds: bone, category, item, effect, problem  |  sweet spot: 2–6 items
+
+```edd
+viz fishbone "Why Releases Slip" {
+  bone "People" { item "Training gaps"; item "Turnover" }
+  bone "Process" { item "No code review"; item "Manual QA" }
+  bone "Tools" { item "Flaky CI" }
+  bone "Environment" { item "Noisy office" }
+}
+```
+
+### viz impact
+
+One cause radiating to effect bubbles above it.
+- aliases: ripple, consequences, effects  |  entry kinds: item, effect, cause, center  |  sweet spot: 2–5 items
+
+```edd
+viz impact "Faster Releases" {
+  cause "Weekly ship cadence"
+  item "Happier customers" "Fixes land in days, not months"
+  item "Tighter feedback" "Real usage guides the roadmap"
+  item "Team momentum" "Small wins compound"
+}
+```
+
+### viz root-causes
+
+A leafy tree — the problem is the crown, the causes are its roots.
+- aliases: root-cause, why, causes, cause-tree, cause-effect  |  entry kinds: item, cause, problem, center  |  sweet spot: 2–7 items
+
+```edd
+viz root-causes "Why Releases Slip" {
+  item "Unclear scope" "Requirements change mid-sprint"
+  item "Hidden dependencies" "Teams discover coupling late"
+  item "Manual testing" "QA becomes the bottleneck"
+}
+```
+
+## Comparison
+
+### viz balance
+
+A two-pan balance weighing two sides of item rows.
+- aliases: scales, tradeoff, trade-off, weigh  |  entry kinds: item, side  |  sweet spot: 2–2 items
+- option `tilt:` (left|right|level) — which side hangs lower (default level)
+
+```edd
+viz balance "Work-Life Balance" {
+  side "Career Growth" {
+    item "Promotions" { icon: trend-up }
+    item "Learning" { icon: book }
+  }
+  side "Personal Wellbeing" {
+    item "Family time" { icon: heart }
+    item "Health" { icon: leaf }
+  }
+}
+```
+
+### viz decision
+
+A person weighing a question, elbow branches fanning to the options.
+- aliases: choose, options  |  entry kinds: item, option, question  |  sweet spot: 2–5 items
+- option `question:` (string) — the question posed (falls back to a question entry, then the title)
+
+```edd
+viz decision "Where should we deploy?" {
+  item "Cloud" "Fastest to start, elastic scale" { icon: cloud }
+  item "On-prem" "Full control, higher ops load" { icon: database }
+  item "Hybrid" "Sensitive data stays home" { icon: shield }
+}
+```
+
+### viz decision-tree
+
+Questions branching left-to-right through labeled yes/no edges to outcomes.
+- aliases: decision-flow, yes-no, branching, choice-tree  |  entry kinds: item, question, option  |  sweet spot: 2–3 items
+
+```edd
+viz decision-tree {
+  item "Build or buy?" {
+    item "Core to product?" { when: "build" } {
+      item "Build in-house" { when: "yes", icon: wrench }
+      item "Open source + contribute" { when: "no", icon: globe }
+    }
+    item "Buy a vendor" { when: "buy", icon: dollar }
+  }
+}
+```
+
+### viz podium
+
+Winners' podium — ranks 1-2-3 in the classic 2-1-3 arrangement.
+- aliases: ranking, leaderboard, winners, top-three  |  entry kinds: item, rank  |  sweet spot: 3–3 items
+
+```edd
+viz podium "Hackathon Winners" {
+  item "Team Rocket" { icon: trophy }
+  item "Null Pointers" { icon: medal }
+  item "Bit Crushers" { icon: medal }
+}
+```
+
+### viz pricing-tiers
+
+Plan cards with price + feature lists; one tier can be highlighted.
+- aliases: pricing, plans, pricing-table, packages  |  entry kinds: tier, plan, item  |  sweet spot: 2–4 items
+- option `period:` (string) — price suffix, e.g. "/mo"
+- option `currency:` (string) — price prefix (default "$")
+- option `showValues:` (boolean) — print prices (default true)
+
+```edd
+viz pricing-tiers "Plans" {
+  period: "/mo"
+  tier "Starter" 0 {
+    item "3 projects"
+    item "Community support"
+  }
+  tier "Pro" 29 { highlight: true
+    item "Unlimited projects"
+    item "SSO + RBAC"
+    item "Priority support"
+  }
+  tier "Enterprise" 99 {
+    item "Dedicated VPC"
+    item "SLA + audit log"
+    item "Onboarding team"
+  }
+}
+```
+
+### viz pros-and-cons
+
+Two panels — pros with a check, cons with a cross — as bullet lists.
+- aliases: pros-cons, pro-con, plus-minus, for-against  |  entry kinds: pro, con, item  |  sweet spot: 1–6 items
+- option `proColor:` (string) — override the pros panel color
+- option `conColor:` (string) — override the cons panel color
+
+```edd
+viz pros-and-cons "Remote Work" {
+  pro "No commute time"
+  pro "Global talent pool"
+  pro "Lower office costs"
+  pro "Flexible schedules"
+  con "Harder to onboard juniors"
+  con "Timezone coordination"
+  con "Less spontaneous collaboration"
+}
+```
+
+### viz quadrant
+
+2×2 matrix on double-headed axes; items in TL/TR/BL/BR order.
+- aliases: 2x2, matrix, four-quadrant, grid-2x2  |  entry kinds: item, quadrant  |  sweet spot: 4–4 items
+- option `xLabels:` (string[]) — x-axis end captions as [negative, positive]
+- option `yLabels:` (string[]) — y-axis end captions as [negative, positive]
+
+```edd
+viz quadrant "Prioritization" {
+  xLabels: ["Not urgent", "Urgent"]
+  yLabels: ["Not important", "Important"]
+  item "Schedule" "Plan deliberately" { icon: calendar }
+  item "Do now" "Crises and deadlines" { icon: fire }
+  item "Drop" "Time sinks" { icon: x }
+  item "Delegate" "Interruptions, some email" { icon: users }
+}
+```
+
+### viz relationship
+
+A hub with satellites on a dashed orbit ring.
+- aliases: hub-spoke, orbit, network, hub  |  entry kinds: item, node, center, hub  |  sweet spot: 3–8 items
+
+```edd
+viz relationship "Product Ecosystem" {
+  center "Platform" { icon: home }
+  item "Mobile app" { icon: phone }
+  item "API" { icon: gear }
+  item "Marketplace" { icon: dollar }
+  item "Analytics" { icon: chart }
+  item "Community" { icon: users }
+  item "Docs" { icon: book }
+}
+```
+
+### viz spectrum
+
+Pole-to-pole horizontal spectrum of zones with arrow ends.
+- aliases: range, continuum, scale-range  |  entry kinds: item, zone  |  sweet spot: 2–5 items
+
+```edd
+viz spectrum "Working Styles" {
+  item "Introvert" "Recharges alone, deep focus" { icon: book }
+  item "Ambivert" "Adapts to the situation" { icon: scale }
+  item "Extrovert" "Energized by people" { icon: users }
+}
+```
+
+### viz table
+
+Grid of individually drawn cells; each column stroked its own color.
+- aliases: comparison-table, grid, feature-table  |  entry kinds: row, item, header  |  sweet spot: 1–8 items
+
+```edd
+viz table "Plan Comparison" {
+  header "Feature" ["Free", "Pro", "Enterprise"]
+  row "Projects" ["3", "Unlimited", "Unlimited"]
+  row "Members" ["5", "50", "Unlimited"]
+  row "SSO" ["—", "—", "Included"]
+  row "Support" ["Community", "Email", "Dedicated"]
+}
+```
+
+### viz venn
+
+Overlapping sets (2–7 circles) in a symmetric rosette with region labels.
+- aliases: venn-diagram, overlap, sets, intersection  |  entry kinds: item, set, overlap, intersection, both, all  |  sweet spot: 2–3 items
+
+```edd
+viz venn "Product Sweet Spot" {
+  set "Desirable" "What users want" { icon: heart }
+  set "Feasible" "What we can build" { icon: gear }
+  set "Viable" "What sustains us" { icon: dollar }
+  overlap all "Great products"
+}
+```
+
+### viz versus
+
+Two contenders compared criterion by criterion around a center gutter.
+- aliases: vs, head-to-head, comparison, showdown  |  entry kinds: left, right, item, contender, criterion, row  |  sweet spot: 1–6 items
+
+```edd
+viz versus "Buy vs Build" {
+  left "Buy"
+  right "Build"
+  criterion "Time to value" { icon: clock, left: "Weeks", right: "Quarters" }
+  criterion "Total cost" { icon: dollar, left: "Predictable subscription", right: "High upfront, low marginal" }
+  criterion "Fit" { icon: puzzle, left: "80% out of the box", right: "Exactly your workflow" }
+}
+```
+
+## Data
+
+### viz area
+
+Line chart with a soft filled area underneath.
+- aliases: area-chart, filled-line  |  entry kinds: item, point  |  sweet spot: 2–14 items
+- option `yTitle:` (string) — y-axis title
+- option `xTitle:` (string) — x-axis title
+- option `color:` (string) — line color override
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz area "Storage Used" {
+  yTitle: "TB"
+  item "2021" 14
+  item "2022" 22
+  item "2023" 31
+  item "2024" 52
+  item "2025" 78
+}
+```
+
+### viz bar
+
+Column chart with per-category colors and value labels.
+- aliases: column, bar-chart, bars, vertical-bar  |  entry kinds: item, bar  |  sweet spot: 1–12 items
+- option `yTitle:` (string) — y-axis title
+- option `xTitle:` (string) — x-axis title
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz bar "Revenue by Quarter" {
+  yTitle: "Revenue ($k)"
+  item "Q1" 120
+  item "Q2" 180
+  item "Q3" 150
+  item "Q4" 240
+}
+```
+
+### viz bar-horizontal
+
+Horizontal bars with circular category badges.
+- aliases: hbar, horizontal-bar, bar-chart-horizontal  |  entry kinds: item, bar  |  sweet spot: 1–8 items
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz bar-horizontal "Team Capacity" {
+  item "Engineering" 34 { icon: gear }
+  item "Design" 12 { icon: heart }
+  item "Marketing" 18 { icon: megaphone }
+  item "Support" 22 { icon: chat }
+}
+```
+
+### viz bullet-chart
+
+KPI rows — actual bar vs a target tick over a qualitative band.
+- aliases: bullet, kpi-vs-target, target-bars  |  entry kinds: item, kpi  |  sweet spot: 2–6 items
+- option `max:` (number) — scale ceiling (default: largest value/target)
+- option `showValues:` (boolean) — print actual values (default true)
+
+```edd
+viz bullet-chart "Q3 Scorecard" {
+  kpi "Revenue" 74 90
+  kpi "NPS" 61 55
+  kpi "Uptime" 99.5 99.9
+  kpi "Hiring" 6 10
+}
+```
+
+### viz drop-off
+
+Nested rounded cards stepping down-right, labels called out around them.
+- aliases: dropoff, attrition, funnel-drop, leakage  |  entry kinds: item, stage  |  sweet spot: 2–5 items
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz drop-off "Signup Funnel Loss" {
+  item "Visit" 100 { icon: eye }
+  item "Sign up" 42 { icon: user }
+  item "Activate" 18 { icon: check }
+}
+```
+
+### viz dumbbell-horizontal
+
+Rows of tracks with value bars and a hanging tag bubble.
+- aliases: progress-bars, tracks, goal-progress, kpi-bars  |  entry kinds: item, row  |  sweet spot: 2–8 items
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz dumbbell-horizontal "Goal Progress" {
+  item "Docs coverage" 80 "80%"
+  item "Test coverage" 65 "65%"
+  item "Accessibility" 90 "90%"
+  item "Performance" 72 "72%"
+}
+```
+
+### viz dumbbell-vertical
+
+Alternating capsules with a delta badge, connected to text blocks.
+- aliases: deltas, change-comparison, yoy, before-after-values  |  entry kinds: item, row  |  sweet spot: 2–6 items
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz dumbbell-vertical "Year over Year" {
+  item "Speed Score" "+15%" { icon: rocket, detail: "Increased from 70 to 85." }
+  item "Retention" "+8%" { icon: heart, detail: "Now at 92% after onboarding fixes." }
+  item "Cost per Lead" "-22%" { icon: dollar, detail: "Down from $18 to $14." }
+}
+```
+
+### viz gauge
+
+A 270° dial showing one value (0–100).
+- aliases: dial, meter, speedometer  |  entry kinds: item, value  |  sweet spot: 1–1 items
+- option `value:` (number) — dial value 0–100 (else the first item's value)
+- option `label:` (string) — caption below the dial (else the first item's label)
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz gauge "System Health" {
+  value: 87
+  label: "Uptime score"
+}
+```
+
+### viz heatmap
+
+A matrix of intensity-shaded cells — risk matrices, skills grids.
+- aliases: heat-map, intensity-grid, risk-matrix, skills-grid  |  entry kinds: row, item  |  sweet spot: 2–7 items
+- option `cols:` (string[]) — column headers, e.g. ["Q1","Q2","Q3"]
+- option `max:` (number) — intensity ceiling (default: largest value)
+- option `showValues:` (boolean) — print cell values (default true)
+
+```edd
+viz heatmap "Incidents per Service" {
+  cols: ["Q1", "Q2", "Q3", "Q4"]
+  row "API" [3, 5, 2, 1]
+  row "Web" [1, 2, 1, 0]
+  row "Billing" [4, 6, 5, 2]
+  row "Auth" [0, 1, 3, 1]
+}
+```
+
+### viz line
+
+Line chart with point markers and value labels.
+- aliases: line-chart, line-graph  |  entry kinds: item, point  |  sweet spot: 2–14 items
+- option `yTitle:` (string) — y-axis title
+- option `xTitle:` (string) — x-axis title
+- option `color:` (string) — line color override
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz line "Active Users" {
+  yTitle: "Users"
+  xTitle: "Month"
+  item "Jan" 1200
+  item "Feb" 1350
+  item "Mar" 1600
+  item "Apr" 1580
+  item "May" 1900
+  item "Jun" 2400
+}
+```
+
+### viz pie
+
+Pie/donut chart with percentage callouts.
+- aliases: donut, pie-chart, doughnut, share  |  entry kinds: item, slice  |  sweet spot: 2–6 items
+- option `variant:` (pie|donut) — "donut" cuts a hole in the middle
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz pie "Market Share" {
+  item "Alpha" 45 { icon: star }
+  item "Beta" 30
+  item "Gamma" 15
+  item "Others" 10
+}
+```
+
+### viz radar
+
+Spider chart — 1-3 series polygons over 4-8 labeled axes.
+- aliases: spider, spider-chart, radar-chart, capability-map, skills-chart  |  entry kinds: axis, series, item  |  sweet spot: 4–8 items
+- option `max:` (number) — scale maximum (default: largest value)
+
+```edd
+viz radar "Platform Assessment" {
+  axis "Security"
+  axis "Performance"
+  axis "Docs"
+  axis "Ecosystem"
+  axis "DX"
+  series "Today" [3, 4, 2, 3, 2]
+  series "Target" [5, 4, 4, 4, 5]
+}
+```
+
+### viz sankey
+
+Sources → targets with value-thick ribbons (`flow a -> b 25`).
+- aliases: flow-diagram, sankey-diagram, flows  |  entry kinds: flow, item, node, source, target  |  sweet spot: 2–5 items
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz sankey "Energy Mix" {
+  flow "Coal" -> "Industry" 25
+  flow "Coal" -> "Homes" 10
+  flow "Solar" -> "Homes" 30
+  flow "Solar" -> "Industry" 12
+  flow "Wind" -> "Industry" 18
+  flow "Wind" -> "Homes" 15
+}
+```
+
+### viz slope-chart
+
+Before → after lines, one per series — rank and magnitude change at a glance.
+- aliases: slope, slopegraph, before-after-lines, rank-change  |  entry kinds: item, series  |  sweet spot: 2–6 items
+- option `left:` (string) — left column header (default "Before")
+- option `right:` (string) — right column header (default "After")
+- option `showValues:` (boolean) — print endpoint values (default true)
+
+```edd
+viz slope-chart "Ticket Volume" {
+  left: "2026"
+  right: "2027"
+  item "Billing" 340 120
+  item "Onboarding" 210 190
+  item "API" 90 160
+  item "Other" 150 60
+}
+```
+
+### viz stacked-bar
+
+Stacked columns; rows are `item "Q1" [a, b, c]`, legend via `series`.
+- aliases: stacked-column, stacked-bars  |  entry kinds: item, row, series  |  sweet spot: 2–6 items
+- option `yTitle:` (string) — y-axis title
+- option `xTitle:` (string) — x-axis title
+- option `legend:` (string) — list of series names for the legend
+- option `series:` (string) — alias for legend
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz stacked-bar "Budget by Quarter" {
+  series "People"
+  series "Tools"
+  series "Marketing"
+  item "Q1" [80, 20, 30]
+  item "Q2" [90, 25, 45]
+  item "Q3" [95, 22, 38]
+}
+```
+
+### viz stacked-bar-horizontal
+
+Horizontal stacked bars with a value axis and legend.
+- aliases: stacked-hbar, horizontal-stacked-bar  |  entry kinds: item, row, series  |  sweet spot: 2–6 items
+- option `legend:` (string) — list of series names for the legend
+- option `series:` (string) — alias for legend
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz stacked-bar-horizontal "Department Budgets" {
+  series "Salaries"
+  series "Equipment"
+  series "Travel"
+  item "Engineering" [120000, 30000, 12000]
+  item "Sales" [90000, 15000, 40000]
+  item "Operations" [70000, 25000, 8000]
+}
+```
+
+### viz waterfall
+
+Start bar, floating signed deltas, computed net bar, connector line.
+- aliases: waterfall-chart, cascade, bridge-chart  |  entry kinds: item, delta, total, net, end  |  sweet spot: 2–8 items
+- option `yTitle:` (string) — y-axis title
+- option `xTitle:` (string) — x-axis title
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz waterfall "Cash Flow" {
+  item "Opening" 500
+  item "Rent" -200
+  item "Payroll" -120
+  item "Marketing" -40
+  total "Closing"
+}
+```
+
+## Hierarchy
+
+### viz bullseye
+
+Concentric target rings, labels on the left with leader lines.
+- aliases: target, concentric, priorities, rings  |  entry kinds: item, ring  |  sweet spot: 2–5 items
+
+```edd
+viz bullseye "Target Market" {
+  item "Addressable market" "Everyone who could buy" { icon: globe }
+  item "Serviceable market" "Who we can reach today" { icon: target }
+  item "Beachhead" "Design-led B2B startups" { icon: flag }
+}
+```
+
+### viz pyramid
+
+Triangle of stacked levels, numbered, labels staggered on the slope.
+- aliases: hierarchy, layers, tiers, triangle  |  entry kinds: item, level  |  sweet spot: 3–6 items
+
+```edd
+viz pyramid "Brand Pyramid" {
+  item "Essence" "One promise"
+  item "Personality" "How we sound and feel"
+  item "Benefits" "What customers get"
+  item "Attributes" "Features and facts"
+}
+```
+
+## Mindmap
+
+### viz mindmap
+
+Root with branches fanning left and right; children beyond each branch.
+- aliases: mind-map, brainstorm, topics  |  entry kinds: item, root, center  |  sweet spot: 3–8 items
+
+```edd
+viz mindmap "Product Launch" {
+  item "Marketing" { item "Landing page"; item "Email campaign"; item "Social posts" }
+  item "Engineering" { item "Feature freeze"; item "Load testing" }
+  item "Sales" { item "Demo script"; item "Pricing sheet" }
+  item "Support" { item "Help articles"; item "Escalation plan" }
+  item "Legal" { item "Terms update" }
+}
+```
+
+### viz mindmap-horizontal
+
+Root at the left; branches one column right, children beyond.
+- entry kinds: item, root, center  |  sweet spot: 2–6 items
+- layout variant of `mindmap` (same data model; see the mindmap example).
+
+### viz mindmap-left
+
+Mindmap with every branch on the left of the root.
+- entry kinds: item, root, center  |  sweet spot: 2–5 items
+- layout variant of `mindmap` (same data model; see the mindmap example).
+
+### viz mindmap-right
+
+Mindmap with every branch on the right of the root.
+- entry kinds: item, root, center  |  sweet spot: 2–5 items
+- layout variant of `mindmap` (same data model; see the mindmap example).
+
+### viz mindmap-vertical
+
+Org-chart mindmap: root center, branch cards above/below with elbow trunks.
+- entry kinds: item, root, center  |  sweet spot: 2–6 items
+- layout variant of `mindmap` (same data model; see the mindmap example).
+
+## Parts of Whole
+
+### viz iceberg
+
+The visible tip vs the hidden mass below the waterline.
+- aliases: visible-hidden, surface-depth, above-below  |  entry kinds: above, below, item  |  sweet spot: 2–5 items
+
+```edd
+viz iceberg "Project Effort" {
+  above "The demo" "What stakeholders see" { icon: eye }
+  below "Testing & hardening" "Edge cases, monitoring, rollback"
+  below "Infrastructure" "CI, environments, data migrations"
+}
+```
+
+## Problems and Solutions
+
+### viz bridge
+
+Bridge planks spanning the gap between two cliffs (from → to).
+- aliases: gap, migration, span, bridge-gap  |  entry kinds: item, step, challenge, plank, from, to  |  sweet spot: 2–5 items
+- option `action:` (string) — call-to-action caption below the from/to boxes
+
+```edd
+viz bridge "Migration Plan" {
+  from "Legacy stack" "Monolith on VMs"
+  to "New platform" "Services on Kubernetes"
+  item "Extract auth"
+  item "Move billing"
+  item "Split reporting"
+  item "Retire monolith"
+  action: "One service at a time"
+}
+```
+
+### viz challenges
+
+Hurdles spanning the gap between two cliffs (from → to).
+- aliases: hurdles, obstacles, barriers  |  entry kinds: item, step, challenge, plank, from, to  |  sweet spot: 2–5 items
+- option `action:` (string) — call-to-action caption below the from/to boxes
+
+```edd
+viz challenges "Path to Launch" {
+  from "Prototype" "Works on my machine"
+  to "Production" "Reliable for everyone"
+  item "Security review" "Close the audit findings"
+  item "Scale testing" "Survive 10x load"
+  item "Compliance" "SOC 2 evidence complete"
+  action: "Bridge the gap"
+}
+```
+
+### viz problem-solution
+
+Problem → central solution circle → outcome, with support captions.
+- aliases: issue-fix, challenge-response  |  entry kinds: item, problem, solution, outcome, support  |  sweet spot: 3–6 items
+
+```edd
+viz problem-solution "Support Overload" {
+  problem "Ticket backlog" "400 open tickets, 3-day replies"
+  solution "Self-serve help center"
+  outcome "Faster answers" "70% deflection, same-day replies"
+  support "Smooth migration for existing users"
+  support "Weekly content reviews keep articles fresh"
+}
+```
+
+### viz transformation
+
+A suspension bridge carrying you from before to after (reference design).
+- aliases: before-after, transition, change, makeover  |  entry kinds: item, before, after  |  sweet spot: 2–2 items
+
+```edd
+viz transformation "Workflow Cleanup" {
+  before "Manual chaos" "Spreadsheets and email threads"
+  after "Streamlined flow" "One automated pipeline"
+}
+```
+
+## Process
+
+### viz cycle
+
+Phases on a ring with sweeping arrows between them.
+- aliases: loop, cyclic, circular, feedback-loop  |  entry kinds: item, phase, step  |  sweet spot: 3–8 items
+
+```edd
+viz cycle "Build-Measure-Learn" {
+  item "Build" "Ship the smallest useful slice" { icon: gear }
+  item "Measure" "Watch real usage, not opinions" { icon: chart }
+  item "Learn" "Decide: persevere or pivot" { icon: bulb }
+}
+```
+
+### viz flowchart
+
+Chain of rounded steps with straight arrows; `direction: right` for horizontal.
+- aliases: flow, process, workflow, flow-chart, steps-flow  |  entry kinds: item, step  |  sweet spot: 2–7 items
+- option `direction:` (right|down) — right (or horizontal) lays the chain horizontally
+- option `orientation:` (horizontal|vertical) — alias for direction
+
+```edd
+viz flowchart "Content Publishing" {
+  item "Draft" { icon: doc }
+  item "Review" { icon: search }
+  item "Approve" { icon: check }
+  item "Publish" { icon: rocket }
+}
+```
+
+### viz gantt
+
+Cascading task bars over a time grid; `task "Name" start end`.
+- aliases: schedule, project-plan, gantt-chart  |  entry kinds: task, item  |  sweet spot: 1–10 items
+- option `scale:` (string) — list of tick labels for the time axis
+- option `deadline:` (number) — time position of the deadline marker
+- option `deadlineLabel:` (string) — caption for the deadline marker
+
+```edd
+viz gantt "Release Plan" {
+  scale: ["Wk 1", "Wk 2", "Wk 3", "Wk 4", "Wk 5", "Wk 6"]
+  deadline: 5
+  task "Design" 0 1.5
+  task "Build" 1 3.5
+  task "QA" 3 4.5
+  task "Rollout" 4.5 5
+}
+```
+
+### viz journey
+
+A winding two-walled ribbon road, one color segment per stage (reference design).
+- aliases: roadmap, journey-map, user-journey, path  |  entry kinds: item, stage, stop  |  sweet spot: 3–6 items
+
+```edd
+viz journey "User Journey" {
+  item "Discover" "Finds us via search or a friend"
+  item "Try" "Signs up for the free tier"
+  item "Adopt" "Invites the team, builds a habit"
+  item "Upgrade" "Converts to a paid plan"
+  item "Advocate" "Recommends us to others"
+}
+```
+
+### viz kanban
+
+Named columns of hand-drawn cards — the task board.
+- aliases: board, task-board, kanban-board  |  entry kinds: column, lane, item  |  sweet spot: 2–4 items
+
+```edd
+viz kanban "Sprint 12" {
+  column "To do" {
+    item "Rate limiting"
+    item "Billing webhooks"
+    item "Dark mode"
+  }
+  column "Doing" {
+    item "Checkout flow" { icon: fire }
+    item "SSO login"
+  }
+  column "Done" {
+    item "Search rework" { icon: check }
+    item "Onboarding tour" { icon: check }
+  }
+}
+```
+
+### viz sequence
+
+Boustrophedon grid of titled description panels joined by flow arrows.
+- aliases: sequential, step-by-step, procedure  |  entry kinds: item, step  |  sweet spot: 4–9 items
+- option `columns:` (number) — grid columns, clamped 2-4 (default 3)
+
+```edd
+viz sequence "Customer Onboarding" {
+  item "Sign up" "Create an account with email or SSO."
+  item "Verify" "Confirm the email address."
+  item "Profile" "Add team and workspace details."
+  item "Invite" "Bring in the first teammates."
+  item "Import" "Load existing project data."
+  item "Launch" "Go live with the first project."
+}
+```
+
+### viz stairs
+
+Ascending abutting step blocks with icon above and label inside each.
+- aliases: staircase, steps, step-up, climb  |  entry kinds: item, step  |  sweet spot: 3–6 items
+
+```edd
+viz stairs "Growth Ladder" {
+  item "Learn" { icon: book }
+  item "Build" { icon: gear }
+  item "Ship" { icon: rocket }
+  item "Scale" { icon: trend-up }
+}
+```
+
+### viz swimlane-flow
+
+A flowchart over responsibility lanes — who does what, in order.
+- aliases: swimlanes, cross-functional-flow, raci-flow  |  entry kinds: lane, step, item  |  sweet spot: 2–4 items
+
+```edd
+viz swimlane-flow "Release Process" {
+  lane "Product" {
+    step "Spec" 0 { icon: doc }
+    step "Sign-off" 3 { icon: check }
+  }
+  lane "Engineering" {
+    step "Build" 1 { icon: wrench }
+    step "Deploy" 4 { icon: rocket }
+  }
+  lane "QA" {
+    step "Test" 2 { icon: search }
+  }
+}
+```
+
+## Timelines
+
+### viz milestone-path
+
+A winding trail to a summit flag, milestones marked along the way.
+- aliases: path-to-goal, summit, trail, journey-to-goal  |  entry kinds: item, milestone, goal  |  sweet spot: 3–6 items
+- option `goal:` (string) — summit flag label (or use a `goal` entry)
+
+```edd
+viz milestone-path "Road to Launch" {
+  item "Prototype" "Q1 — clickable demo"
+  item "Private beta" "Q2 — 20 design partners"
+  item "Pricing" "Q3 — packaging locked"
+  goal "Launch" "Public GA"
+}
+```
+
+### viz roadmap-lanes
+
+Workstream swimlanes × time columns — the product-roadmap slide.
+- aliases: product-roadmap, swimlane-roadmap, quarterly-roadmap, release-plan  |  entry kinds: lane, task, milestone, item  |  sweet spot: 2–5 items
+- option `scale:` (string[]) — column headers, e.g. ["Q1","Q2","Q3","Q4"]
+
+```edd
+viz roadmap-lanes "2027 Roadmap" {
+  scale: ["Q1", "Q2", "Q3", "Q4"]
+  lane "Platform" {
+    task "SSO + RBAC" 0 1.5
+    task "Audit log" 2 3
+    icon: gear
+  }
+  lane "Growth" {
+    task "Referrals" 0.5 2
+    milestone "Self-serve GA" 3
+    icon: trend-up
+  }
+  lane "Mobile" {
+    task "iOS beta" 1 2.5
+    task "Android" 2.5 4
+    icon: phone
+  }
+}
+```
+
+### viz timeline
+
+A baseline with alternating teardrop pins: icon inside, date + description beside.
+- aliases: milestones, chronology, history  |  entry kinds: item, event, milestone  |  sweet spot: 3–7 items
+
+```edd
+viz timeline "Company Milestones" {
+  item "2019" "Founded in a garage" { icon: home }
+  item "2021" "First 1,000 customers" { icon: users }
+  item "2023" "Series A raised" { icon: dollar }
+  item "2025" "Global expansion" { icon: globe }
+}
+```
+
+## Visual Metaphors
+
+### viz bottleneck
+
+Flow crowding through a bottle's neck — many in, few out.
+- aliases: constraint, chokepoint, throughput  |  entry kinds: item
+- option `count:` (number) — upstream circle count, 6-28 (default 16)
+- option `in:` (string) — caption over the wide inlet
+- option `out:` (string) — caption over the outlet
+- option `neck:` (string) — caption naming the constraint, arrowed at the neck
+
+```edd
+viz bottleneck "Review Bottleneck" {
+  in: "30 PRs/week"
+  out: "8 merged"
+  neck: "Two reviewers"
+}
+```
+
+### viz dialogue
+
+A chat transcript between two speakers, bubbles alternating sides.
+- aliases: conversation, chat, qa, discussion  |  entry kinds: item, msg, turn, message, speaker  |  sweet spot: 2–6 items
+- option `a:` (string) — left speaker name (default A)
+- option `b:` (string) — right speaker name (default B)
+
+```edd
+viz dialogue "Discovery Call" {
+  a: "Customer"
+  b: "Sales"
+  msg "We spend hours copying data between tools." { speaker: a }
+  msg "What would change if that sync was automatic?" { speaker: b }
+  msg "We'd save a day a week, easily." { speaker: a }
+  msg "Let me show you how the integration works." { speaker: b }
+}
+```
+
+### viz hole
+
+A pit in the ground with a ladder out — the title carries the message.
+- aliases: pit, trap, pitfall, risk  |  entry kinds: 
+- option `caption:` (string) — message line below the pit
+
+```edd
+viz hole "Technical Debt Trap" {
+}
+```
+
+### viz lens
+
+A focusing lens — several inputs concentrated into one output.
+- aliases: focus, magnify, filter  |  entry kinds: item, input, output, out  |  sweet spot: 2–5 items
+- option `output:` (string) — outcome label when no output entry (else the last item is the output)
+
+```edd
+viz lens "Research Focus" {
+  item "Interviews" { icon: chat }
+  item "Surveys" { icon: doc }
+  item "Analytics" { icon: chart }
+  output "Insight report" { icon: bulb }
+}
+```
+
+### viz lighthouse
+
+A lighthouse beam sweeping over labeled rocks — guidance past the risks.
+- aliases: guidance, beacon, watch-out  |  entry kinds: item, rock, risk  |  sweet spot: 2–4 items
+- option `ship:` (string) — label under the ship sailing past
+
+```edd
+viz lighthouse "Compliance Guidance" {
+  ship: "Launch plan"
+  item "Data residency" "EU hosting required"
+  item "Audit gaps" "SOC 2 evidence missing"
+  item "Access sprawl" "Stale admin accounts"
+}
+```
+
+### viz magnet
+
+A horseshoe magnet pulling item chips in — attraction and retention.
+- aliases: attraction, retention, pull  |  entry kinds: item  |  sweet spot: 2–5 items
+- option `label:` (string) — caption under the magnet
+
+```edd
+viz magnet "Why Devs Stay" {
+  label: "Developer experience"
+  item "Fast CI" { icon: rocket }
+  item "Clear docs" { icon: book }
+  item "Small PRs" { icon: check }
+  item "Owned services" { icon: shield }
+}
+```
+
+### viz performance
+
+Side-by-side donut gauges, one per metric.
+- aliases: kpis, metrics, scorecard, dashboard, kpi-donuts  |  entry kinds: item, metric  |  sweet spot: 2–4 items
+- option `summary:` (string) — caption under the panels
+- option `showValues:` (boolean) — print item values (default true)
+
+```edd
+viz performance "Quarterly KPIs" {
+  summary: "All three programs are trending above target."
+  item "Uptime" 99 "Rolling 90-day availability" { icon: shield }
+  item "NPS" 62 "Promoters minus detractors" { icon: heart }
+  item "Velocity" 85 "Committed vs delivered" { icon: rocket }
+}
+```
+
+### viz pillar
+
+Classical columns, one per pillar, icon + label in the shaft.
+- aliases: pillars, columns, foundations, supports  |  entry kinds: item, pillar  |  sweet spot: 2–5 items
+
+```edd
+viz pillar "Company Pillars" {
+  item "Trust" "Security and reliability first" { icon: shield }
+  item "Craft" "Quality in every detail" { icon: star }
+  item "Pace" "Ship and learn weekly" { icon: rocket }
+  item "Care" "Customers and each other" { icon: heart }
+}
+```
+
+### viz prism
+
+One input beam split by a prism into several outputs.
+- aliases: refraction, one-to-many, split  |  entry kinds: item, output, out, input, in  |  sweet spot: 2–5 items
+- option `input:` (string) — input label when no input entry
+
+```edd
+viz prism "One Strategy, Many Wins" {
+  input "Platform bet" { icon: diamond }
+  item "Faster features" { icon: rocket }
+  item "Lower costs" { icon: dollar }
+  item "New integrations" { icon: puzzle }
+  item "Happier devs" { icon: heart }
+}
+```
+
+### viz race
+
+Karts racing toward the finish line, staggered by rank.
+- aliases: competition, finish-line, contest  |  entry kinds: item, racer, kart  |  sweet spot: 2–5 items
+- option `finish:` (string) — banner text over the finish gate (default FINISH)
+
+```edd
+viz race "Market Race" {
+  item "Us"
+  item "Competitor X"
+}
+```
+
+### viz trend
+
+A rising staircase of progress with labeled levels on leader lines.
+- aliases: growth, upward, trajectory, maturity, rising  |  entry kinds: item, step, level  |  sweet spot: 2–5 items
+
+```edd
+viz trend "Maturity Curve" {
+  item "Ad hoc" "Heroics and hotfixes" { icon: fire }
+  item "Repeatable" "Checklists and runbooks" { icon: doc }
+  item "Automated" "CI/CD end to end" { icon: gear }
+  item "Self-healing" "Systems fix themselves" { icon: star }
+}
+```
+
+### viz tug-of-war
+
+Two teams pulling a rope — the marker drifts toward the stronger side.
+- aliases: force-field, push-pull, tension  |  entry kinds: side, team  |  sweet spot: 2–2 items
+- option `tilt:` (left|right|balanced) — override the computed balance
+
+```edd
+viz tug-of-war "Ship now vs. polish" {
+  side "Ship now" 3 {
+    item "Market window closing"
+    item "Competitor launched"
+    item "Team is burning out"
+  }
+  side "Keep polishing" 1 {
+    item "Two rough edges left"
+  }
+}
+```
+
+### viz vision
+
+A staircase rising from today toward an open door (the vision).
+- aliases: goal, aspiration, destination, north-star  |  entry kinds: item, current, vision  |  sweet spot: 2–2 items
+
+```edd
+viz vision "Where We're Headed" {
+  current "Today" "Regional player, 2 products"
+  vision "Global platform" "The door is open by 2028"
+}
+```
+
+==============================================================================
+
+# ▸ Runnable examples (examples/*.edd)
+
+Each is a complete EDodoDraw program. Paste any into the playground
+(https://vivmagarwal.github.io/edododraw/#/playground) or compile it with `compileEdd(source)`.
+
+## examples/animated-arrows.edd
+
+```edd
+edd 1.0
+meta { title: "Animated Arrow Gallery" }
+
+// EDodoDraw ships far more animated connectors than Excalidraw.
+scene {
+  layout dag { direction: right, gap: 120 }
+
+  circle a "A" { fill: blue }
+  circle b "B" { fill: green }
+
+  a -> b "flow"          { animate: flow }
+  a -> b "dash-march"    { animate: dash-march }
+  a -> b "draw-on"       { animate: draw-on }
+  a -> b "comet"         { animate: comet, color: red }
+  a -> b "gradient-flow" { animate: gradient-flow }
+  a -> b "electric"      { animate: electric, color: violet }
+  a -> b "pulse"         { animate: pulse }
+}
+```
+
+## examples/architecture.edd
+
+```edd
+edd 1.0
+meta { title: "WebShop Reference Architecture" }
+
+theme light {
+  tokens { $accent: #2563eb, $muted: #9ca3af, $danger: #e03131 }
+}
+
+style .card     { shape: round-rect, fill: blue }
+style .critical { stroke: $danger, strokeWidth: bold }
+
+defaults {
+  edge { endArrow: arrow }
+}
+
+scene {
+  use theme light
+  layout dag { direction: down, gap: 64, rankGap: 110 }
+
+  actor  client "User"
+  cloud  cdn    "CDN / Edge"       { fill: cyan }
+  hexagon gw    "API Gateway"      { fill: violet, strokeWidth: bold }
+
+  group services "Application Services" {
+    round-rect auth   "Auth Service"  :::card
+    round-rect api    "API Service"   :::card :::critical
+    subroutine worker "Async Worker"
+  }
+
+  group data "Data Layer" {
+    cylinder      db    "Postgres"       { fill: teal }
+    cylinder      cache "Redis"          { fill: red }
+    parallelogram queue "Message Queue"  { fill: orange }
+  }
+
+  note legacy "Legacy Billing\n(deprecate)" { at: (760, 40), pin: true, strokeStyle: dashed }
+
+  // Arrowhead + animation variety
+  client  -> cdn    "https"
+  cdn     ==> gw    "cache miss"   { color: $accent }
+  gw      -> auth   "authZ"        { startArrow: dot }
+  gw      -> api    "REST"         { animate: dash-march }
+  api     ~> worker "enqueue"      { animate: flow }
+  api     -> db     "write"        { endArrow: triangle, animate: draw-on }
+  api     -.-> cache "read-through"
+  worker  -> queue  "publish"      { animate: comet, color: $accent }
+  queue   -> db     "persist"
+  api     -x legacy "deprecated"   { color: $muted, strokeStyle: dashed }
+}
+
+annotate "persistent" {
+  callout db "source of truth" { placement: bottom }
+}
+
+timeline story {
+  beat overview "The whole system" {
+    camera fit-all over 800ms
+    reveal { show all with fade-in }
+    narrate: "End-to-end request path."
+  }
+
+  beat ingress "Traffic enters at the edge" {
+    camera focus [client, cdn, gw] zoom 1.5 ease spring
+    reveal { show [client, cdn, gw] with pop }   // pop the entry path into focus
+    annotate {
+      point-at gw "single entry point" { from: ne, color: $accent }
+      highlight cdn { color: yellow }
+    }
+  }
+
+  beat services "Inside the app tier" {
+    camera focus services zoom 1.6
+    reveal { show [auth, api, worker] with pop }
+    annotate {
+      spotlight services { dim: 0.72 }
+      underline api "the hot path" { color: $accent }
+    }
+    narrate: "Auth fronts the API; the worker drains async jobs."
+  }
+
+  beat data "Where state lives" {
+    camera focus data zoom 1.7 ease ease-in-out
+    reveal { draw-on [db, cache, queue] }        // sweep the data stores in
+    annotate {
+      callout db "primary of record" { placement: right }
+      circle-mark queue "retry here"
+    }
+    narrate: "All writes funnel through Postgres; Redis is read-through."
+    hold: 2s
+  }
+}
+```
+
+## examples/flowchart.edd
+
+```edd
+edd 1.0
+meta { title: "Signup Flow" }
+
+scene {
+  layout dag { direction: down, gap: 60 }
+
+  start([Start])
+  form[Signup Form]
+  valid{Valid?}
+  ok(Create Account):::good
+  err(Show Errors):::bad
+
+  start --> form
+  form  --> valid
+  valid -->|yes| ok
+  valid -->|no|  err
+  err   --> form
+}
+
+style .good { stroke: green, fill: green }
+style .bad  { stroke: red,   fill: red }
+```
+
+## examples/mermaid-import.edd
+
+```edd
+edd 1.0
+meta { title: "Imported from Mermaid" }
+
+// Paste raw Mermaid — EDodoDraw imports it, keeps the node ids,
+// and lets you choreograph a walkthrough on top.
+mermaid """
+flowchart LR
+  app[App Servers] --> otel[OTel Collector]
+  otel --> prom[Prometheus]
+  otel --> loki[Loki]
+  prom --> grafana[Grafana]
+  loki --> grafana
+  prom --> alertmgr[Alertmanager]
+"""
+
+timeline walkthrough {
+  beat all "Pipeline overview" {
+    camera fit-all over 700ms
+    narrate: "Telemetry flows left to right into Grafana."
+  }
+  beat collect "Collection" {
+    camera focus [app, otel] zoom 1.7
+    annotate {
+      highlight otel { color: yellow }
+      point-at otel "single ingestion point" { from: s }
+    }
+  }
+  beat visualize "Dashboards & alerts" {
+    camera focus [grafana, alertmgr] zoom 1.6
+    annotate {
+      circle-mark grafana "the pane of glass"
+      callout alertmgr "pages on-call" { placement: top }
+    }
+  }
+}
+```
+
+## examples/visualizations.edd
+
+```edd
+edd 1.0
+meta { title: "Visualizations" }
+
+// 62 chart & diagram templates ship built-in — declare DATA, get a diagram.
+// The default look is the black-and-white hand-drawn Classic. Add a style to
+// restyle everything, e.g. `meta { style: classic-color }` — also colorful-lines,
+// chalkboard, crayon, earthy-gradient, mono-accent, fine-line, neutral-lines.
+// Full catalog: Docs → Visualizations.
+
+viz funnel sales "Sales Funnel" {
+  input: "Potential customers"
+  output: "Closed deals"
+  item "Awareness" 5000
+  item "Interest" 1800 "Warm leads in the CRM"
+  item "Evaluation" 420
+  item "Won" 38 { icon: trophy }
+}
+
+viz venn "Product Sweet Spot" {
+  set "Desirable" "What users want" { icon: heart }
+  set "Feasible" "What we can build" { icon: gear }
+  set "Viable" "What sustains us" { icon: dollar }
+  overlap all "Great products"
+}
+
+viz cycle "Build-Measure-Learn" {
+  item "Build" "Ship the smallest useful slice" { icon: gear }
+  item "Measure" "Watch real usage, not opinions" { icon: chart }
+  item "Learn" "Decide: persevere or pivot" { icon: bulb }
+}
+
+// Viz elements are ordinary scene elements: annotate them, focus them, edit them.
+annotate {
+  circle-mark sales.won "the goal"
+}
+
+timeline {
+  beat all "Everything" { camera fit-all }
+  beat funnel "The funnel" { camera focus sales.won zoom 1.6 }
+}
+```
+
+## examples/welcome.edd
+
+```edd
+edd 1.0
+meta { title: "Welcome to EDodoDraw" }
+
+// Everything you see is generated from THIS code.
+// Edit anything on the left and the diagram updates live.
+
+scene {
+  layout dag { direction: down, gap: 72 }
+
+  ellipse     hello "Hello 👋"                 { fill: yellow }
+  rect        idea  "Diagrams as CODE"         { fill: blue }
+  round-rect  vibe  "…with the Excalidraw vibe" { fill: green }
+  diamond     edit  "Try editing me!"          { fill: violet }
+
+  hello --> idea   "type"
+  idea  --> vibe   "render"
+  vibe  --> edit   "enjoy"
+  edit  ~> hello   "loop"        // ~>  == a flowing animated arrow
+}
+```
+
