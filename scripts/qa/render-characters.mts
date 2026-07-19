@@ -17,7 +17,7 @@ const dom = new JSDOM("<!doctype html><html><body><div id='host' style='width:18
 const { compileEdd } = await import("../../src/engine/dsl/index.js");
 const { SvgRenderer } = await import("../../src/engine/render/svgRenderer.js");
 const { exportSVGString } = await import("../../src/engine/export.js");
-const { listCharacterPoses, listCharacterEmotions, listCharacterShirts } = await import("../../src/engine/viz/characters.js");
+const { listCharacterPoses, listCharacterEmotions, listCharacterShirts, listCharacterHair, listCharacterAccessories, listCharacterFx } = await import("../../src/engine/viz/characters.js");
 
 const host = dom.window.document.getElementById("host") as unknown as HTMLElement;
 (host as any).getBoundingClientRect = () => ({ width: 1800, height: 900, x: 0, y: 0, top: 0, left: 0, right: 1800, bottom: 900 });
@@ -34,10 +34,22 @@ const emoSrc = meta + chunk(listCharacterEmotions(), 5)
   .join("\n");
 
 const shirtSrc = meta + chunk(listCharacterShirts(), 4)
-  .map((row, r) => `viz personas shirts${r} ${r === 0 ? '"Shirts"' : ""} {\n` + row.map((sh) => `  item "${sh}" { pose: standing, shirt: ${sh} }`).join("\n") + "\n}")
+  .map((row, r) => `viz personas shirts${r} ${r === 0 ? '"Shirts"' : ""} {\n` + row.map((sh) => `  item "${sh}" { pose: standing, shirt: ${sh}, shirtColor: "#e8590c" }`).join("\n") + "\n}")
   .join("\n");
 
-const sheets: Array<[string, string]> = [...poseSheets.map((src, i) => [`poses-${i + 1}`, src] as [string, string]), ["emotions", emoSrc], ["shirts", shirtSrc]];
+const hairSrc = meta + chunk(listCharacterHair(), 4)
+  .map((row, r) => `viz personas hair${r} ${r === 0 ? '"Hair"' : ""} {\n` + row.map((hr) => `  item "${hr}" { pose: standing, hair: ${hr} }`).join("\n") + "\n}")
+  .join("\n");
+
+const accSrc = meta + chunk(listCharacterAccessories(), 4)
+  .map((row, r) => `viz personas acc${r} ${r === 0 ? '"Accessories"' : ""} {\n` + row.map((ac) => `  item "${ac}" { pose: standing, accessory: ${ac} }`).join("\n") + "\n}")
+  .join("\n");
+
+const fxSrc = meta + chunk(listCharacterFx(), 4)
+  .map((row, r) => `viz personas fx${r} ${r === 0 ? '"Effects"' : ""} {\n` + row.map((x) => `  item "${x}" { pose: standing, emotion: happy, fx: ${x} }`).join("\n") + "\n}")
+  .join("\n");
+
+const sheets: Array<[string, string]> = [...poseSheets.map((src, i) => [`poses-${i + 1}`, src] as [string, string]), ["emotions", emoSrc], ["shirts", shirtSrc], ["hair", hairSrc], ["accessories", accSrc], ["effects", fxSrc]];
 for (const [name, src] of sheets) {
   const { scene, diagnostics } = compileEdd(src);
   if (diagnostics.errors.length) throw new Error(String(diagnostics.errors[0]?.message));

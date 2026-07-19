@@ -9,7 +9,21 @@ import { SvgRenderer } from "@engine/render/svgRenderer.js";
 import { VizContext } from "@engine/viz/context.js";
 import { DiagnosticBag } from "@engine/dsl/diagnostics.js";
 import { effectivePreset } from "@engine/style/presets.js";
-import { drawCharacter, listCharacterPoses, listCharacterEmotions, registerCharacterPose } from "@engine/viz/characters.js";
+import {
+  drawCharacter,
+  listCharacterPoses,
+  listCharacterEmotions,
+  listCharacterHair,
+  listCharacterAccessories,
+  listCharacterFx,
+  registerCharacterPose,
+  registerCharacterEmotion,
+  registerCharacterShirt,
+  registerCharacterHair,
+  registerCharacterAccessory,
+  registerCharacterFx,
+  characterOptsFrom,
+} from "@engine/viz/characters.js";
 import { vizItemMembers } from "@engine/scene/query.js";
 import "@engine/viz/generators/index.js";
 
@@ -49,13 +63,64 @@ describe("character library", () => {
     registerCharacterPose("t-pose", {
       armL: [[-0.1, 0.31], [-0.3, 0.31]],
       armR: [[0.1, 0.31], [0.3, 0.31]],
-      legL: [[-0.05, 0.55], [-0.08, 0.97]],
-      legR: [[0.05, 0.55], [0.08, 0.97]],
+      legL: [[-0.05, 0.55], [-0.08, 1.0]],
+      legR: [[0.05, 0.55], [0.08, 1.0]],
     });
     expect(listCharacterPoses()).toContain("t-pose");
     const ctx = ctxOf();
     drawCharacter(ctx, 0, 100, 100, { pose: "t-pose" });
     expect(ctx.nodes.length).toBeGreaterThan(6);
+  });
+
+  it("keeps a leaning figure's head attached to its torso", () => {
+    // running leans forward; the head centre must sit over the (sheared) torso,
+    // not float off to the side as it did before the shear fix.
+    const ctx = ctxOf();
+    drawCharacter(ctx, 0, 200, 120, { pose: "running" });
+    const heads = ctx.nodes.filter((n) => n.shape === "circle" && n.w > 15); // head ~ 0.21*120
+    expect(heads.length).toBeGreaterThan(0);
+    const head = heads.reduce((a, b) => (a.y < b.y ? a : b)); // topmost circle = head
+    const headCx = head.x + head.w / 2;
+    // torso top centre is sheared to ~lean*0.67*h ≈ 10.5 for running; head tracks it
+    expect(Math.abs(headCx)).toBeLessThan(0.2 * 120); // within a fifth of height of centre
+    expect(headCx).toBeGreaterThan(2); // and actually leaning (not upright)
+  });
+
+  it("grounds standing feet at the ground line", () => {
+    const ctx = ctxOf();
+    const groundY = 200;
+    drawCharacter(ctx, 0, groundY, 120, { pose: "standing" });
+    const lowest = Math.max(...ctx.nodes.map((n) => n.y + n.h));
+    expect(lowest).toBeGreaterThanOrEqual(groundY - 2); // feet reach the ground
+    expect(lowest).toBeLessThanOrEqual(groundY + 3);
+  });
+
+  it("adds hair / accessory / fx layers on top of the base figure", () => {
+    const base = ctxOf();
+    drawCharacter(base, 0, 100, 100, { pose: "standing" });
+    const decorated = ctxOf();
+    drawCharacter(decorated, 0, 100, 100, { pose: "standing", hair: "spiky", accessory: "glasses", fx: "stars" });
+    expect(decorated.nodes.length).toBeGreaterThan(base.nodes.length);
+  });
+
+  it("register* extends every axis at runtime", () => {
+    registerCharacterEmotion("test-emo", (f) => f.dot(f.face.eyeL, f.face.eyeY, 2));
+    registerCharacterShirt("test-shirt", (f) => f.stroke([f.T([-0.1, 0.4]), f.T([0.1, 0.4])]));
+    registerCharacterHair("test-hair", (f) => f.stroke(f.arc(f.head.cx, f.head.cy, f.head.r, 180, 360)));
+    registerCharacterAccessory("test-acc", (f) => f.dot(f.head.cx, f.head.cy, 2));
+    registerCharacterFx("test-fx", (f) => f.dot(f.head.cx, f.head.cy - f.head.r * 2, 2));
+    expect(listCharacterEmotions()).toContain("test-emo");
+    expect(listCharacterHair()).toContain("test-hair");
+    expect(listCharacterAccessories()).toContain("test-acc");
+    expect(listCharacterFx()).toContain("test-fx");
+    const ctx = ctxOf();
+    drawCharacter(ctx, 0, 100, 100, { pose: "standing", emotion: "test-emo", shirt: "test-shirt", hair: "test-hair", accessory: "test-acc", fx: "test-fx" });
+    expect(ctx.nodes.every((n) => [n.x, n.y, n.w, n.h].every(Number.isFinite))).toBe(true);
+  });
+
+  it("characterOptsFrom forwards only the axes that are set", () => {
+    expect(characterOptsFrom({ hair: "bob", fx: "idea", nonsense: 5 })).toEqual({ hair: "bob", fx: "idea" });
+    expect(characterOptsFrom({})).toEqual({});
   });
 });
 
@@ -142,8 +207,32 @@ describe("character matrix — every pose × shirt × flip", () => {
     }
   });
 
-  it("ships the full movement + shirt vocabulary", () => {
-    expect(listCharacterPoses().length).toBeGreaterThanOrEqual(24);
-    expect(listCharacterShirts()).toEqual(["vest", "tee", "striped", "solid", "tie", "dress", "hoodie"]);
+  it("renders every hair × accessory × fx with sane geometry", () => {
+    for (const hair of listCharacterHair()) {
+      for (const accessory of listCharacterAccessories()) {
+        const ctx = ctxOf();
+        drawCharacter(ctx, 0, 100, 100, { hair, accessory });
+        expect(finite(ctx), `${hair}/${accessory} NaN`).toBe(true);
+      }
+    }
+    for (const fx of listCharacterFx()) {
+      const ctx = ctxOf();
+      drawCharacter(ctx, 0, 100, 100, { fx, emotion: "happy" });
+      expect(finite(ctx), `fx ${fx} NaN`).toBe(true);
+      for (const n of ctx.nodes) {
+        expect(n.y, `fx ${fx} stray`).toBeGreaterThan(-60);
+        expect(n.x).toBeGreaterThan(-160);
+        expect(n.x + n.w).toBeLessThan(160);
+      }
+    }
+  });
+
+  it("ships the full movement + expression + shirt vocabulary", () => {
+    expect(listCharacterPoses().length).toBeGreaterThanOrEqual(40);
+    expect(listCharacterEmotions().length).toBeGreaterThanOrEqual(24);
+    // the original seven shirts stay, in order, at the front of the registry
+    expect(listCharacterShirts().slice(0, 7)).toEqual(["vest", "tee", "striped", "solid", "tie", "dress", "hoodie"]);
+    expect(listCharacterShirts().length).toBeGreaterThanOrEqual(12);
+    for (const axis of [listCharacterHair(), listCharacterAccessories(), listCharacterFx()]) expect(axis.length).toBeGreaterThanOrEqual(10);
   });
 });

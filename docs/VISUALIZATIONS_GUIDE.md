@@ -162,8 +162,8 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 |---|---|---|
 | `mindmap` (+ `mindmap-left`, `-right`, `-horizontal`, `-vertical`) | nested `item`s; root = title, a lone parent item, or a `root` entry | — |
 | `key-ideas` (`ideas`) | `item "Focus" "description"` lightbulbs | — |
-| `personas` (`team`, `cast`) | `item "The Builder" "detail" { pose: confident, emotion: happy, prop: wrench, shirt: tie }` characters | — |
-| `quote` (`big-quote`) | title = the quote; `by:` attribution; a character presents it | `by:`, `pose:`, `emotion:`, `prop:` |
+| `personas` (`team`, `cast`) | `item "The Builder" "detail" { pose: confident, emotion: happy, shirt: tie, hair: short, accessory: glasses, fx: idea, prop: wrench }` characters | — |
+| `quote` (`big-quote`) | title = the quote; `by:` attribution; a character presents it | `by:`, `pose:`, `emotion:`, `shirt:`, `hair:`, `accessory:`, `fx:`, `prop:` |
 | `clouds` (`idea-clouds`) | `item "Theme" "detail" { icon }` scattered thought-cloud islands | — |
 | `head-thoughts` (`in-their-head`) | `item "Will it save time?" { icon }` thoughts inside a profile head | `who:` caption |
 | `list` | `item "Value" "detail" { icon }` — vertical ≤5 items, horizontal 6+ | `orientation:` |
@@ -281,7 +281,7 @@ EDodoDraw is a **text→visualization generator**: it renders whatever you give 
 | `domino` | 3–6 tiles | fallen hardest at the trigger, upright at the outcome |
 | `lighthouse` | 2–4 rocks | + `ship:`; beam sweeps over every rock |
 | `magnet` | 2–5 chips | chips fan toward the poles |
-| `personas` | 2–6 characters | poses cycle when unset; `pose:`/`emotion:`/`prop:` per item |
+| `personas` | 2–6 characters | poses cycle when unset; `pose:`/`emotion:`/`shirt:`/`hair:`/`accessory:`/`fx:`/`prop:` per item (§6) |
 | `quote` | exactly 1 quote | `pose: none` hides the figure |
 | `clouds` | 3–7 clouds | staggered rows sized by the largest cloud |
 | `fishbone` | 2–6 bones × ≤4 causes | bones alternate above/below the spine |
@@ -349,32 +349,54 @@ tooling can validate `.edd` before rendering.
 ## 6. Characters
 
 A reusable **sketchnote character library** ships with the engine — the classic
-bullet-head figure (circle head + dot eyes + emotion mouth, vest-outline torso,
+bullet-head figure (circle head + dot eyes + emotion mouth, torso outline,
 curved limbs with hand blobs, motion lines) drawn parametrically, preset-aware,
-and deterministic like everything else.
+and deterministic like everything else. It has **six independent axes** — mix
+and match one figure into millions of distinct characters. Browse them all live
+on the [Characters page](https://vivmagarwal.github.io/edododraw/#/characters).
 
-- **Poses (24 movements)**: `standing waving pointing presenting cheering
-  running confident thinking holding-overhead shrugging pulling peering
-  walking jumping pushing carrying sitting meditating facepalm arms-crossed
-  halting searching climbing falling` (plus any you register).
-- **Emotions (14 expressions)**: `neutral happy sad surprised angry excited
-  confused thinking determined wink love starstruck sleeping dizzy` — the
-  workbook's mouth+eyes grid, extended with heart/star eyes, a wink, Zzz
-  sleep, and dizzy X-eyes.
-- **Shirts (7 styles)**: `vest tee striped solid tie dress hoodie` — the
-  figure-style continuum (vest outline → filled silhouette → triangle person),
-  via `shirt:` (+ `shirtColor:` for the fill/stripes/tie accent).
+- **Poses (44 movements)** — `pose:`: `standing confident arms-crossed leaning
+  strolling waving waving-both pointing presenting offering halting hands-up
+  shrugging thinking chin-thinking listening facepalm peering searching cheering
+  victory holding-overhead reaching-up dancing stretching star-pose walking
+  marching tiptoeing running jumping kicking pushing pulling carrying throwing
+  bending climbing sitting kneeling meditating bowing balancing falling`. The
+  upper body shears with each pose's forward `lean` so leaning figures (running,
+  pushing, falling…) stay whole; feet stay planted on the ground line.
+- **Emotions (26 expressions)** — `emotion:`: `neutral happy sad surprised angry
+  excited confused thinking determined wink love starstruck sleeping dizzy
+  laughing grin content calm worried scared crying furious stressed smug curious
+  embarrassed` — the workbook's mouth+eyes grid, extended with heart/star eyes,
+  tears, blush, and slanted brows.
+- **Shirts (14 styles)** — `shirt:` (+ `shirtColor:`): `vest tee striped solid
+  tie dress hoodie crew buttoned blazer labcoat overalls turtleneck scarf`.
+- **Hair (13 styles)** — `hair:` (+ `hairColor:`): `short spiky messy curly bob
+  long pigtails bun ponytail afro mohawk side-part bald`.
+- **Accessories (12)** — `accessory:` (+ `accessoryColor:`): `glasses sunglasses
+  monocle hat cap beard mustache bowtie headphones earrings crown mask`.
+- **Effects (14 emanata)** — `fx:` (+ `fxColor:`): `sweat question
+  double-question alarm exclaim idea anger excited stars hearts music zzz dizzy
+  sightline` — floating state marks near the head.
 - **Props**: ANY icon name (§5), held at the pose's anchor — `prop: trophy`
   puts a trophy overhead in `holding-overhead`, `prop: star` crowns `cheering`.
 
 In the DSL, characters appear through templates: `personas` renders one per
-item (`{ pose: confident, emotion: happy, prop: wrench, shirt: tie }`), `quote` adds a
-presenting figure, and `vision`/`hole`/`tug-of-war` use them internally. From
-generator code (see EXTENDING_GUIDE):
+item (`{ pose: dancing, emotion: happy, shirt: hoodie, hair: afro, accessory: headphones, fx: music, prop: star }`),
+`quote` adds a presenting figure, and `vision`/`hole`/`tug-of-war` use them
+internally. From generator code (see EXTENDING_GUIDE):
 
 ```ts
-ctx.character("cheering", cx, groundY, 120, { color: role.color, prop: "trophy", shirt: "striped" });
+ctx.character("cheering", cx, groundY, 120, { color: role.color, prop: "trophy", shirt: "striped", hair: "spiky", fx: "stars" });
+```
+
+Every axis is a **runtime registry** — extend any of them without touching the
+engine (the gallery and `llms.txt` pick up your additions automatically):
+
+```ts
+import { registerCharacterPose, registerCharacterEmotion, registerCharacterHair } from "edododraw";
 registerCharacterPose("dabbing", { armL: […], armR: […], legL: […], legR: […] });
+registerCharacterEmotion("smirk", (f) => { f.dot(f.face.eyeL, f.face.eyeY, 2); /* … */ });
+registerCharacterHair("mohawk-xl", (f) => { /* draw on f.head with f.stroke/f.fill/f.arc */ });
 ```
 
 Container shapes from the same vocabulary are first-class node shapes usable

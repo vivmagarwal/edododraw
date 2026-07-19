@@ -41,6 +41,11 @@ with no engine fork:
 | Layouts | `registerLayout(name, fn)` | `layout column` |
 | Icons | `registerIcon(name, pathD, opts?)` | `item "X" { icon: mylogo }` |
 | Character poses | `registerCharacterPose(name, pose)` | `item "X" { pose: myname }` (personas et al.) |
+| Character emotions | `registerCharacterEmotion(name, draw)` | `item "X" { emotion: myname }` |
+| Character shirts | `registerCharacterShirt(name, draw)` | `item "X" { shirt: myname }` |
+| Character hair | `registerCharacterHair(name, draw)` | `item "X" { hair: myname }` |
+| Character accessories | `registerCharacterAccessory(name, draw)` | `item "X" { accessory: myname }` |
+| Character effects | `registerCharacterFx(name, draw)` | `item "X" { fx: myname }` |
 
 Registries win over the built-in switches, so a plugin can also *shadow* a
 built-in name. Each is detailed below; there's also a fully **programmatic**
@@ -538,9 +543,15 @@ a pure runtime registration — same pattern as shapes:
 >   fragment` and re-renders).
 >
 > - **Characters**: `ctx.character(pose, cx, groundY, h, { color, emotion,
->   prop, flip })` draws the sketchnote stick figure anywhere in a generator;
->   `registerCharacterPose(name, { armL, armR, legL, legR, … })` adds poses
->   (limb polylines in a unit frame — see `src/engine/viz/characters.ts`).
+>   shirt, hair, accessory, fx, prop, flip })` draws the sketchnote stick figure
+>   anywhere in a generator. Six independent axes, each a runtime registry
+>   (`src/engine/viz/characters/`): `registerCharacterPose(name, { armL, armR,
+>   legL, legR, lean?, … })` takes limb polylines in a unit frame; the other
+>   five (`registerCharacterEmotion` / `Shirt` / `Hair` / `Accessory` / `Fx`)
+>   take a drawer `(f: CharacterFrame) => void` — `f` hands you the sheared/
+>   planted transforms plus `head`/`torso`/`face` anchors and `stroke`/`dot`/
+>   `fill`/`arc` helpers. The upper body shears with the pose's `lean` so
+>   leaning figures stay whole; grounded feet end at `y=1.0`.
 >
 > Declare `entryKinds` / `options` / `sweetSpot` on your `registerViz` def and
 > it appears fully described in `listVizTemplates()` (the machine-readable

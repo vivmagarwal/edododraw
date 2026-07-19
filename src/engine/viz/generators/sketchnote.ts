@@ -7,7 +7,7 @@
 import { registerViz } from "../registry.js";
 import { itemsOf, optStr, type VizSpec } from "../types.js";
 import type { VizContext } from "../context.js";
-import { listCharacterPoses } from "../characters.js";
+import { listCharacterPoses, characterOptsFrom } from "../characters.js";
 import { lerp, scallopedBlob } from "./util.js";
 
 /** Deterministic jitter (stable re-renders — no Math.random). */
@@ -22,7 +22,15 @@ registerViz({
   category: "Brainstorming",
   summary: "A cast of sketchnote characters — one per role/persona, posed and labeled.",
   entryKinds: ["item", "persona", "role"],
-  options: [],
+  options: [
+    { name: "pose", type: "string", description: "per item: action pose (see the character library; poses cycle when unset)" },
+    { name: "emotion", type: "string", description: "per item: facial expression" },
+    { name: "shirt", type: "string", description: "per item: clothing style (+ shirtColor)" },
+    { name: "hair", type: "string", description: "per item: hair style (+ hairColor)" },
+    { name: "accessory", type: "string", description: "per item: glasses / hat / beard … (+ accessoryColor)" },
+    { name: "fx", type: "string", description: "per item: floating mark — sweat / question / idea / stars … (+ fxColor)" },
+    { name: "prop", type: "string", description: "per item: any icon name, held in hand" },
+  ],
   sweetSpot: { min: 2, max: 6 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "persona", "role");
@@ -36,13 +44,10 @@ registerViz({
         const role = ctx.role(i, { n, color: item.color });
         const cx = i * pitch + pitch / 2;
         const pose = typeof item.opts.pose === "string" ? item.opts.pose : PERSONA_POSES[i % PERSONA_POSES.length];
-        const emotion = typeof item.opts.emotion === "string" ? item.opts.emotion : undefined;
-        const prop = typeof item.opts.prop === "string" ? item.opts.prop : item.icon;
-        const shirt = typeof item.opts.shirt === "string" ? item.opts.shirt : undefined;
-        const shirtColor = typeof item.opts.shirtColor === "string" ? item.opts.shirtColor : undefined;
-        ctx.character(pose, cx, figH + 26, figH, { color: role.color, emotion, prop, propColor: role.color, shirt, shirtColor });
+        const chOpts = characterOptsFrom(item.opts);
+        ctx.character(pose, cx, figH + 26, figH, { color: role.color, propColor: role.color, ...chOpts, prop: chOpts.prop ?? item.icon });
         // ground stroke under each figure
-        ctx.line([[cx - 34, figH + 28], [cx + 34, figH + 28]], { color: ctx.mutedInk, width: 1.6 });
+        ctx.line([[cx - 40, figH + 28], [cx + 40, figH + 28]], { color: ctx.mutedInk, width: 1.6 });
         ctx.labelBlock(item.label, item.detail, cx, figH + 52, { color: role.color, align: "center", maxW: 180, vAnchor: "top", size: 18 });
       }),
     );
@@ -61,7 +66,10 @@ registerViz({
     { name: "pose", type: "string", description: 'character pose (default "presenting"; "none" hides the figure)' },
     { name: "emotion", type: "string", description: "character emotion" },
     { name: "prop", type: "string", description: "icon the character holds" },
-    { name: "shirt", type: "string", description: "character shirt style (vest/tee/striped/solid/tie/dress/hoodie)" },
+    { name: "shirt", type: "string", description: "character shirt style (+ shirtColor)" },
+    { name: "hair", type: "string", description: "character hair style (+ hairColor)" },
+    { name: "accessory", type: "string", description: "worn accessory — glasses / hat / beard … (+ accessoryColor)" },
+    { name: "fx", type: "string", description: "floating state mark — sweat / question / idea / stars …" },
   ],
   sweetSpot: { min: 1, max: 1 },
   generate(spec: VizSpec, ctx: VizContext) {
@@ -95,14 +103,7 @@ registerViz({
     // the messenger: a character presenting the quote
     const pose = optStr(spec.options, "pose") ?? "presenting";
     if (pose !== "none" && listCharacterPoses().includes(pose)) {
-      ctx.character(pose, qx - 306, qh + 112, 126, {
-        color: ctx.ink,
-        emotion: optStr(spec.options, "emotion"),
-        prop: optStr(spec.options, "prop"),
-        propColor: accent,
-        shirt: optStr(spec.options, "shirt"),
-        shirtColor: accent,
-      });
+      ctx.character(pose, qx - 306, qh + 112, 126, { color: ctx.ink, propColor: accent, shirtColor: accent, ...characterOptsFrom(spec.options) });
       ctx.line([[qx - 344, qh + 114], [qx - 266, qh + 114]], { color: ctx.mutedInk, width: 1.6 });
     }
   },
