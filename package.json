@@ -1,6 +1,6 @@
 {
   "name": "edododraw",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "type": "module",
   "description": "A 100% code/syntax-to-diagram engine with the Excalidraw hand-drawn aesthetic, magic-move camera, scriptable + real-time annotations, animated arrows, and first-class Mermaid import.",
   "license": "MIT",
@@ -43,7 +43,9 @@
     "**/builtins.js",
     "**/builtins.ts",
     "**/viz/generators/*.js",
-    "**/viz/generators/*.ts"
+    "**/viz/generators/*.ts",
+    "**/viz/characters/*.js",
+    "**/viz/characters/*.ts"
   ],
   "files": [
     "dist-lib",
@@ -65,7 +67,7 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build:pkg"
+    "prepublishOnly": "npm run build:pkg && node scripts/check-dist.mjs"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.4",
