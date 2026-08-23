@@ -47,3 +47,73 @@ annotate {
     expect(spot.options.dim).toBe(0.7);
   });
 });
+
+// ---- 0.13.1: `render()` alone must not silently drop always-on annotations ----
+
+import { SvgRenderer } from "@engine/render/svgRenderer.js";
+import { AnnotationLayer, renderSceneWithAnnotations } from "@engine/annotate/layer.js";
+
+const ANNOTATED = `
+scene {
+  layout dag
+  rect a "A"
+  rect b "B"
+  a --> b
+}
+
+annotate "always" {
+  highlight a { color: yellow }
+  circle-mark b { color: #e8590c }
+}
+`;
+
+describe("SvgRenderer.render paints the always-on annotations", () => {
+  const mountRenderer = (opts?: { annotations?: boolean }) => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const r = new SvgRenderer(host, opts);
+    r.mount();
+    return r;
+  };
+
+  it("renders scene.annotations with no second object to construct", () => {
+    const { scene, diagnostics } = compileEdd(ANNOTATED);
+    expect(diagnostics.errors).toEqual([]);
+    const r = mountRenderer();
+    r.render(scene);
+    expect(r.getLayer("annotations").querySelectorAll("[data-annotation]").length).toBe(2);
+  });
+
+  it("re-rendering replaces rather than stacks the marks", () => {
+    const { scene } = compileEdd(ANNOTATED);
+    const r = mountRenderer();
+    r.render(scene);
+    r.render(scene);
+    expect(r.getLayer("annotations").querySelectorAll("[data-annotation]").length).toBe(2);
+  });
+
+  it("an explicit AnnotationLayer still owns the layer (timeline/step control)", () => {
+    const { scene } = compileEdd(ANNOTATED);
+    const r = mountRenderer();
+    r.render(scene);
+    new AnnotationLayer(r).render(scene, [], false);
+    expect(r.getLayer("annotations").querySelectorAll("[data-annotation]").length).toBe(0);
+  });
+
+  it("`annotations: false` opts out for hosts that drive the layer themselves", () => {
+    const { scene } = compileEdd(ANNOTATED);
+    const r = mountRenderer({ annotations: false });
+    r.render(scene);
+    expect(r.getLayer("annotations").querySelectorAll("[data-annotation]").length).toBe(0);
+  });
+
+  it("renderSceneWithAnnotations is the one-call form (and takes a custom set)", () => {
+    const { scene } = compileEdd(ANNOTATED);
+    const r = mountRenderer({ annotations: false });
+    renderSceneWithAnnotations(r, scene);
+    expect(r.getLayer("annotations").querySelectorAll("[data-annotation]").length).toBe(2);
+    expect(r.getLayer("nodes").querySelectorAll("[data-node]").length).toBe(2);
+    renderSceneWithAnnotations(r, scene, scene.annotations.slice(0, 1));
+    expect(r.getLayer("annotations").querySelectorAll("[data-annotation]").length).toBe(1);
+  });
+});

@@ -8,9 +8,12 @@ import { compileEdd } from "@engine/dsl/index.js";
 import { SvgRenderer } from "@engine/render/svgRenderer.js";
 import { VizContext } from "@engine/viz/context.js";
 import { DiagnosticBag } from "@engine/dsl/diagnostics.js";
-import { effectivePreset } from "@engine/style/presets.js";
+import { effectivePreset, listStyleChoices } from "@engine/style/presets.js";
+import { luma } from "@engine/style/color.js";
 import {
   drawCharacter,
+  characterInk,
+  getCharacterPose,
   listCharacterPoses,
   listCharacterEmotions,
   listCharacterHair,
@@ -24,6 +27,7 @@ import {
   registerCharacterFx,
   characterOptsFrom,
 } from "@engine/viz/characters.js";
+import type { CharacterOptions } from "@engine/viz/characters.js";
 import { vizItemMembers } from "@engine/scene/query.js";
 import "@engine/viz/generators/index.js";
 
@@ -234,5 +238,147 @@ describe("character matrix — every pose × shirt × flip", () => {
     expect(listCharacterShirts().slice(0, 7)).toEqual(["vest", "tee", "striped", "solid", "tie", "dress", "hoodie"]);
     expect(listCharacterShirts().length).toBeGreaterThanOrEqual(12);
     for (const axis of [listCharacterHair(), listCharacterAccessories(), listCharacterFx()]) expect(axis.length).toBeGreaterThanOrEqual(10);
+  });
+});
+
+// ---- 0.13.1 regression guards: distinct faces, safe defaults, visible ink ----------
+
+// Captured at module load, BEFORE any test registers its own axis entries —
+// these guards are about the shipped vocabulary, not the runtime extensions.
+const BUILTIN_POSES = listCharacterPoses();
+const BUILTIN_EMOTIONS = listCharacterEmotions();
+const BUILTIN_FX = listCharacterFx();
+
+/** Geometry fingerprint of one figure — the drawn output, not the source. Two
+ *  emotions with the same fingerprint are literally the same picture. */
+const figureSignature = (opts: CharacterOptions): string => {
+  const ctx = ctxOf();
+  drawCharacter(ctx, 0, 100, 100, { pose: "standing", ...opts });
+  return ctx.nodes
+    .map((n) => [n.shape, n.x.toFixed(3), n.y.toFixed(3), n.w.toFixed(3), n.h.toFixed(3), n.label ?? "", JSON.stringify((n.data as { points?: unknown })?.points ?? null)].join("|"))
+    .join("\n");
+};
+
+describe("emotions are distinct drawings", () => {
+  it("no two emotions render identically", () => {
+    const byShape = new Map<string, string[]>();
+    for (const e of BUILTIN_EMOTIONS) {
+      const sig = figureSignature({ emotion: e });
+      const list = byShape.get(sig) ?? [];
+      list.push(e);
+      byShape.set(sig, list);
+    }
+    const dupes = [...byShape.values()].filter((names) => names.length > 1).map((n) => n.join(" == "));
+    expect(dupes, `these emotions render the same face: ${dupes.join(" ; ")}`).toEqual([]);
+  });
+
+  it("the three historically-duplicated pairs now differ", () => {
+    // 0.13.0 and earlier: determined ≡ angry, excited ≡ happy, confused ≡ sad.
+    for (const [a, b] of [["determined", "angry"], ["excited", "happy"], ["confused", "sad"]]) {
+      expect(figureSignature({ emotion: a }), `${a} still draws exactly like ${b}`).not.toEqual(figureSignature({ emotion: b }));
+    }
+  });
+
+  it("determined reads as resolve, not anger: LEVEL brows where angry slants them", () => {
+    // Brow band: inside the head circle, above the eye line. `standing`, h=100 →
+    // head centre y=10.5 r=10.5, eyes y=9. Only the brows live in [0, 8.5].
+    const browStrokes = (emotion: string) => {
+      const ctx = ctxOf();
+      drawCharacter(ctx, 0, 100, 100, { pose: "standing", emotion });
+      return ctx.nodes
+        .filter((n) => n.shape === "polyline")
+        .map((n) => (((n.data as { points?: [number, number][] })?.points ?? []) as [number, number][]).map(([px, py]) => [n.x + px, n.y + py] as [number, number]))
+        .filter((pts) => pts.length === 2 && pts.every(([px, py]) => py >= 0 && py <= 8.5 && Math.abs(px) <= 10.5));
+    };
+    const det = browStrokes("determined");
+    expect(det.length, "determined should draw exactly two brows").toBe(2);
+    for (const [a, b] of det) expect(Math.abs(a[1] - b[1]), "a determined brow must be LEVEL").toBeLessThan(0.3);
+    expect(Math.abs(det[0][0][1] - det[1][0][1]), "both brows sit at one height").toBeLessThan(0.3);
+
+    const ang = browStrokes("angry");
+    expect(ang.length, "angry should still draw two brows").toBe(2);
+    expect(ang.filter(([a, b]) => Math.abs(a[1] - b[1]) > 0.5).length, "angry's brows must stay slanted").toBe(2);
+  });
+});
+
+describe("pose default emotions", () => {
+  it("every pose declares its default face explicitly", () => {
+    const silent = BUILTIN_POSES.filter((p) => !getCharacterPose(p)?.emotion);
+    expect(silent, `these poses have no declared default emotion: ${silent.join(", ")}`).toEqual([]);
+  });
+
+  it("no pose defaults to determined (or angry) — a figure nobody gave a mood never scowls", () => {
+    const loaded = BUILTIN_POSES.filter((p) => ["determined", "angry", "furious"].includes(getCharacterPose(p)?.emotion ?? ""));
+    expect(loaded, `these poses default to a loaded face: ${loaded.join(", ")}`).toEqual([]);
+  });
+
+  it("keeps the pose-suited defaults the gallery documents", () => {
+    for (const [pose, emotion] of [["chin-thinking", "thinking"], ["cheering", "excited"], ["dancing", "happy"], ["victory", "excited"], ["meditating", "calm"]]) {
+      expect(getCharacterPose(pose)?.emotion, pose).toBe(emotion);
+    }
+  });
+});
+
+describe("figures are visible in every preset", () => {
+  it("derives an ink that contrasts with the canvas in all 9 style choices", () => {
+    for (const preset of listStyleChoices()) {
+      const ctx = new VizContext("t", preset, preset.mode, new DiagnosticBag());
+      drawCharacter(ctx, 0, 100, 100, { pose: "standing", emotion: "happy" });
+      const strokes = [...new Set(ctx.nodes.map((n) => String(n.style.stroke)))];
+      for (const c of strokes) {
+        expect(Math.abs(luma(c) - luma(preset.background)), `${preset.name}: stroke ${c} vanishes into ${preset.background}`).toBeGreaterThanOrEqual(20);
+      }
+    }
+  });
+
+  it("a character node's CAPTION reads on the canvas too (it sits on no fill)", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    for (const preset of listStyleChoices()) {
+      const { scene } = compileEdd(`edd 1.0\nmeta { style: ${preset.name} }\nscene { character a "Ada" { pose: standing } }`);
+      const r = new SvgRenderer(host);
+      r.mount();
+      r.render(scene);
+      const t = r.svg.querySelector('[data-node="a"] text') as SVGTextElement | null;
+      expect(t, `${preset.name}: no caption`).toBeTruthy();
+      const fill = t!.getAttribute("fill") ?? t!.style.fill;
+      expect(Math.abs(luma(fill) - luma(preset.background)), `${preset.name}: caption ${fill} vanishes into ${preset.background}`).toBeGreaterThanOrEqual(20);
+      r.destroy();
+    }
+  });
+
+  it("characterInk rescues a seam-stroke preset (mono-accent drew white on white)", () => {
+    const seam = listStyleChoices().find((p) => p.name === "mono-accent")!;
+    expect(seam.strokeMode).toBe("seam");
+    expect(characterInk(seam.background, seam)).toBe(seam.ink); // the invisible request is refused
+    expect(characterInk("#1e1e1e", seam)).toBe("#1e1e1e"); // a readable request is honoured
+  });
+});
+
+describe("fx mirrors with flip", () => {
+  it("every emanata moves to the other side of the head when the figure flips", () => {
+    const baseCount = (flip: boolean) => { const c = ctxOf(); drawCharacter(c, 0, 100, 100, { pose: "standing", flip }); return c.nodes.length; };
+    const marksCx = (fx: string, flip: boolean) => {
+      const c = ctxOf();
+      drawCharacter(c, 0, 100, 100, { pose: "standing", fx, flip });
+      const extra = c.nodes.slice(baseCount(flip));
+      expect(extra.length, `fx ${fx} drew nothing`).toBeGreaterThan(0);
+      return extra.reduce((s, n) => s + n.x + n.w / 2, 0) / extra.length;
+    };
+    for (const fx of BUILTIN_FX) {
+      const a = marksCx(fx, false);
+      const b = marksCx(fx, true);
+      // position mirrors about the figure centre-line (centred marks stay put)
+      expect(a + b, `fx ${fx} does not mirror with flip (${a} -> ${b})`).toBeCloseTo(0, 0);
+    }
+  });
+
+  it("keeps the glyph itself upright — a '?' is never drawn backwards", () => {
+    const c = ctxOf();
+    drawCharacter(c, 0, 100, 100, { pose: "standing", fx: "question", flip: true });
+    const q = c.nodes.find((n) => n.label === "?");
+    expect(q).toBeTruthy();
+    expect(q!.w).toBeGreaterThan(0); // no negative/mirrored text box
+    expect(q!.x + q!.w / 2).toBeLessThan(0); // but it moved to the figure's left
   });
 });

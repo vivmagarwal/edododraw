@@ -58,7 +58,7 @@ export {
   listCharacterFx,
 } from "./registry.js";
 
-export { drawCharacter } from "./draw.js";
+export { drawCharacter, characterInk } from "./draw.js";
 
 import type { CharacterOptions } from "./types.js";
 

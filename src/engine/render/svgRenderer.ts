@@ -14,6 +14,7 @@ import type { Point } from "../geometry.js";
 import type { Scene, SceneNode } from "../scene/types.js";
 import { registerBuiltinShapes } from "../plugins/builtins.js";
 import { ensurePluginStyles } from "../plugins/registry.js";
+import { AnnotationLayer } from "../annotate/layer.js";
 import { renderEdge } from "./edges.js";
 import { renderCharacterNode, renderIconNode } from "./figures.js";
 import { labelBelow, renderShapeBody } from "./shapes.js";
@@ -44,12 +45,24 @@ export interface SvgRendererOptions {
    * setRevealProgress instead.
    */
   static?: boolean;
+  /**
+   * Paint the scene's ALWAYS-ON annotations (`scene.annotations`, i.e. the
+   * top-level `annotate { … }` block) as part of `render()`. Default true —
+   * without it a plain `renderer.render(scene)` silently drops every mark and
+   * the caller has to know to build an `AnnotationLayer` itself. Set false
+   * only when something else owns the annotations layer (TimelinePlayer and
+   * the `EdodoDraw` facade both re-render it right after, so they're
+   * unaffected either way).
+   */
+  annotations?: boolean;
 }
 
 export class SvgRenderer {
   readonly container: HTMLElement;
   /** True when constructed with `{ static: true }` — see SvgRendererOptions. */
   readonly isStatic: boolean;
+  /** See SvgRendererOptions.annotations. */
+  readonly paintsAnnotations: boolean;
   svg!: SVGSVGElement;
   private defs!: SVGDefsElement;
   private bg!: SVGRectElement;
@@ -65,6 +78,7 @@ export class SvgRenderer {
   constructor(container: HTMLElement, options: SvgRendererOptions = {}) {
     this.container = container;
     this.isStatic = options.static ?? false;
+    this.paintsAnnotations = options.annotations ?? true;
   }
 
   mount(): void {
@@ -118,6 +132,7 @@ export class SvgRenderer {
   }
 
   destroy(): void {
+    this.annotationLayerCache = null; // bound to the old <svg>
     this.svg?.remove();
   }
 
@@ -322,6 +337,19 @@ export class SvgRenderer {
         console.warn("node render failed", node.id, err);
       }
     }
+
+    // always-on annotations (the top-level `annotate { … }` block). Rendering
+    // them here makes `render(scene)` alone complete: a consumer that never
+    // heard of AnnotationLayer still gets the marks the source asked for.
+    // Step-scoped marks stay the timeline's job — TimelinePlayer/EdodoDraw
+    // re-render this same layer with the step's set immediately after.
+    if (this.paintsAnnotations) this.annotationLayer().render(scene, scene.annotations, false);
+  }
+
+  private annotationLayerCache: AnnotationLayer | null = null;
+  /** Lazily-built layer for the always-on annotations painted by render(). */
+  private annotationLayer(): AnnotationLayer {
+    return (this.annotationLayerCache ??= new AnnotationLayer(this));
   }
 
   /** Cache of gradient-fill defs created this mount: spec -> def id. */
@@ -383,19 +411,19 @@ export class SvgRenderer {
       // painted inside this node group; the label hangs under the feet,
       // inside the node box (so the bbox the layout computed is honoured).
       const paintText = (...args: Parameters<SvgRenderer["textBlock"]>) => this.textBlock(...args);
-      const { body, labelCy } = renderCharacterNode(this.rc, scene, node, doc, paintText);
+      const { body, labelCy, labelColor } = renderCharacterNode(this.rc, scene, node, doc, paintText);
       g.appendChild(body);
       if (node.label) {
-        g.appendChild(this.textBlock(node.label, node.x + node.w / 2, labelCy, node.style.fontSize, node.style.textColor, node.style.fontFamily, "center", node.style.fontWeight));
+        g.appendChild(this.textBlock(node.label, node.x + node.w / 2, labelCy, node.style.fontSize, labelColor, node.style.fontFamily, "center", node.style.fontWeight));
       }
       return g;
     }
     if (node.shape === "icon") {
       // Glyph + caption: the sketchnote "icon + word" unit.
-      const { body, labelCy } = renderIconNode(this.rc, node, doc);
+      const { body, labelCy, labelColor } = renderIconNode(this.rc, scene, node, doc);
       g.appendChild(body);
       if (node.label) {
-        g.appendChild(this.textBlock(node.label, node.x + node.w / 2, labelCy, node.style.fontSize, node.style.textColor, node.style.fontFamily, "center", node.style.fontWeight));
+        g.appendChild(this.textBlock(node.label, node.x + node.w / 2, labelCy, node.style.fontSize, labelColor, node.style.fontFamily, "center", node.style.fontWeight));
       }
       return g;
     }

@@ -76,7 +76,7 @@ export function characterNodeSpec(node: SceneNode): CharacterNodeSpec | null {
  *  the shirt accent falls back to the node's fill so a filled preset dresses
  *  the figure in the same pastel the other shapes wear. Never hardcoded. */
 export function characterDrawOptions(spec: CharacterNodeSpec, style: NodeStyle): CharacterOptions {
-  const fill = style.fill && style.fillStyle !== "none" ? style.fill : undefined;
+  const fill = flatFill(style.fill && style.fillStyle !== "none" ? style.fill : undefined);
   const opts: CharacterOptions = {
     pose: spec.pose,
     color: style.stroke,
@@ -96,6 +96,18 @@ export function characterDrawOptions(spec: CharacterNodeSpec, style: NodeStyle):
   // drop undefined keys so drawCharacter's own defaults apply
   for (const k of Object.keys(opts) as (keyof CharacterOptions)[]) if (opts[k] === undefined) delete opts[k];
   return opts;
+}
+
+/** Gradient fills (`linear-gradient(a,b)`, from the gradient presets) are
+ *  resolved to an SVG def by the renderer for NODE bodies only — a figure's
+ *  sub-strokes are painted directly, so a gradient string would land in a
+ *  `fill=` attribute as garbage. Dress the figure in the gradient's first stop
+ *  instead. */
+function flatFill(c: string | null | undefined): string | undefined {
+  if (!c) return undefined;
+  if (!c.startsWith("linear-gradient(")) return c;
+  const first = c.slice("linear-gradient(".length, -1).split(",")[0]?.trim();
+  return first || undefined;
 }
 
 function scratchContext(id: string, preset: StylePreset, mode: "light" | "dark"): VizContext {

@@ -19,7 +19,7 @@ export { cameraForBBox, cameraForCenter, mixCameras } from "./camera/fit.js";
 export { CameraController } from "./camera/controller.js";
 export type { MoveOptions } from "./camera/controller.js";
 export { EASINGS, easingByName } from "./camera/easing.js";
-export { AnnotationLayer } from "./annotate/layer.js";
+export { AnnotationLayer, renderSceneWithAnnotations } from "./annotate/layer.js";
 export { LiveAnnotationController } from "./annotate/interact.js";
 export type { Tool, LiveState } from "./annotate/interact.js";
 export { EditController } from "./edit/controller.js";

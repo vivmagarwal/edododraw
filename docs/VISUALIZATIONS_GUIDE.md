@@ -365,11 +365,14 @@ on the [Characters page](https://vivmagarwal.github.io/edododraw/#/characters).
   bending climbing sitting kneeling meditating bowing balancing falling`. The
   upper body shears with each pose's forward `lean` so leaning figures (running,
   pushing, falling…) stay whole; feet stay planted on the ground line.
+  **Every pose carries an explicit default emotion** (below) — the face a figure
+  wears when you never wrote `emotion:`.
 - **Emotions (26 expressions)** — `emotion:`: `neutral happy sad surprised angry
   excited confused thinking determined wink love starstruck sleeping dizzy
   laughing grin content calm worried scared crying furious stressed smug curious
   embarrassed` — the workbook's mouth+eyes grid, extended with heart/star eyes,
-  tears, blush, and slanted brows.
+  tears, blush, and slanted brows. **All 26 are distinct drawings** — see
+  "Reading the expressions" below for the three that used to collide.
 - **Shirts (14 styles)** — `shirt:` (+ `shirtColor:`): `vest tee striped solid
   tie dress hoodie crew buttoned blazer labcoat overalls turtleneck scarf`.
 - **Hair (13 styles)** — `hair:` (+ `hairColor:`): `short spiky messy curly bob
@@ -378,9 +381,78 @@ on the [Characters page](https://vivmagarwal.github.io/edododraw/#/characters).
   monocle hat cap beard mustache bowtie headphones earrings crown mask`.
 - **Effects (14 emanata)** — `fx:` (+ `fxColor:`): `sweat question
   double-question alarm exclaim idea anger excited stars hearts music zzz dizzy
-  sightline` — floating state marks near the head.
+  sightline` — floating state marks near the head. **Mirroring rule (0.13.1):**
+  `flip: true` mirrors an emanata's POSITION (it stays on the side the figure
+  faces, like the prop) but never its GLYPH — a `?` is never drawn backwards.
 - **Props**: ANY icon name (§5), held at the pose's anchor — `prop: trophy`
   puts a trophy overhead in `holding-overhead`, `prop: star` crowns `cheering`.
+
+### Reading the expressions
+
+Three faces used to be the *same drawing* under two names (fixed in 0.13.1):
+`determined` ≡ `angry`, `excited` ≡ `happy`, `confused` ≡ `sad`. Asking for
+"quiet resolve" put a scowl on screen. What separates them now:
+
+| Emotion | The drawing | Don't confuse with |
+|---|---|---|
+| `determined` | brows **lowered but LEVEL** (parallel, one shared height), slightly narrowed dot eyes, a **firm level mouth** — concentration, resolve | `angry` — slanted brows are what make a face read as anger |
+| `angry` / `furious` | brows **slanted down toward the nose** (`\ /`) over a flat / v-shaped mouth | `determined`, `stressed` |
+| `excited` | **wide bright eyes** (ring + pupil), **high arched brows**, a big **open grin** | `happy` (plain smile, dot eyes), `grin`, `starstruck` |
+| `happy` | dot eyes + a simple smile — the neutral-positive default | `content` (closed ∪ eyes), `grin` (toothy) |
+| `confused` | **asymmetric brows** (one raised, one lowered) + a **wavy mouth** | `sad` (plain frown), `worried` (both brows up + zigzag) |
+| `sad` | dot eyes + a plain frown | `confused`, `crying` (adds tears) |
+
+Emanata amplify a face rather than replace it: `emotion: confused, fx: question`,
+`emotion: excited, fx: excited`, `emotion: thinking, fx: idea`.
+
+### Default emotion per pose
+
+The face a figure wears when the author never set `emotion:`. **No pose defaults
+to `determined` or `angry`** — a figure nobody gave a mood must never arrive on
+screen scowling — so `neutral` is the deliberate choice wherever the mood is
+ambiguous (effort, locomotion, plain gesturing). Before 0.13.1, eleven poses
+(`confident arms-crossed halting reaching-up marching running kicking pushing
+pulling throwing climbing`) defaulted to `determined`, which was drawn as a
+scowl; eight more (`standing pointing searching walking carrying bending sitting
+kneeling`) declared nothing at all.
+
+| Pose | Default | Pose | Default | Pose | Default |
+|---|---|---|---|---|---|
+| `standing` | `neutral` | `confident` | `grin` | `arms-crossed` | `neutral` |
+| `leaning` | `smug` | `strolling` | `content` | `waving` | `happy` |
+| `waving-both` | `happy` | `pointing` | `neutral` | `presenting` | `happy` |
+| `offering` | `happy` | `halting` | `neutral` | `hands-up` | `surprised` |
+| `shrugging` | `confused` | `thinking` | `thinking` | `chin-thinking` | `thinking` |
+| `listening` | `curious` | `facepalm` | `sad` | `peering` | `surprised` |
+| `searching` | `curious` | `cheering` | `excited` | `victory` | `excited` |
+| `holding-overhead` | `happy` | `reaching-up` | `neutral` | `dancing` | `happy` |
+| `stretching` | `calm` | `star-pose` | `excited` | `walking` | `neutral` |
+| `marching` | `neutral` | `tiptoeing` | `smug` | `running` | `neutral` |
+| `jumping` | `excited` | `kicking` | `neutral` | `pushing` | `neutral` |
+| `pulling` | `neutral` | `carrying` | `neutral` | `throwing` | `neutral` |
+| `bending` | `neutral` | `climbing` | `neutral` | `sitting` | `neutral` |
+| `kneeling` | `neutral` | `meditating` | `calm` | `bowing` | `calm` |
+| `balancing` | `surprised` | `falling` | `scared` | | |
+
+`determined` is still the right face for effort — it is just opt-in now:
+`character hero { pose: pushing, emotion: determined }`.
+
+### Ink: a figure is visible in every preset
+
+A character is line art, so if its stroke matches the canvas the whole figure
+disappears. Some presets legitimately hand shapes a background-coloured outline
+(`mono-accent`'s `strokeMode: "seam"` makes solid blocks read as cut-outs) —
+right for a filled rectangle, fatal for a stick figure. Since 0.13.1
+`drawCharacter` runs the requested ink through `characterInk(want, preset)`,
+which keeps it when it contrasts with `preset.background` and otherwise falls
+back to `preset.ink` (then to plain contrast ink). Nothing is hardcoded — every
+candidate comes from the preset — and figures now read in all nine style
+choices. The same guard covers the caption under a `character` (and an `icon`
+node's glyph + caption): a figure node has no filled body, so its text sits
+straight on the canvas and must not inherit the white "text on top of this fill"
+ink a filled shape gets. And a `linear-gradient(…)` node fill is flattened to
+its first stop before it becomes a `shirtColor`, since a figure's sub-strokes
+are painted directly and can't reference a gradient def.
 
 In the DSL, characters appear two ways.
 

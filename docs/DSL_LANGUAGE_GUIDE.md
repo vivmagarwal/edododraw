@@ -138,11 +138,11 @@ scene {
 | Attribute | Values | Default |
 |---|---|---|
 | `pose:` | any of `listCharacterPoses()` — 44 actions (`standing confident thinking presenting climbing sitting running …`) | `standing` |
-| `emotion:` | any of `listCharacterEmotions()` — 26 expressions (`neutral happy curious determined content …`) | the pose's own, else `neutral` |
+| `emotion:` | any of `listCharacterEmotions()` — 26 expressions, all distinct drawings (`neutral happy curious determined content …`) | the pose's own — always declared, never `determined`/`angry` (table in Visualizations §6) |
 | `shirt:` | `vest tee striped solid tie dress hoodie crew buttoned blazer labcoat overalls turtleneck scarf` | `vest` |
 | `hair:` | `short spiky messy curly bob long pigtails bun ponytail afro mohawk side-part bald` | none |
 | `accessory:` | `glasses sunglasses monocle hat cap beard mustache bowtie headphones earrings crown mask` | none |
-| `fx:` | `sweat question double-question alarm exclaim idea anger excited stars hearts music zzz dizzy sightline` | the pose's own |
+| `fx:` | `sweat question double-question alarm exclaim idea anger excited stars hearts music zzz dizzy sightline` — `flip:` mirrors the mark's POSITION, never its glyph | the pose's own |
 | `prop:` | any icon name (§ Visualizations §5) — held at the pose's hand anchor | none |
 | `height:` | figure height in world units (feet → top of head) | `200` |
 | `flip:` | `true` mirrors the figure left↔right (use it to make two figures face each other) | `false` |
@@ -159,6 +159,11 @@ anchors (`.n .s .e .w …`), `camera focus brad`, `reveal`, `annotate` and
 `setRevealProgress("brad", p)` all treat it as one unit. Unknown names never
 blank the diagram: you get a `W-CHARACTER-…` warning listing the valid values
 and the figure falls back to `standing` / `neutral`.
+
+The figure's ink is guaranteed to read on the canvas: a `stroke:` (or a preset
+whose stroke mode is the canvas background, like `mono-accent`'s seam) that
+would make the figure invisible is replaced by the preset ink — see
+Visualizations §6, "Ink: a figure is visible in every preset".
 
 ### The `icon` node — a glyph with a caption
 

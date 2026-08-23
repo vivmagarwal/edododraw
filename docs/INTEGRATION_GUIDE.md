@@ -351,7 +351,7 @@ pipeline instead of using the `EdodoDraw` facade:
 import {
   compileEdd, applyLayout,
   SvgRenderer, CameraController, TimelinePlayer,
-  AnnotationLayer, LiveAnnotationController,
+  AnnotationLayer, renderSceneWithAnnotations, LiveAnnotationController,
   cameraForBBox, sceneBBox,
   exportSVGString, exportPNGBlob,
   registerShape, ensureEngineStyles,
@@ -361,6 +361,42 @@ import {
 For example, a minimal custom composition (browser): compile → new `SvgRenderer`
 → `renderer.render(scene)` → drive a `CameraController` yourself. The `EdodoDraw`
 facade in `src/lib/EdodoDraw.ts` is the reference for how these compose.
+
+### Annotations in a custom pipeline
+
+`SvgRenderer.render(scene)` paints the scene's **always-on** annotations (the
+top-level `annotate { … }` block) into the annotations layer for you — since
+0.13.1. Before that, `render()` alone silently dropped every mark and you had to
+know to build an `AnnotationLayer` yourself; a plain `render()` looked complete
+and wasn't.
+
+```ts
+const r = new SvgRenderer(el);
+r.mount();
+r.render(scene);                       // nodes + edges + always-on annotations ✓
+```
+
+Step-scoped marks are still the timeline's business. When you drive steps
+yourself, render a specific set — `renderSceneWithAnnotations` is the one-call
+form:
+
+```ts
+import { renderSceneWithAnnotations, stepStateAt } from "edododraw";
+
+renderSceneWithAnnotations(r, scene);                                  // always-on only
+renderSceneWithAnnotations(r, scene, stepStateAt(scene, 2).annotations); // step 2's marks too
+```
+
+If your host owns the annotations layer completely (its own `AnnotationLayer`,
+its own clear/render cycle), opt out of the automatic pass so nothing is painted
+twice on the way to your first state:
+
+```ts
+const r = new SvgRenderer(el, { annotations: false });
+```
+
+`TimelinePlayer` and the `EdodoDraw` facade re-render the layer immediately after
+`render()`, so they behave identically either way.
 
 ---
 

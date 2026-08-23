@@ -13,6 +13,8 @@
  */
 
 import type { VizContext } from "../context.js";
+import type { StylePreset } from "../../style/presets.js";
+import { contrastInk, luma, parseHex } from "../../style/color.js";
 import { iconEntry } from "../icons.js";
 import {
   type CharacterOptions,
@@ -32,6 +34,33 @@ import {
   getCharacterAccessory,
   getCharacterFx,
 } from "./registry.js";
+
+/** Smallest luma gap (0..255) between a figure's ink and the canvas that still
+ *  reads as a drawn line. Line art has no fill to fall back on, so the bar is
+ *  low but non-zero. */
+const MIN_INK_CONTRAST = 40;
+
+/**
+ * The ink a figure is actually drawn in.
+ *
+ * A character is LINE ART: if its stroke matches the canvas the whole figure
+ * disappears. Some presets legitimately hand shapes a background-coloured
+ * outline — `mono-accent`'s `strokeMode: "seam"` makes adjacent solid blocks
+ * read as cut-outs — which is right for a filled rectangle and fatal for a
+ * stick figure. So the requested ink is checked against the preset background
+ * and, when it would vanish, falls back to the preset ink (then to plain
+ * contrast ink). Nothing is hardcoded: every candidate comes from the preset.
+ * Non-hex colours are trusted as-is (we can't measure them).
+ */
+export function characterInk(want: string | undefined, preset: StylePreset): string {
+  const wanted = want ?? preset.ink;
+  const bg = preset.background;
+  if (!parseHex(wanted) || !parseHex(bg)) return wanted;
+  const reads = (c: string) => Math.abs(luma(c) - luma(bg)) >= MIN_INK_CONTRAST;
+  if (reads(wanted)) return wanted;
+  if (reads(preset.ink)) return preset.ink;
+  return contrastInk(bg);
+}
 
 /** Shear weight: 1 at/above head height, 0 at the hips, clamped. */
 function shearWeight(y: number): number {
@@ -53,7 +82,7 @@ export function drawCharacter(
 ): { x: number; y: number; w: number; h: number } {
   const pose = getCharacterPose(opts.pose ?? "standing") ?? getCharacterPose("standing")!;
   const emotion = opts.emotion ?? pose.emotion ?? "neutral";
-  const color = opts.color ?? ctx.ink;
+  const color = characterInk(opts.color ?? ctx.ink, ctx.preset);
   const flip: 1 | -1 = opts.flip ? -1 : 1;
   const y0 = groundY - h;
   const z = opts.z ?? 0;

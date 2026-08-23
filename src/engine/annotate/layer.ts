@@ -20,6 +20,28 @@ import type { SvgRenderer } from "../render/svgRenderer.js";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const BIG = 200000;
 
+/**
+ * One call for the common case: paint a scene AND its annotations.
+ *
+ * `SvgRenderer.render()` already paints the scene's always-on annotations, so
+ * this helper exists for the case that still needs a second object — painting
+ * a SPECIFIC set, e.g. one timeline step's marks:
+ *
+ *   renderSceneWithAnnotations(renderer, scene);                              // always-on
+ *   renderSceneWithAnnotations(renderer, scene, stepStateAt(scene, 2).annotations);
+ */
+export function renderSceneWithAnnotations(
+  renderer: SvgRenderer,
+  scene: Scene,
+  annotations: Annotation[] = scene.annotations,
+  animate = false,
+): AnnotationLayer {
+  renderer.render(scene);
+  const layer = new AnnotationLayer(renderer);
+  layer.render(scene, annotations, animate);
+  return layer;
+}
+
 export class AnnotationLayer {
   private renderer: SvgRenderer;
   private rc: ReturnType<(typeof rough)["svg"]>;

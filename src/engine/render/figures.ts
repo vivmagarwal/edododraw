@@ -11,6 +11,7 @@
 import type rough from "roughjs";
 import type { Scene, SceneNode } from "../scene/types.js";
 import { effectivePreset } from "../style/presets.js";
+import { characterInk } from "../viz/characters/draw.js";
 import { emitCharacterNode } from "../viz/characterNode.js";
 import { iconNodeGlyph } from "../viz/iconNode.js";
 import { renderShapeBody } from "./shapes.js";
@@ -36,6 +37,13 @@ export interface FigureRender {
   body: SVGGElement;
   /** Vertical centre for the node label (inside the box, under the figure). */
   labelCy: number;
+  /**
+   * Ink for that caption. Figure nodes have NO filled body, so the caption sits
+   * straight on the canvas — it cannot inherit the "text on top of this fill"
+   * colour a filled shape gets (under `mono-accent` that is white, i.e.
+   * invisible). Derived from the preset like the figure's own ink.
+   */
+  labelColor: string;
 }
 
 /**
@@ -67,7 +75,7 @@ export function renderCharacterNode(rc: RoughSVG, scene: Scene, node: SceneNode,
     }
   }
   const labelCy = node.y + node.h - emitted.labelH / 2;
-  return { body, labelCy };
+  return { body, labelCy, labelColor: characterInk(node.style.textColor, preset) };
 }
 
 /**
@@ -75,7 +83,8 @@ export function renderCharacterNode(rc: RoughSVG, scene: Scene, node: SceneNode,
  * rough.js like every icon in the viz templates) and return the body group;
  * the caller appends the caption at `labelCy`.
  */
-export function renderIconNode(rc: RoughSVG, node: SceneNode, doc: Document): FigureRender {
+export function renderIconNode(rc: RoughSVG, scene: Scene, node: SceneNode, doc: Document): FigureRender {
+  const preset = effectivePreset(scene.meta.style, scene.theme.mode);
   const body = doc.createElementNS(SVG_NS, "g") as SVGGElement;
   body.setAttribute("class", "edd-icon");
   const glyph = iconNodeGlyph(node);
@@ -85,6 +94,8 @@ export function renderIconNode(rc: RoughSVG, node: SceneNode, doc: Document): Fi
     const visual = Math.min(3, Math.max(1.8, glyph.size / 18));
     const style = {
       ...node.style,
+      // line art on the canvas — same visibility guard as a character's ink
+      stroke: characterInk(node.style.stroke, preset),
       fill: null,
       fillStyle: "none" as const,
       strokeWidth: (node.style.strokeWidth > 2 ? Math.min(3.2, node.style.strokeWidth) : visual) * (glyph.viewBox / glyph.size),
@@ -92,5 +103,5 @@ export function renderIconNode(rc: RoughSVG, node: SceneNode, doc: Document): Fi
     };
     body.appendChild(renderShapeBody(rc, "path", { x: glyph.x, y: glyph.y, w: glyph.size, h: glyph.size }, style, { d: glyph.d, vw: glyph.viewBox, vh: glyph.viewBox }));
   }
-  return { body, labelCy: node.y + node.h - glyph.labelH / 2 };
+  return { body, labelCy: node.y + node.h - glyph.labelH / 2, labelColor: characterInk(node.style.textColor, preset) };
 }

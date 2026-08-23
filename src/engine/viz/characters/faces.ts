@@ -55,6 +55,28 @@ const worryBrows = (f: CharacterFrame) => {
   f.stroke([[eyeL - 0.02 * h, eyeY - 0.022 * h], [eyeL + 0.012 * h, eyeY - 0.036 * h]], f.lw * 0.7);
   f.stroke([[eyeR + 0.02 * h, eyeY - 0.022 * h], [eyeR - 0.012 * h, eyeY - 0.036 * h]], f.lw * 0.7);
 };
+/** Lowered but PARALLEL brows — focus, not aggression. The single stroke that
+ *  separates `determined` from `angry`: same height over both eyes, level, so
+ *  the face reads as concentrated rather than scowling. */
+const levelBrows = (f: CharacterFrame) => {
+  const { eyeL, eyeR, eyeY, h } = { ...f.face, h: f.h };
+  const by = eyeY - 0.027 * h;
+  f.stroke([[eyeL - 0.026 * h, by], [eyeL + 0.018 * h, by]], f.lw * 0.9);
+  f.stroke([[eyeR + 0.026 * h, by], [eyeR - 0.018 * h, by]], f.lw * 0.9);
+};
+/** High arched brows — anticipation/delight (the `excited` signature). */
+const raisedBrows = (f: CharacterFrame) => {
+  const { eyeL, eyeR, eyeY, h } = { ...f.face, h: f.h };
+  for (const px of [eyeL, eyeR]) f.stroke([[px - 0.024 * h, eyeY - 0.04 * h], [px, eyeY - 0.05 * h], [px + 0.024 * h, eyeY - 0.04 * h]], f.lw * 0.7);
+};
+/** One brow arched HIGH, the other flat and LOW — the classic "I don't follow"
+ *  asymmetry. Both stay level-ish: a brow slanting down toward the nose is what
+ *  reads as anger, and confusion must never read as a glare. */
+const skewBrows = (f: CharacterFrame) => {
+  const { eyeL, eyeR, eyeY, h } = { ...f.face, h: f.h };
+  f.stroke([[eyeL - 0.024 * h, eyeY - 0.042 * h], [eyeL, eyeY - 0.052 * h], [eyeL + 0.024 * h, eyeY - 0.042 * h]], f.lw * 0.75); // arched, high
+  f.stroke([[eyeR - 0.02 * h, eyeY - 0.024 * h], [eyeR + 0.024 * h, eyeY - 0.024 * h]], f.lw * 0.8); // flat, low
+};
 
 // ---- mouth primitives ---------------------------------------------------------
 
@@ -62,6 +84,12 @@ const mw = (f: CharacterFrame) => 0.035 * f.h;
 const smile = (f: CharacterFrame, d = 1) => f.stroke([[f.head.cx - mw(f), f.face.mouthY - 0.008 * f.h * d], [f.head.cx, f.face.mouthY + 0.012 * f.h * d], [f.head.cx + mw(f), f.face.mouthY - 0.008 * f.h * d]]);
 const frown = (f: CharacterFrame) => f.stroke([[f.head.cx - mw(f), f.face.mouthY + 0.012 * f.h], [f.head.cx, f.face.mouthY - 0.008 * f.h], [f.head.cx + mw(f), f.face.mouthY + 0.012 * f.h]]);
 const flat = (f: CharacterFrame, w = 0.8) => f.stroke([[f.head.cx - mw(f) * w, f.face.mouthY], [f.head.cx + mw(f) * w, f.face.mouthY]]);
+/** A pressed, level line — held resolve. Heavier and wider than `flat`. */
+const firm = (f: CharacterFrame) => f.stroke([[f.head.cx - mw(f) * 0.95, f.face.mouthY], [f.head.cx + mw(f) * 0.95, f.face.mouthY]], f.lw);
+/** A wide open grin — bigger and deeper than `smile`. */
+const bigSmile = (f: CharacterFrame) => f.stroke([[f.head.cx - mw(f) * 1.15, f.face.mouthY - 0.012 * f.h], [f.head.cx - mw(f) * 0.45, f.face.mouthY + 0.018 * f.h], [f.head.cx + mw(f) * 0.45, f.face.mouthY + 0.018 * f.h], [f.head.cx + mw(f) * 1.15, f.face.mouthY - 0.012 * f.h]]);
+/** A symmetric squiggle — puzzlement (distinct from `zigzag`'s lopsided wobble). */
+const wavy = (f: CharacterFrame) => f.stroke([[f.head.cx - mw(f) * 1.05, f.face.mouthY + 0.007 * f.h], [f.head.cx - mw(f) * 0.35, f.face.mouthY - 0.009 * f.h], [f.head.cx + mw(f) * 0.35, f.face.mouthY + 0.009 * f.h], [f.head.cx + mw(f) * 1.05, f.face.mouthY - 0.007 * f.h]]);
 const zigzag = (f: CharacterFrame) => f.stroke([[f.head.cx - mw(f), f.face.mouthY], [f.head.cx - mw(f) * 0.33, f.face.mouthY + 0.012 * f.h], [f.head.cx + mw(f) * 0.33, f.face.mouthY - 0.006 * f.h], [f.head.cx + mw(f), f.face.mouthY + 0.008 * f.h]]);
 const openMouth = (f: CharacterFrame, big = false) => {
   const r = (big ? 0.024 : 0.018) * f.h;
@@ -75,10 +103,14 @@ registerCharacterEmotion("happy", (f) => { dotEyes(f); smile(f); });
 registerCharacterEmotion("sad", (f) => { dotEyes(f); frown(f); });
 registerCharacterEmotion("surprised", (f) => { dotEyes(f, f.face.eyeR2 * 1.5); openMouth(f); });
 registerCharacterEmotion("angry", (f) => { dotEyes(f); flat(f, 1); angryBrows(f); });
-registerCharacterEmotion("excited", (f) => { dotEyes(f); smile(f); });
-registerCharacterEmotion("confused", (f) => { dotEyes(f); frown(f); });
+// excited ≠ happy: wide bright eyes + high brows + an open grin (pair with `fx: excited` for the motion ticks).
+registerCharacterEmotion("excited", (f) => { dotEyes(f, f.face.eyeR2 * 1.45); raisedBrows(f); bigSmile(f); });
+// confused ≠ sad: asymmetric brows (one up, one down) + a wavy mouth (pair with `fx: question`).
+registerCharacterEmotion("confused", (f) => { dotEyes(f); skewBrows(f); wavy(f); });
 registerCharacterEmotion("thinking", (f) => { dotEyes(f, f.face.eyeR2, -0.01 * f.h); f.stroke([[f.head.cx - mw(f) * 0.6, f.face.mouthY + 0.004 * f.h], [f.head.cx + mw(f) * 0.6, f.face.mouthY]]); });
-registerCharacterEmotion("determined", (f) => { dotEyes(f); flat(f, 1); angryBrows(f); });
+// determined ≠ angry: brows are LOWERED BUT LEVEL and the mouth is a firm level
+// line — quiet resolve. Slanted brows (angryBrows) are what make a face read as anger.
+registerCharacterEmotion("determined", (f) => { dotEyes(f, f.face.eyeR2 * 0.92); levelBrows(f); firm(f); });
 registerCharacterEmotion("wink", (f) => { f.dot(f.face.eyeL, f.face.eyeY, f.face.eyeR2); happyEye(f, f.face.eyeR); smile(f); });
 registerCharacterEmotion("love", (f) => { heartEye(f, f.face.eyeL); heartEye(f, f.face.eyeR); smile(f); });
 registerCharacterEmotion("starstruck", (f) => { starEye(f, f.face.eyeL); starEye(f, f.face.eyeR); openMouth(f, true); });
