@@ -96,6 +96,7 @@ export const SHAPE_KEYWORDS = new Set([
   "parallelogram", "trapezoid", "cloud", "actor", "note", "document", "stadium",
   "pill", "subroutine", "triangle", "star", "text", "image", "frame", "custom",
   "speech-bubble", "starburst", "ribbon", "paper-fold",
+  "character", "icon",
 ]);
 
 export const LAYOUT_KEYWORDS = new Set([

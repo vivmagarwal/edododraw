@@ -88,8 +88,8 @@ L.push(`Every element a template emits for one data entry is addressable as \`<b
 L.push(`annotations, timeline reveal/hide, and camera focus.`);
 L.push("");
 L.push(`Style presets (any template × any preset, \`meta { style: <name> }\`): ${listStyleChoices().map((s) => s.name).join(", ")}.`);
-L.push(`Icons (\`icon: <name>\`): ${listIcons().join(" ")}.`);
-L.push(`Characters (personas/quote items: \`{ pose: …, emotion: …, shirt: …, hair: …, accessory: …, fx: …, prop: <icon> }\`) — poses: ${listCharacterPoses().join(" ")}; emotions: ${listCharacterEmotions().join(" ")}; shirts: ${listCharacterShirts().join(" ")}; hair: ${listCharacterHair().join(" ")}; accessories: ${listCharacterAccessories().join(" ")}; fx: ${listCharacterFx().join(" ")}.`);
+L.push(`Icons (\`icon: <name>\` on a viz item, \`prop:\` on a character, or a standalone \`icon <id> "Caption" { size: N }\` node): ${listIcons().join(" ")}.`);
+L.push(`Characters (a standalone \`character <id> "Label" { pose: …, … }\` node in \`scene { … }\`, and personas/quote items: \`{ pose: …, emotion: …, shirt: …, hair: …, accessory: …, fx: …, prop: <icon> }\`) — poses: ${listCharacterPoses().join(" ")}; emotions: ${listCharacterEmotions().join(" ")}; shirts: ${listCharacterShirts().join(" ")}; hair: ${listCharacterHair().join(" ")}; accessories: ${listCharacterAccessories().join(" ")}; fx: ${listCharacterFx().join(" ")}.`);
 L.push(`Sketchnote container shapes (usable on any node via \`shape:\` or as keywords): speech-bubble, starburst, ribbon, paper-fold (+ cloud, note, document).`);
 L.push("");
 let lastCat = "";

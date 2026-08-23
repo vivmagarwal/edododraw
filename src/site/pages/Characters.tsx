@@ -113,7 +113,9 @@ export function Characters() {
           expressions × {listCharacterShirts().length} shirts × {listCharacterHair().length} hair styles ×{" "}
           {listCharacterAccessories().length} accessories × {listCharacterFx().length} effects, plus any icon as a hand-held
           prop — mix and match for millions of distinct characters. Every tile is rendered live by the engine; click one to
-          open its code in the playground. Use them in <code>personas</code> / <code>quote</code> items (
+          open its code in the playground. Drop one beside a diagram as a standalone node —{" "}
+          <code>{'character brad "Brad" { pose: thinking, emotion: curious, flip: true }'}</code> — use them in{" "}
+          <code>personas</code> / <code>quote</code> items (
           <code>{"{ pose: dancing, hair: afro, accessory: headphones, fx: music }"}</code>) or from generator code via{" "}
           <code>ctx.character(…)</code>. Every axis is a runtime registry, so you can register your own.
         </p>

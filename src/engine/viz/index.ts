@@ -29,6 +29,17 @@ export {
   listCharacterFx,
 } from "./characters.js";
 export type { CharacterPose, CharacterOptions, CharacterFrame } from "./characters.js";
+export {
+  characterNodeSpec,
+  characterNodeBox,
+  measureCharacterNode,
+  emitCharacterNode,
+  CHARACTER_NODE_DEFAULT_HEIGHT,
+  CHARACTER_LABEL_GAP,
+} from "./characterNode.js";
+export type { CharacterNodeSpec, CharacterNodeBox, CharacterNodeEmit } from "./characterNode.js";
+export { iconNodeSpec, iconNodeBox, iconNodeGlyph, ICON_NODE_DEFAULT_SIZE, ICON_LABEL_GAP } from "./iconNode.js";
+export type { IconNodeSpec, IconNodeBox } from "./iconNode.js";
 export type { VizComposeOptions, VizComposeResult, VizItemInput, VizSpecInput } from "./compose.js";
 export type { VizBounds, VizDef, VizGenerate, VizItem, VizOptionDoc, VizResult, VizSpec } from "./types.js";
 export { itemsOf, optBool, optNum, optStr } from "./types.js";

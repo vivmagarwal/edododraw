@@ -428,8 +428,15 @@ first (stroke-dashoffset in draw order), then labels fade:
 ```ts
 edd.setRevealProgress("api", p);              // node or edge id, p = 0..1
 edd.setRevealProgress("loads.intrinsic", p);  // a whole viz item as one drawing
+edd.setRevealProgress("brad", p);             // a `character` node: the whole figure draws on as one unit
 // p ≥ 1 restores the untouched rendering (original dash patterns included)
 ```
+
+Standalone `character` and `icon` nodes (DSL_LANGUAGE_GUIDE §3) are ordinary
+draw-on-able units: one `data-node` group each, so `setRevealProgress`,
+`applyVisibility`, `camera focus` and annotations address a whole person or
+glyph by its node id — which is how a hand-drawn presenter appears beside a
+diagram in a video.
 
 **Choreographing viz internals.** Every element a viz template emits for one
 data entry is tagged with its item — in the Scene IR (`node.data.vizItem =

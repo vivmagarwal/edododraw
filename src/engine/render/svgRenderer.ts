@@ -15,6 +15,7 @@ import type { Scene, SceneNode } from "../scene/types.js";
 import { registerBuiltinShapes } from "../plugins/builtins.js";
 import { ensurePluginStyles } from "../plugins/registry.js";
 import { renderEdge } from "./edges.js";
+import { renderCharacterNode, renderIconNode } from "./figures.js";
 import { labelBelow, renderShapeBody } from "./shapes.js";
 import { ensureEngineStyles, FONT_FAMILY } from "./theme.css.js";
 
@@ -369,13 +370,35 @@ export class SvgRenderer {
     if (role) g.setAttribute("data-viz-role", role);
   }
 
-  private renderNode(_scene: Scene, node: SceneNode): SVGGElement {
+  private renderNode(scene: Scene, node: SceneNode): SVGGElement {
     const doc = this.container.ownerDocument;
     const g = doc.createElementNS(SVG_NS, "g") as SVGGElement;
     g.setAttribute("data-node", node.id);
     g.setAttribute("class", "edd-node");
     this.applyVizTags(g, node.data);
     g.style.opacity = String(node.style.opacity / 100);
+
+    if (node.shape === "character") {
+      // Standalone sketchnote figure: the character library's strokes are
+      // painted inside this node group; the label hangs under the feet,
+      // inside the node box (so the bbox the layout computed is honoured).
+      const paintText = (...args: Parameters<SvgRenderer["textBlock"]>) => this.textBlock(...args);
+      const { body, labelCy } = renderCharacterNode(this.rc, scene, node, doc, paintText);
+      g.appendChild(body);
+      if (node.label) {
+        g.appendChild(this.textBlock(node.label, node.x + node.w / 2, labelCy, node.style.fontSize, node.style.textColor, node.style.fontFamily, "center", node.style.fontWeight));
+      }
+      return g;
+    }
+    if (node.shape === "icon") {
+      // Glyph + caption: the sketchnote "icon + word" unit.
+      const { body, labelCy } = renderIconNode(this.rc, node, doc);
+      g.appendChild(body);
+      if (node.label) {
+        g.appendChild(this.textBlock(node.label, node.x + node.w / 2, labelCy, node.style.fontSize, node.style.textColor, node.style.fontFamily, "center", node.style.fontWeight));
+      }
+      return g;
+    }
 
     const fill = this.resolveGradientFill(node.style.fill);
     const style = fill === node.style.fill ? node.style : { ...node.style, fill };

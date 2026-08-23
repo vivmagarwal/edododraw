@@ -77,7 +77,7 @@ node db "Postgres" as cylinder
 
 ### Full shape keyword list
 
-`rect` · `round-rect` · `ellipse` · `circle` · `diamond` (`decision`) · `triangle` · `hexagon` · `parallelogram` · `trapezoid` · `cylinder` (`db`) · `cloud` · `document` · `note` · `actor` · `pill` (`stadium`) · `text` · `star`
+`rect` · `round-rect` · `ellipse` · `circle` · `diamond` (`decision`) · `triangle` · `hexagon` · `parallelogram` · `trapezoid` · `cylinder` (`db`) · `cloud` · `document` · `note` · `actor` · `pill` (`stadium`) · `text` · `star` · `character` · `icon`
 
 Unknown shape names resolve through the **shape plugin registry** (`registerShape`) — see DEVELOPMENT_STANDARDS.md.
 
@@ -114,6 +114,71 @@ Stroke palette: `black gray red pink grape violet blue cyan teal green lime yell
 **Sketchnote containers** are ordinary shapes too: `speech-bubble` (dialogue),
 `starburst` (impact statements), `ribbon` (banner titles), `paper-fold`
 (documents) — e.g. `starburst wow "BE GOOD, DO GOOD"`.
+
+### The `character` node — a person standing next to your diagram
+
+`character` is a node shape like any other, drawn by the built-in sketchnote
+figure library (VISUALIZATIONS_GUIDE §6). Before 0.13 characters only appeared
+inside `personas` / `quote`; now a figure is a first-class node you can place,
+connect, focus, reveal, annotate and draw on.
+
+```edd
+scene {
+  character brad "Brad" {
+    pose: thinking, emotion: curious
+    hair: short, shirt: hoodie, accessory: glasses
+    fx: question, prop: bulb
+    height: 240, flip: true
+  }
+  rect idea "The idea it's about"
+  brad --> idea "wonders about"
+}
+```
+
+| Attribute | Values | Default |
+|---|---|---|
+| `pose:` | any of `listCharacterPoses()` — 44 actions (`standing confident thinking presenting climbing sitting running …`) | `standing` |
+| `emotion:` | any of `listCharacterEmotions()` — 26 expressions (`neutral happy curious determined content …`) | the pose's own, else `neutral` |
+| `shirt:` | `vest tee striped solid tie dress hoodie crew buttoned blazer labcoat overalls turtleneck scarf` | `vest` |
+| `hair:` | `short spiky messy curly bob long pigtails bun ponytail afro mohawk side-part bald` | none |
+| `accessory:` | `glasses sunglasses monocle hat cap beard mustache bowtie headphones earrings crown mask` | none |
+| `fx:` | `sweat question double-question alarm exclaim idea anger excited stars hearts music zzz dizzy sightline` | the pose's own |
+| `prop:` | any icon name (§ Visualizations §5) — held at the pose's hand anchor | none |
+| `height:` | figure height in world units (feet → top of head) | `200` |
+| `flip:` | `true` mirrors the figure left↔right (use it to make two figures face each other) | `false` |
+| `shirtColor:` `hairColor:` `accessoryColor:` `fxColor:` `propColor:` | palette name, `#hex`, or `$token` | derived from the node's ink/fill |
+| `label:` | the caption under the figure; `label: false` (or `""`) draws none | the node's label |
+
+All the ordinary node attributes still apply: `stroke`/`color` sets the
+figure's ink, `at:`/`pin:`/`size:` place it, `:::class` and `style .cls { pose:
+… }` cascade like any other attribute, and `opacity:` fades it.
+
+The node's box is measured from the figure's real drawn extents (limbs, hair,
+prop, emanata) plus the caption row, so `dag`/`grid`/`manual` layouts, edge
+anchors (`.n .s .e .w …`), `camera focus brad`, `reveal`, `annotate` and
+`setRevealProgress("brad", p)` all treat it as one unit. Unknown names never
+blank the diagram: you get a `W-CHARACTER-…` warning listing the valid values
+and the figure falls back to `standing` / `neutral`.
+
+### The `icon` node — a glyph with a caption
+
+The other half of the sketchnote vocabulary: one line-glyph from the icon
+library (§ Visualizations §5), captioned underneath.
+
+```edd
+scene {
+  icon wheelchair "Access"                  // the id doubles as the icon name
+  icon ramp "Scaffolding" { icon: scaffold, size: 110 }
+}
+```
+
+| Attribute | Values | Default |
+|---|---|---|
+| `icon:` (alias `glyph:`) | any icon name or alias | the node id |
+| `size:` (alias `iconSize:`) | glyph square size in world units | `64` |
+| `label:` | caption under the glyph; `label: false` for none | the node's label |
+
+An unknown glyph warns (`W-ICON`) and still renders the caption.
 
 ## 4. Edges
 

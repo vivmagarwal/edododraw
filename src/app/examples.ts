@@ -4,6 +4,7 @@ import architecture from "../../examples/architecture.edd?raw";
 import animatedArrows from "../../examples/animated-arrows.edd?raw";
 import mermaidImport from "../../examples/mermaid-import.edd?raw";
 import visualizations from "../../examples/visualizations.edd?raw";
+import charactersBeside from "../../examples/characters-beside-diagram.edd?raw";
 
 export interface Example {
   name: string;
@@ -13,6 +14,7 @@ export interface Example {
 export const EXAMPLES: Example[] = [
   { name: "Welcome", source: welcome },
   { name: "Visualizations", source: visualizations },
+  { name: "Characters", source: charactersBeside },
   { name: "Flowchart", source: flowchart },
   { name: "Architecture", source: architecture },
   { name: "Animated Arrows", source: animatedArrows },

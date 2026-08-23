@@ -13,7 +13,10 @@ import { isLightColor, resolveMarker } from "../scene/palette.js";
 import { effectivePreset, getStylePreset, presetEdgeDefaults, presetNodeDefaults, presetTheme, roleStyle } from "../style/presets.js";
 import { runViz } from "../viz/registry.js";
 import "../viz/generators/index.js"; // register the built-in viz templates
+import { characterNodeBox } from "../viz/characterNode.js";
+import { iconNodeBox } from "../viz/iconNode.js";
 import { lowerViz } from "./vizLower.js";
+import { lowerCharacterNode, lowerIconNode } from "./figureLower.js";
 import type {
   Annotation,
   AnnotationTarget,
@@ -346,6 +349,24 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
       mode,
       data: { tags: collectTags(nd), classes },
     });
+    if (shape === "character") {
+      // Standalone figure: lower the character axes (validated against the
+      // registries) and size the box from the figure's drawn extents + label,
+      // so layout/edges/camera/annotations see the real footprint.
+      const spec = lowerCharacterNode(layered, tokenMap, diags, nd.span);
+      const box = characterNodeBox(spec, node.label, node.style, preset ?? effectivePreset(undefined, mode), mode);
+      spec.figure = box.figure;
+      node.w = box.w;
+      node.h = box.h;
+      node.data = { ...node.data, character: spec };
+    } else if (shape === "icon") {
+      // Glyph + caption: size the box from the glyph square and the label.
+      const spec = lowerIconNode(id, layered, diags, nd.span);
+      const box = iconNodeBox(spec, node.label, node.style);
+      node.w = box.w;
+      node.h = box.h;
+      node.data = { ...node.data, icon: spec };
+    }
     scene.nodes.push(node);
   }
 
@@ -715,6 +736,7 @@ function buildNodeStyle(attrs: AttrBlock, tokens: Map<string, Value>, _mode: "li
       case "label":
       case "text":
         if (v.t === "str") out.label = v.v;
+        else if (v.t === "bool" && !v.v) out.label = ""; // label: false → no label
         break;
       case "at":
         if (v.t === "tuple" && v.v[0]?.t === "num" && v.v[1]?.t === "num") {

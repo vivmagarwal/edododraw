@@ -43,6 +43,11 @@ export type ShapeKind =
   | "arc"
   | "block-arrow"
   | "chevron"
+  // a standalone sketchnote figure (pose/emotion/… in node.data.character —
+  // see viz/characterNode.ts); the renderer draws it via the character library
+  | "character"
+  // a line glyph + caption (icon name/size in node.data.icon — see viz/iconNode.ts)
+  | "icon"
   | (string & {});
 
 export type FillStyle =

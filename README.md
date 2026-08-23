@@ -27,6 +27,7 @@ Excalidraw is a joy to draw *by hand*. EDodoDraw is a joy to drive *by code* —
 - **Annotations, scripted + live.** Highlight / underline / box / circle / point-at / callout / spotlight. Draw them with the toolbar, then **commit to code**.
 - **More animated arrows** than Excalidraw: flow, dash-march, draw-on, comet, gradient-flow, electric, pulse.
 - **15+ hand-drawn shapes** + a **plugin registry** to add your own without touching the core.
+- **People in your diagrams.** `character brad "Brad" { pose: thinking, emotion: curious, flip: true }` puts a sketchnote figure beside the diagram as an ordinary node (44 poses × 26 emotions × shirts/hair/accessories/effects/props) — plus `icon` nodes for a captioned glyph.
 - **Export** to self-contained SVG (font embedded), PNG, or JSON.
 
 ## Use it in your app

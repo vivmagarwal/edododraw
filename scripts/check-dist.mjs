@@ -7,7 +7,7 @@
  *     because the package.json `sideEffects` allowlist missed them (0.12.0).
  * Runs as part of prepublishOnly, after build:pkg.
  */
-import { compileEdd, listCharacterPoses, listCharacterEmotions } from "../dist-lib/index.js";
+import { compileEdd, listCharacterPoses, listCharacterEmotions, listIcons, listCharacterNodes } from "../dist-lib/index.js";
 
 const fail = (msg) => {
   console.error(`✗ check-dist: ${msg}`);
@@ -44,4 +44,27 @@ try {
   fail(`compileEdd crashed on an unknown pose: ${e.message}`);
 }
 
-console.log(`✓ check-dist: ${poses.length} poses, ${emotions.length} emotions, personas compiles (${n} elements), unknown-pose fallback OK`);
+// 0.13: the standalone `character`/`icon` nodes + the new glyphs.
+const icons = listIcons();
+for (const name of ["wheelchair", "ladder", "scaffold", "sparkle", "robot", "brain", "graduation-cap"]) {
+  if (!icons.includes(name)) fail(`icon "${name}" missing from built lib`);
+}
+const charSrc = `scene {
+  character brad "Brad" { pose: thinking, emotion: curious, hair: short, shirt: hoodie, accessory: glasses, fx: question, prop: bulb, height: 240, flip: true }
+  icon scaffold "Scaffolding" { size: 100 }
+  brad --> scaffold "leans on"
+}`;
+let charOut;
+try {
+  charOut = compileEdd(charSrc);
+} catch (e) {
+  fail(`compileEdd threw on a character-node source: ${e.message}`);
+}
+if (charOut.diagnostics.hasErrors) fail(`character-node source produced errors: ${charOut.diagnostics.errors.map((d) => d.code).join(", ")}`);
+if (listCharacterNodes(charOut.scene).join() !== "brad") fail("listCharacterNodes did not find the character node");
+const brad = charOut.scene.nodes.find((x) => x.id === "brad");
+if (!brad || brad.shape !== "character") fail("the character node lost its shape in the built lib");
+if (!(brad.w > 0 && brad.h > 240)) fail(`character node box not measured (${brad.w}×${brad.h})`);
+if (brad.data?.character?.pose !== "thinking") fail("character spec missing from node.data");
+
+console.log(`✓ check-dist: ${poses.length} poses, ${emotions.length} emotions, ${icons.length} icons, personas compiles (${n} elements), character node ${Math.round(brad.w)}×${Math.round(brad.h)}, unknown-pose fallback OK`);

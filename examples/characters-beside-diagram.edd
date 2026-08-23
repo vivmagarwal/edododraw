@@ -1,0 +1,68 @@
+edd 1.0
+meta { title: "Scaffold vs. Wheelchair", style: classic-color }
+
+// Standalone `character` and `icon` nodes put PEOPLE and OBJECTS next to the
+// diagram as ordinary nodes: real bboxes, so they lay out, connect, focus,
+// reveal, annotate and draw on like any shape. `flip` turns a figure so the
+// two columns face each other.
+
+scene {
+  layout dag { direction: down, gap: 120, rankGap: 80 }
+
+  text title "Two kinds of support" { at: (150, -155), fontSize: 40, pin: true }
+  text ask   "Is the goal to take it away?" { at: (150, -98), fontSize: 22, pin: true }
+
+  group temporary "Temporary — you take it away" {
+    character climber "The learner" {
+      pose: climbing, emotion: determined, hair: messy, shirt: tee, fx: sweat
+      height: 230
+    }
+    icon scaffold "Scaffolding" { size: 100 }
+    round-rect alone "Climbs it alone" { fill: green }
+  }
+
+  group permanent "Permanent — it stays" {
+    character rider "The learner" {
+      pose: sitting, emotion: content, hair: bob, shirt: hoodie, accessory: glasses
+      height: 230, flip: true
+    }
+    icon wheelchair "Wheelchair" { size: 100 }
+    round-rect access "Reaches the same door" { fill: blue }
+  }
+
+  edge leans: climber    --> scaffold   "leans on"
+  edge down:  scaffold   --> alone      "then comes down"
+
+  // named edges so the timeline can hide the whole right column at first
+  edge rolls: rider      --> wheelchair "moves with"
+  edge daily: wheelchair --> access     "every day"
+  edge back:  access     ~> rider       "and back again"
+}
+
+annotate "persistent" {
+  strike scaffold                          // the whole point: it comes down
+}
+
+timeline story {
+  beat left "Scaffolding comes down" {
+    camera focus temporary zoom 1.1 ease ease-in-out
+    reveal {
+      hide [rider, wheelchair, access, rolls, daily, back]   // sticky: hide once…
+      draw-on [climber, scaffold, alone]
+    }
+    narrate: "Scaffolding is support you build in order to take it away."
+    hold: 2s
+  }
+  beat right "Access stays" {
+    camera focus permanent zoom 1.1 ease ease-in-out
+    reveal { show [rider, wheelchair, access, rolls, daily, back] with draw-on }  // …show here
+    annotate { circle-mark wheelchair "never remove this one" }
+    narrate: "Access is support you never remove — and shouldn't."
+    hold: 2s
+  }
+  beat both "Tell them apart" {
+    camera fit-all over 900ms
+    reveal { show all with fade-in }
+    narrate: "One question tells them apart: is the goal to take it away?"
+  }
+}

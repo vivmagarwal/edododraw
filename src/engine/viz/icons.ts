@@ -59,6 +59,21 @@ const ICONS: Record<string, string> = {
   puzzle: "M9 4 L9 6 A2 2 0 1 0 13 6 L13 4 L19 4 L19 9 L17.5 9 A2 2 0 1 0 17.5 13 L19 13 L19 19 L14 19 L14 17 A2 2 0 1 0 10 17 L10 19 L4 19 L4 13 L6 13 A2 2 0 1 0 6 9 L4 9 L4 4 Z",
   diamond: "M12 3 L21 12 L12 21 L3 12 Z",
   circle: "M12 12 m-8.5 0 a8.5 8.5 0 1 0 17 0 a8.5 8.5 0 1 0 -17 0",
+  // ---- 0.13: accessibility / learning / AI glyphs ---------------------------
+  // side-view wheelchair user: head, backrest+seat, shin+footrest, one big wheel
+  wheelchair: "M9 3.6 m-2.8 0 a2.8 2.8 0 1 0 5.6 0 a2.8 2.8 0 1 0 -5.6 0 M9 6.4 L9.5 11.5 L15 11.5 L16.8 16 L20 16 M10.5 17 m-4.2 0 a4.2 4.2 0 1 0 8.4 0 a4.2 4.2 0 1 0 -8.4 0",
+  // two rails + four rungs
+  ladder: "M7 2.5 L7 21.5 M17 2.5 L17 21.5 M7 6 L17 6 M7 10 L17 10 M7 14 L17 14 M7 18 L17 18",
+  // two uprights, two overhanging planks, an X brace between them
+  scaffold: "M6 3 L6 21 M18 3 L18 21 M3 9 L21 9 M3 16 L21 16 M6 9 L18 16 M18 9 L6 16",
+  // one big four-point sparkle + a small companion (AI / magic)
+  sparkle: "M11 5 C11.5 9.8 14.2 12.5 19 13 C14.2 13.5 11.5 16.2 11 21 C10.5 16.2 7.8 13.5 3 13 C7.8 12.5 10.5 9.8 11 5 Z M19 2 L19 9 M15.5 5.5 L22.5 5.5",
+  // boxy head with antenna, two eyes, a mouth and side "ears"
+  robot: "M5 8 L19 8 L19 19.5 L5 19.5 Z M12 8 L12 4.5 M10 3.5 L14 3.5 M9 11 L9 14 M15 11 L15 14 M8.5 17 L15.5 17 M2 11.5 L2 15.5 M2 13.5 L5 13.5 M22 11.5 L22 15.5 M19 13.5 L22 13.5",
+  // two lobes, central fissure, a few gyri
+  brain: "M12 4 C9.5 2.5 6 3.5 5.5 6.5 C3 7.5 2.5 11 4 12.5 C2.5 14.5 3.5 17.5 6 18 C6.5 20.5 9.5 21.5 12 19.5 M12 4 C14.5 2.5 18 3.5 18.5 6.5 C21 7.5 21.5 11 20 12.5 C21.5 14.5 20.5 17.5 18 18 C17.5 20.5 14.5 21.5 12 19.5 M12 4 L12 19.5 M8 8 C9.5 8 10 9.5 9 10.5 M16 8 C14.5 8 14 9.5 15 10.5 M7 13.5 C8.5 13.2 9.5 14.5 9 15.8 M17 13.5 C15.5 13.2 14.5 14.5 15 15.8",
+  // mortarboard + cap body + tassel
+  "graduation-cap": "M12 4 L22 9 L12 14 L2 9 Z M6 11.2 L6 16 C6 18.2 9 19.6 12 19.6 C15 19.6 18 18.2 18 16 L18 11.2 M22 9 L22 15.5 M22 16.5 m-1 0 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0",
 };
 
 const ALIASES: Record<string, string> = {
@@ -110,6 +125,12 @@ const ALIASES: Record<string, string> = {
   justice: "scale",
   piece: "puzzle",
   gem: "diamond",
+  accessibility: "wheelchair",
+  ai: "sparkle",
+  magic: "sparkle",
+  bot: "robot",
+  graduate: "graduation-cap",
+  school: "graduation-cap",
 };
 
 // Runtime-registered icons (package consumers extending the glyph set).

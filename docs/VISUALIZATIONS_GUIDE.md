@@ -344,7 +344,9 @@ tooling can validate `.edd` before rendering.
 
 ## 5. Icons
 
-`icon:` accepts a built-in line-glyph name; unknown names render nothing (layouts don't depend on them). Available: `check x plus minus arrow-up arrow-down arrow-right arrow-left trend-up trend-down star heart flag target bulb gear user users clock calendar rocket trophy medal search warning dollar chart pie doc mail chat home globe lock key leaf fire drop cloud database shield eye book wrench phone megaphone handshake scale puzzle diamond circle` (plus aliases like `idea`, `growth`, `money`, `team`, `award` — see `src/engine/viz/icons.ts`).
+`icon:` accepts a built-in line-glyph name; unknown names render nothing (layouts don't depend on them). Available: `check x plus minus arrow-up arrow-down arrow-right arrow-left trend-up trend-down star heart flag target bulb gear user users clock calendar rocket trophy medal search warning dollar chart pie doc mail chat home globe lock key leaf fire drop cloud database shield eye book wrench phone megaphone handshake scale puzzle diamond circle wheelchair ladder scaffold sparkle robot brain graduation-cap` (plus aliases like `idea`, `growth`, `money`, `team`, `award`, `ai`/`magic` → sparkle, `bot` → robot, `graduate`/`school` → graduation-cap, `accessibility` → wheelchair — see `src/engine/viz/icons.ts`).
+
+Any of them is also a standalone captioned node — `icon wheelchair "Access"` — see DSL_LANGUAGE_GUIDE §3.
 
 ## 6. Characters
 
@@ -380,8 +382,26 @@ on the [Characters page](https://vivmagarwal.github.io/edododraw/#/characters).
 - **Props**: ANY icon name (§5), held at the pose's anchor — `prop: trophy`
   puts a trophy overhead in `holding-overhead`, `prop: star` crowns `cheering`.
 
-In the DSL, characters appear through templates: `personas` renders one per
-item (`{ pose: dancing, emotion: happy, shirt: hoodie, hair: afro, accessory: headphones, fx: music, prop: star }`),
+In the DSL, characters appear two ways.
+
+**As a standalone node** (since 0.13) — a figure that stands beside the
+diagram as an ordinary node, with a real bbox, so layouts, edges, `camera
+focus`, `reveal`, `annotate` and `setRevealProgress` treat it as one unit:
+
+```edd
+scene {
+  character teacher "Ms. Rivera" { pose: presenting, emotion: happy, hair: afro, accessory: glasses, height: 240 }
+  character student "Sam"        { pose: thinking, emotion: curious, hair: pigtails, fx: question, flip: true }
+  teacher --> student "asks"
+}
+```
+
+Full attribute table in DSL_LANGUAGE_GUIDE §3 (`pose emotion shirt hair
+accessory fx prop height flip *Color label`). Unknown names warn with the valid
+list and fall back instead of blanking the figure.
+
+**Through templates**: `personas` renders one per item
+(`{ pose: dancing, emotion: happy, shirt: hoodie, hair: afro, accessory: headphones, fx: music, prop: star }`),
 `quote` adds a presenting figure, and `vision`/`hole`/`tug-of-war` use them
 internally. From generator code (see EXTENDING_GUIDE):
 

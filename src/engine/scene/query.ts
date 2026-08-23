@@ -64,6 +64,18 @@ export function listVizItems(scene: Scene): string[] {
   return [...keys];
 }
 
+/** Ids of every standalone `character` node in the scene (shape "character";
+ *  the figure spec lives in `node.data.character`). Companion to listVizItems
+ *  for hosts planning beats/draw-ons. */
+export function listCharacterNodes(scene: Scene): string[] {
+  return scene.nodes.filter((n) => n.shape === "character").map((n) => n.id);
+}
+
+/** Ids of every standalone `icon` node (shape "icon"; spec in `node.data.icon`). */
+export function listIconNodes(scene: Scene): string[] {
+  return scene.nodes.filter((n) => n.shape === "icon").map((n) => n.id);
+}
+
 /** Resolve any element id (node/group; edges included if routed; viz-item
  *  keys resolve to the union of their members) to a bbox. */
 export function elementBBox(scene: Scene, id: string): BBox | undefined {

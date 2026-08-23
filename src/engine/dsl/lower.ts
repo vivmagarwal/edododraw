@@ -46,6 +46,8 @@ export const SHAPE_MAP: Record<string, ShapeKind> = {
   text: "text",
   image: "rectangle",
   frame: "rectangle",
+  character: "character",
+  icon: "icon",
 };
 
 export function mapShape(name: string | undefined): ShapeKind {
