@@ -49,6 +49,10 @@ export interface CharacterNodeSpec {
   height: number;
   /** Mirror left↔right. */
   flip?: boolean;
+  /** "minimal" | "plain" | "detailed" — how much of the figure is drawn. */
+  fidelity?: "minimal" | "plain" | "detailed";
+  /** Soft ground shadow under a grounded figure (default true). */
+  shadow?: boolean;
   shirtColor?: string;
   hairColor?: string;
   accessoryColor?: string;
@@ -87,6 +91,8 @@ export function characterDrawOptions(spec: CharacterNodeSpec, style: NodeStyle):
     fx: spec.fx,
     prop: spec.prop,
     flip: spec.flip,
+    fidelity: spec.fidelity,
+    shadow: spec.shadow,
     shirtColor: spec.shirtColor ?? fill,
     hairColor: spec.hairColor,
     accessoryColor: spec.accessoryColor,

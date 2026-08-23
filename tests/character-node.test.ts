@@ -235,11 +235,13 @@ describe("character node — render", () => {
   });
 
   it("derives ink from the active style preset, not a hardcoded color", () => {
+    // the figure's INK path — skip the ground shadow, which is a filled ellipse
+    // with stroke="none" and is deliberately near-invisible against the canvas
     const strokeOf = (src: string) =>
       mount(src).renderer.svg.querySelector('[data-node="p"] path')!.getAttribute("stroke");
-    const classic = strokeOf(`meta { style: classic }\nscene { character p "P" }`);
-    const chalk = strokeOf(`meta { style: chalkboard }\nscene { character p "P" }`);
-    const authored = strokeOf(`meta { style: classic }\nscene { character p "P" { stroke: #2563eb } }`);
+    const classic = strokeOf(`meta { style: classic }\nscene { character p "P" { shadow: false } }`);
+    const chalk = strokeOf(`meta { style: chalkboard }\nscene { character p "P" { shadow: false } }`);
+    const authored = strokeOf(`meta { style: classic }\nscene { character p "P" { stroke: #2563eb, shadow: false } }`);
     expect(classic).toBeTruthy();
     expect(chalk).not.toBe(classic); // the preset's ink, not a constant
     expect(authored).toBe("#2563eb"); // an authored color still wins

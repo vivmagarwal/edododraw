@@ -47,6 +47,20 @@ export function listCharacterEmotions(): string[] {
 
 // ---- shirts -------------------------------------------------------------------
 
+/**
+ * Body styles that draw their OWN arms (the workbook's star person is one
+ * stroke for both). The renderer skips the pose's arms for these, or the figure
+ * ends up with four.
+ */
+const SELF_ARMED = new Set<string>(["star"]);
+export function shirtDrawsArms(name: string | undefined): boolean {
+  return !!name && SELF_ARMED.has(name);
+}
+/** Declare that a registered body style draws its own arms. */
+export function registerSelfArmedShirt(name: string): void {
+  SELF_ARMED.add(name);
+}
+
 export function registerCharacterShirt(name: string, draw: ShirtDrawer): void {
   SHIRTS.set(name, draw);
 }

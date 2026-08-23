@@ -3,6 +3,14 @@
  * angles 200°→340° in the frame's y-down convention). `f.accent` is the hair
  * colour. Masses are placed at the sides/crown so they never cover the face,
  * which is painted after hair.
+ *
+ * THE BROW RULE (v2, 2026-08-23). No hair stroke may dip into the band just
+ * above the eyes. v1's `bob` drew a fringe as a chevron — high at the temples,
+ * dipping to mid-forehead — which is, stroke for stroke, an angry unibrow: the
+ * whole cast read as scowling at `emotion: neutral` and the film had to be
+ * rejected before anyone traced it to the hair. A fringe must curve WITH the
+ * crown (∩) or not exist. Keep every mass above `head.cy - r*0.5` or outside
+ * the rim, and check any new style against `emotion: neutral` before shipping.
  */
 
 import { registerCharacterHair } from "./registry.js";
@@ -35,10 +43,25 @@ registerCharacterHair("curly", (f) => {
 
 registerCharacterHair("bob", (f) => {
   const { cx, cy, r } = f.head;
-  f.stroke(f.arc(cx, cy, r * 1.06, 178, 362, 16), f.lw, f.accent); // cap over the crown
-  // side flaps framing the face (just outside the head), temple → jaw
-  for (const s of [-1, 1] as const) f.fill([[cx + s * r * 0.86, cy - r * 0.55], [cx + s * r * 1.28, cy - r * 0.3], [cx + s * r * 1.2, cy + r * 0.9], [cx + s * r * 0.82, cy + r * 0.55]], f.accent);
-  f.stroke([rim(f, 232, 0.98), [cx, cy - r * 0.55], rim(f, 308, 0.98)], f.lw * 0.85, f.accent); // fringe
+  // one continuous mass: over the crown and down BOTH sides to the jaw, its
+  // inner edge well clear of the eyes. No fringe stroke — see THE BROW RULE.
+  // A CAP, not a helmet: it covers the crown and stops at the temples, with two
+  // short side pieces outside the rim. v2's first cut filled down to the jaw on
+  // both sides and every figure wore a heavy black bowl.
+  // A thin band over the crown plus two short side pieces. Solid mass is what
+  // turned this into a helmet twice: keep the band under ~0.16r thick.
+  f.fill([...f.arc(cx, cy, r * 1.08, 190, 350, 16), ...f.arc(cx, cy, r * 0.84, 350, 190, 16)], f.accent);
+  for (const sgn of [-1, 1] as const) {
+    f.stroke(
+      [
+        [cx + sgn * r * 1.0, cy - r * 0.48],
+        [cx + sgn * r * 1.13, cy - r * 0.12],
+        [cx + sgn * r * 1.06, cy + r * 0.42],
+      ],
+      f.lw * 1.1,
+      f.accent,
+    );
+  }
 });
 
 registerCharacterHair("long", (f) => {
@@ -47,7 +70,7 @@ registerCharacterHair("long", (f) => {
 });
 
 registerCharacterHair("pigtails", (f) => {
-  f.stroke([rim(f, 248, 0.95), [f.head.cx, f.head.cy - f.head.r * 0.55], rim(f, 292, 0.95)], f.lw * 0.7, f.accent); // fringe
+  f.stroke(f.arc(f.head.cx, f.head.cy, f.head.r * 1.02, 200, 340, 12), f.lw * 0.85, f.accent); // crown, curving WITH the head
   for (const s of [-1, 1] as const) {
     f.stroke([rim(f, s < 0 ? 205 : 335, 0.95), [f.head.cx + s * f.head.r * 1.35, f.head.cy]], f.lw, f.accent);
     f.fill(f.arc(f.head.cx + s * f.head.r * 1.5, f.head.cy + f.head.r * 0.15, f.head.r * 0.32, 0, 360, 12), f.accent);
@@ -61,15 +84,17 @@ registerCharacterHair("bun", (f) => {
 
 registerCharacterHair("ponytail", (f) => {
   const { cx, cy, r } = f.head;
-  f.stroke(f.arc(cx, cy, r * 1.04, 192, 350, 12), f.lw, f.accent); // cap
-  f.stroke([rim(f, 210, 1.04), [cx - r * 1.35, cy - r * 0.5], [cx - r * 1.6, cy + r * 0.35], [cx - r * 1.4, cy + r * 1.15]], f.lw, f.accent); // tail swept back
-  f.dot(...rim(f, 208, 1.06), Math.max(1.2, f.h * 0.013), f.accent); // tie
+  f.fill([...f.arc(cx, cy, r * 1.05, 198, 342, 14), ...f.arc(cx, cy, r * 0.92, 342, 198, 14)], f.accent); // cap
+  // the tail hangs BEHIND the shoulder, not out to the side like a handle
+  f.stroke([[cx - r * 0.98, cy - r * 0.28], [cx - r * 1.22, cy + r * 0.35], [cx - r * 1.12, cy + r * 1.05]], f.lw * 1.15, f.accent);
+  f.dot(cx - r * 0.98, cy - r * 0.28, Math.max(1.2, f.h * 0.012), f.accent); // tie
 });
 
 registerCharacterHair("afro", (f) => {
+  // a scalloped cloud that SITS ON the head — a bare arc floats above it
   const pts: Pt[] = [];
-  for (let d = 165; d <= 375; d += 15) pts.push(rim(f, d, 1.45 + 0.12 * Math.sin(d * 1.7)));
-  f.stroke(pts, f.lw, f.accent);
+  for (let d = 172; d <= 368; d += 14) pts.push(rim(f, d, 1.34 + 0.1 * Math.sin(d * 1.9)));
+  f.stroke([...pts, rim(f, 368, 1.0), ...f.arc(f.head.cx, f.head.cy, f.head.r * 1.0, 368, 172, 14)], f.lw, f.accent);
 });
 
 registerCharacterHair("mohawk", (f) => {
@@ -77,8 +102,19 @@ registerCharacterHair("mohawk", (f) => {
 });
 
 registerCharacterHair("side-part", (f) => {
-  f.fill([rim(f, 190), rim(f, 250, 0.98), [f.head.cx + f.head.r * 0.15, f.head.cy - f.head.r * 0.5], rim(f, 320, 1.02), rim(f, 350), [f.head.cx + f.head.r * 0.9, f.head.cy - f.head.r * 0.55], [f.head.cx - f.head.r * 0.9, f.head.cy - f.head.r * 0.55]], f.accent);
-  f.stroke([[f.head.cx + f.head.r * 0.15, f.head.cy - f.head.r * 0.62], [f.head.cx + f.head.r * 0.35, f.head.cy - f.head.r * 0.2]], f.lw * 0.6, f.ctx.preset.background); // part
+  const { cx, cy, r } = f.head;
+  // a swoop: full over one temple, sweeping across the crown to a part
+  f.fill(
+    [
+      [cx - r * 1.04, cy - r * 0.26],
+      ...f.arc(cx, cy, r * 1.04, 195, 345, 14),
+      [cx + r * 1.02, cy - r * 0.3],
+      [cx + r * 0.5, cy - r * 0.74],
+      [cx - r * 0.2, cy - r * 0.62],
+      [cx - r * 0.76, cy - r * 0.3],
+    ],
+    f.accent,
+  );
 });
 
 registerCharacterHair("bald", (f) => {

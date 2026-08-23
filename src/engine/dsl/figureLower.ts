@@ -33,6 +33,8 @@ export const CHARACTER_ATTR_KEYS = [
   "prop",
   "height",
   "flip",
+  "fidelity",
+  "shadow",
   "shirtColor",
   "hairColor",
   "accessoryColor",
@@ -125,6 +127,19 @@ export function lowerCharacterNode(attrs: AttrBlock, tokens: Map<string, Value>,
         if (v.t === "bool") spec.flip = v.v;
         else if (v.t === "ident") spec.flip = v.v === "true" || v.v === "yes";
         break;
+      case "shadow":
+        if (v.t === "bool") spec.shadow = v.v;
+        else if (v.t === "ident") spec.shadow = v.v === "true" || v.v === "yes";
+        break;
+      case "fidelity": {
+        const f = nameOf(v);
+        if (f === "minimal" || f === "plain" || f === "detailed") spec.fidelity = f;
+        else if (f)
+          diags.warn("W-CHARACTER-FIDELITY", `unknown fidelity '${f}' — use minimal | plain | detailed`, at(a.span ?? fallbackSpan), {
+            hint: "minimal = bystanders (no face) · plain = default · detailed = the protagonist",
+          });
+        break;
+      }
       case "shirtColor":
       case "hairColor":
       case "accessoryColor":

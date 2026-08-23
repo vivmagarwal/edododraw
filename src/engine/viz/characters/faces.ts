@@ -80,14 +80,23 @@ const skewBrows = (f: CharacterFrame) => {
 
 // ---- mouth primitives ---------------------------------------------------------
 
-const mw = (f: CharacterFrame) => 0.035 * f.h;
-const smile = (f: CharacterFrame, d = 1) => f.stroke([[f.head.cx - mw(f), f.face.mouthY - 0.008 * f.h * d], [f.head.cx, f.face.mouthY + 0.012 * f.h * d], [f.head.cx + mw(f), f.face.mouthY - 0.008 * f.h * d]]);
-const frown = (f: CharacterFrame) => f.stroke([[f.head.cx - mw(f), f.face.mouthY + 0.012 * f.h], [f.head.cx, f.face.mouthY - 0.008 * f.h], [f.head.cx + mw(f), f.face.mouthY + 0.012 * f.h]]);
+/**
+ * Mouth half-width. A GENEROUS mouth is where the warmth of this drawing style
+ * lives: the reference sets all give a smile roughly 40% of the head's width,
+ * and v1's 0.035 dash (28% of the head radius) is most of why those figures
+ * read as sullen even at `emotion: neutral`.
+ */
+const mw = (f: CharacterFrame) => 0.05 * f.h;
+const smile = (f: CharacterFrame, d = 1) => f.stroke([[f.head.cx - mw(f), f.face.mouthY - 0.012 * f.h * d], [f.head.cx - mw(f) * 0.45, f.face.mouthY + 0.014 * f.h * d], [f.head.cx + mw(f) * 0.45, f.face.mouthY + 0.014 * f.h * d], [f.head.cx + mw(f), f.face.mouthY - 0.012 * f.h * d]]);
+const frown = (f: CharacterFrame) => f.stroke([[f.head.cx - mw(f) * 0.85, f.face.mouthY + 0.014 * f.h], [f.head.cx, f.face.mouthY - 0.01 * f.h], [f.head.cx + mw(f) * 0.85, f.face.mouthY + 0.014 * f.h]]);
 const flat = (f: CharacterFrame, w = 0.8) => f.stroke([[f.head.cx - mw(f) * w, f.face.mouthY], [f.head.cx + mw(f) * w, f.face.mouthY]]);
 /** A pressed, level line — held resolve. Heavier and wider than `flat`. */
 const firm = (f: CharacterFrame) => f.stroke([[f.head.cx - mw(f) * 0.95, f.face.mouthY], [f.head.cx + mw(f) * 0.95, f.face.mouthY]], f.lw);
 /** A wide open grin — bigger and deeper than `smile`. */
-const bigSmile = (f: CharacterFrame) => f.stroke([[f.head.cx - mw(f) * 1.15, f.face.mouthY - 0.012 * f.h], [f.head.cx - mw(f) * 0.45, f.face.mouthY + 0.018 * f.h], [f.head.cx + mw(f) * 0.45, f.face.mouthY + 0.018 * f.h], [f.head.cx + mw(f) * 1.15, f.face.mouthY - 0.012 * f.h]]);
+const bigSmile = (f: CharacterFrame) => {
+  f.stroke([[f.head.cx - mw(f) * 1.1, f.face.mouthY - 0.018 * f.h], [f.head.cx - mw(f) * 0.5, f.face.mouthY + 0.024 * f.h], [f.head.cx + mw(f) * 0.5, f.face.mouthY + 0.024 * f.h], [f.head.cx + mw(f) * 1.1, f.face.mouthY - 0.018 * f.h]]);
+  f.stroke([[f.head.cx - mw(f) * 1.08, f.face.mouthY - 0.016 * f.h], [f.head.cx + mw(f) * 1.08, f.face.mouthY - 0.016 * f.h]], f.lw * 0.6); // the upper lip closes the grin
+};
 /** A symmetric squiggle — puzzlement (distinct from `zigzag`'s lopsided wobble). */
 const wavy = (f: CharacterFrame) => f.stroke([[f.head.cx - mw(f) * 1.05, f.face.mouthY + 0.007 * f.h], [f.head.cx - mw(f) * 0.35, f.face.mouthY - 0.009 * f.h], [f.head.cx + mw(f) * 0.35, f.face.mouthY + 0.009 * f.h], [f.head.cx + mw(f) * 1.05, f.face.mouthY - 0.007 * f.h]]);
 const zigzag = (f: CharacterFrame) => f.stroke([[f.head.cx - mw(f), f.face.mouthY], [f.head.cx - mw(f) * 0.33, f.face.mouthY + 0.012 * f.h], [f.head.cx + mw(f) * 0.33, f.face.mouthY - 0.006 * f.h], [f.head.cx + mw(f), f.face.mouthY + 0.008 * f.h]]);
@@ -98,7 +107,13 @@ const openMouth = (f: CharacterFrame, big = false) => {
 
 // ---- registrations ------------------------------------------------------------
 
-registerCharacterEmotion("neutral", (f) => { dotEyes(f); flat(f); });
+// `neutral` is a FAINT SMILE, not a level dash. It is the face a figure wears
+// when the author named no mood, so it is on screen more than any other — and a
+// straight line under two dots reads as displeasure, not neutrality. This one
+// stroke is worth more than any other in the library.
+registerCharacterEmotion("neutral", (f) => { dotEyes(f); smile(f, 0.45); });
+/** A genuinely flat, unreadable mouth — deadpan, when you want exactly that. */
+registerCharacterEmotion("blank", (f) => { dotEyes(f); flat(f); });
 registerCharacterEmotion("happy", (f) => { dotEyes(f); smile(f); });
 registerCharacterEmotion("sad", (f) => { dotEyes(f); frown(f); });
 registerCharacterEmotion("surprised", (f) => { dotEyes(f, f.face.eyeR2 * 1.5); openMouth(f); });
@@ -107,7 +122,7 @@ registerCharacterEmotion("angry", (f) => { dotEyes(f); flat(f, 1); angryBrows(f)
 registerCharacterEmotion("excited", (f) => { dotEyes(f, f.face.eyeR2 * 1.45); raisedBrows(f); bigSmile(f); });
 // confused ≠ sad: asymmetric brows (one up, one down) + a wavy mouth (pair with `fx: question`).
 registerCharacterEmotion("confused", (f) => { dotEyes(f); skewBrows(f); wavy(f); });
-registerCharacterEmotion("thinking", (f) => { dotEyes(f, f.face.eyeR2, -0.01 * f.h); f.stroke([[f.head.cx - mw(f) * 0.6, f.face.mouthY + 0.004 * f.h], [f.head.cx + mw(f) * 0.6, f.face.mouthY]]); });
+registerCharacterEmotion("thinking", (f) => { dotEyes(f, f.face.eyeR2, -0.012 * f.h); f.stroke([[f.head.cx - mw(f) * 0.55, f.face.mouthY + 0.006 * f.h], [f.head.cx + mw(f) * 0.55, f.face.mouthY - 0.002 * f.h]]); });
 // determined ≠ angry: brows are LOWERED BUT LEVEL and the mouth is a firm level
 // line — quiet resolve. Slanted brows (angryBrows) are what make a face read as anger.
 registerCharacterEmotion("determined", (f) => { dotEyes(f, f.face.eyeR2 * 0.92); levelBrows(f); firm(f); });
