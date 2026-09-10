@@ -44,12 +44,10 @@
     "./package.json": "./package.json"
   },
   "sideEffects": [
-    "**/builtins.js",
-    "**/builtins.ts",
-    "**/viz/generators/*.js",
-    "**/viz/generators/*.ts",
-    "**/viz/characters/*.js",
-    "**/viz/characters/*.ts"
+    "dist-lib/**/*.js",
+    "src/**/builtins.ts",
+    "src/**/viz/generators/*.ts",
+    "src/**/viz/characters/*.ts"
   ],
   "files": [
     "dist-lib",
