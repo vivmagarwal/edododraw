@@ -21,8 +21,11 @@ import { VIZ_DEMOS } from "../src/site/vizDemos.js";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const SITE = pkg.homepage.replace(/\/$/, "");
+const REPO = pkg.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
 
 // [file, title, site slug] — same order as the docs site nav.
+// A `null` slug means the guide is not (yet) a page on the docs site, so links
+// point at the file in the repo instead of at a 404.
 const DOCS = [
   ["DSL_LANGUAGE_GUIDE.md", "Language reference", "language"],
   ["VISUALIZATIONS_GUIDE.md", "Visualizations", "visualizations"],
@@ -31,6 +34,7 @@ const DOCS = [
   ["ANNOTATIONS_GUIDE.md", "Annotations", "annotations"],
   ["IMPORT_AND_EXPORT_GUIDE.md", "Import & export", "import-export"],
   ["INTEGRATION_GUIDE.md", "Embed in your app", "integration"],
+  ["REMOTION_RECIPE.md", "Remotion recipe (frame-driven video)", null],
   ["EXTENDING_GUIDE.md", "Extend & make plugins", "extending"],
   ["ARCHITECTURE.md", "Architecture", "architecture"],
   ["DEVELOPMENT_STANDARDS.md", "Development standards", "development"],
@@ -151,11 +155,18 @@ const idx =
     `Everything an LLM needs in ONE file: ${SITE}/llms-full.txt`,
     "",
     "## Docs",
-    ...DOCS.map(([, title, slug]) => `- [${title}](${SITE}/#/docs/${slug})`),
+    ...DOCS.map(([file, title, slug]) => `- [${title}](${slug ? `${SITE}/#/docs/${slug}` : `${REPO}/blob/main/docs/${file}`})`),
     "",
     "## Visualizations (" + listVizTemplates().length + " templates \u00d7 " + listStyleChoices().length + " style presets)",
   "All usable as `viz <name> { item \"Label\" ... }`; full reference with runnable examples in llms-full.txt:",
   listVizTemplates().map((t) => t.name).join(", "),
+  "",
+  "## Video / frame-driven rendering",
+  "Diagrams can be driven frame by frame with no wall clock (Remotion, Puppeteer capture, bake pipelines):",
+  "compile once, render once, then per frame call only total functions of the frame number —",
+  "`stepStateAt` / `resolveCameraDirective` / `mixCameras` / `applyVisibility` / `applyCamera` / `setRevealProgressAll`.",
+  "The `hand-clean` preset keeps strokes crisp under a camera punch-in. Full recipe (working component,",
+  "what is forbidden and why, every export) is in llms-full.txt under \"Remotion recipe\".",
   "",
   "## Links",
     `- Full docs (single file): ${SITE}/llms-full.txt`,

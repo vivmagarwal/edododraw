@@ -7,23 +7,106 @@
 
 import type rough from "roughjs";
 import type { Options } from "roughjs/bin/core";
-import type { NodeStyle, ShapeKind } from "../scene/types.js";
+import type { NodeStyle, RoughTuning, Scene, ShapeKind } from "../scene/types.js";
 import { getShapePlugin } from "../plugins/registry.js";
 
 type RoughSVG = ReturnType<(typeof rough)["svg"]>;
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-/** Map a NodeStyle to rough.js Options. */
-export function nodeRoughOptions(style: NodeStyle, filled: boolean): Options {
-  const opts: Options = {
-    stroke: style.stroke,
-    strokeWidth: style.strokeWidth,
-    roughness: style.roughness,
-    seed: style.seed,
-    bowing: 1,
-    preserveVertices: false,
+/** rough.js's own default for `maxRandomnessOffset` (generator.js). */
+export const DEFAULT_MAX_RANDOMNESS_OFFSET = 2;
+
+/**
+ * Render-time knobs that are NOT part of the scene: how much of the authored
+ * roughness to actually draw, and whether strokes should resist the camera.
+ * Both come from the renderer, so the same Scene can be painted crisp for a
+ * 4x punch-in and normal at 1x without recompiling.
+ */
+export interface RoughRenderTuning {
+  /**
+   * Multiplier on `roughness` and `maxRandomnessOffset`. rough.js jitters in
+   * WORLD units and the camera is `scale(zoom)` on the world group, so a host
+   * that passes `1/zoom` keeps SCREEN-space jitter constant through a zoom.
+   */
+  roughnessScale?: number;
+  /** Stamp `vector-effect="non-scaling-stroke"` on every generated drawable. */
+  nonScalingStroke?: boolean;
+}
+
+/** Elements rough.js emits that carry a stroke we may want to pin to screen px. */
+const STROKED = "path,line,polyline,polygon,circle,ellipse,rect";
+
+/**
+ * Apply `vector-effect="non-scaling-stroke"` to every drawable under `root`
+ * (inclusive). Under a `scale(4)` camera an SVG stroke normally quadruples
+ * with it; this keeps a 2px line 2px at any zoom.
+ */
+export function applyNonScalingStroke(root: Element): void {
+  if ((root as Element).matches?.(STROKED)) root.setAttribute("vector-effect", "non-scaling-stroke");
+  root.querySelectorAll(STROKED).forEach((el) => el.setAttribute("vector-effect", "non-scaling-stroke"));
+}
+
+/** Fold a style's rough tuning + the render-time scale into rough.js Options. */
+function withTuning(opts: Options, style: RoughTuning, tune: RoughRenderTuning): Options {
+  const k = tune.roughnessScale ?? 1;
+  if (k !== 1 && opts.roughness !== undefined) opts.roughness = opts.roughness * k;
+  opts.bowing = style.bowing ?? opts.bowing ?? 1;
+  opts.preserveVertices = style.preserveVertices ?? opts.preserveVertices ?? false;
+  opts.disableMultiStroke = style.disableMultiStroke ?? false;
+  opts.maxRandomnessOffset = (style.maxRandomnessOffset ?? DEFAULT_MAX_RANDOMNESS_OFFSET) * k;
+  return opts;
+}
+
+/**
+ * rough.js options for a drawable that belongs to the diagram as a whole
+ * rather than to one styled element — group frames and annotation marks. Their
+ * roughness constants were tuned against `classic` (roughness 1.15), so the
+ * diagram's declared roughness is applied as a RATIO of that baseline: a
+ * `hand-clean` diagram gets marks a third as wobbly, a `crayon` one gets marks
+ * as wobbly as its strokes, and a diagram that declared nothing gets exactly
+ * the constants it always got.
+ */
+export function sceneRoughOptions(
+  scene: Scene,
+  baseRoughness: number,
+  roughnessScale = 1,
+  baseBowing = 1,
+): {
+  roughness: number;
+  bowing: number;
+  maxRandomnessOffset: number;
+  preserveVertices: boolean;
+  disableMultiStroke: boolean;
+} {
+  const r = scene.meta.rough;
+  const relative = r?.roughness !== undefined ? r.roughness / CLASSIC_ROUGHNESS : 1;
+  return {
+    roughness: baseRoughness * relative * roughnessScale,
+    bowing: baseBowing * (r?.bowing ?? 1),
+    maxRandomnessOffset: (r?.maxRandomnessOffset ?? DEFAULT_MAX_RANDOMNESS_OFFSET) * roughnessScale,
+    preserveVertices: r?.preserveVertices ?? false,
+    disableMultiStroke: r?.disableMultiStroke ?? false,
   };
+}
+
+/** The roughness the annotation/frame constants were authored against. */
+const CLASSIC_ROUGHNESS = 1.15;
+
+/** Map a NodeStyle to rough.js Options. */
+export function nodeRoughOptions(style: NodeStyle, filled: boolean, tune: RoughRenderTuning = {}): Options {
+  const opts: Options = withTuning(
+    {
+      stroke: style.stroke,
+      strokeWidth: style.strokeWidth,
+      roughness: style.roughness,
+      seed: style.seed,
+      bowing: 1,
+      preserveVertices: false,
+    },
+    style,
+    tune,
+  );
   if (filled && style.fill && style.fillStyle !== "none") {
     opts.fill = style.fill;
     opts.fillStyle = style.fillStyle;
@@ -244,11 +327,12 @@ export function renderShapeBody(
   rect: ShapeRect,
   style: NodeStyle,
   data?: Record<string, unknown>,
+  tune: RoughRenderTuning = {},
 ): SVGGElement {
   const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
   const { x, y, w, h } = rect;
-  const filledOpts = nodeRoughOptions(style, true);
-  const strokeOpts = nodeRoughOptions(style, false);
+  const filledOpts = nodeRoughOptions(style, true, tune);
+  const strokeOpts = nodeRoughOptions(style, false, tune);
   const sd = (data ?? {}) as ShapeData;
 
   const add = (el: SVGGElement) => g.appendChild(el);
@@ -464,7 +548,9 @@ export function renderShapeBody(
       // Plugin-registered shape?
       const plugin = getShapePlugin(shape);
       if (plugin) {
-        return plugin(rc, rect, style, data);
+        const pg = plugin(rc, rect, style, data);
+        if (tune.nonScalingStroke) applyNonScalingStroke(pg);
+        return pg;
       }
       // Unknown shape -> fall back to a rounded rectangle so nothing
       // silently disappears.
@@ -473,6 +559,7 @@ export function renderShapeBody(
     }
   }
 
+  if (tune.nonScalingStroke) applyNonScalingStroke(g);
   return g;
 }
 

@@ -113,7 +113,44 @@ export type LayoutKind =
 // Styles
 // ----------------------------------------------------------------------------
 
-export interface NodeStyle {
+/**
+ * Optional rough.js tuning shared by style presets, node/edge styles and the
+ * scene. Every field is optional and `undefined` means "rough.js default", so
+ * a style that sets none of them draws exactly as it always has.
+ *
+ * These matter for VIDEO. rough.js perturbs geometry in WORLD units, and the
+ * camera is a `scale(zoom)` on the world group, so on-screen jitter is
+ * `zoom x world jitter`. At a 4x punch-in a `roughness: 1.15` corner is ~4.8px
+ * off the ideal — visibly scratchy. `preserveVertices` pins the drawn path to
+ * the exact input corners (corner error -> 0), `maxRandomnessOffset` caps the
+ * per-vertex jitter budget, `bowing` flattens the mid-segment bulge and
+ * `disableMultiStroke` draws one pass instead of two overlapping ones.
+ */
+export interface RoughTuning {
+  /** Mid-segment bulge multiplier (rough.js default 1; 0 = dead straight). */
+  bowing?: number;
+  /** Per-vertex jitter budget in world units (rough.js default 2). */
+  maxRandomnessOffset?: number;
+  /** Pin the drawing to the exact input vertices (rough.js default false). */
+  preserveVertices?: boolean;
+  /** Draw one pass instead of two overlapping ones (rough.js default false). */
+  disableMultiStroke?: boolean;
+}
+
+/**
+ * Diagram-wide hand-drawn intensity, as declared by the author (a
+ * `defaults { node { roughness: … } }` block, or a preset that carries rough
+ * tuning of its own). Set by the compiler; consumed by the parts of the
+ * renderer that have no per-element style to read — the annotation layer and
+ * group frames — so ONE declaration governs the whole picture. Undefined on
+ * every diagram that never opted in, which therefore renders unchanged.
+ */
+export interface SceneRough extends RoughTuning {
+  /** Hand-drawn intensity the diagram was authored at (0..3). */
+  roughness?: number;
+}
+
+export interface NodeStyle extends RoughTuning {
   stroke: string;
   fill: string | null;
   fillStyle: FillStyle;
@@ -133,7 +170,7 @@ export interface NodeStyle {
   fontWeight?: number;
 }
 
-export interface EdgeStyle {
+export interface EdgeStyle extends RoughTuning {
   stroke: string;
   strokeWidth: number;
   strokeStyle: StrokeStyle;
@@ -347,6 +384,8 @@ export interface SceneMeta {
   background?: string;
   /** Active style preset name (see engine/style/presets.ts). */
   style?: string;
+  /** Author-declared hand-drawn intensity for the whole diagram (see SceneRough). */
+  rough?: SceneRough;
 }
 
 /** A machine-managed position/size override (from the `overrides { … }` block).

@@ -10,11 +10,11 @@
 
 import type rough from "roughjs";
 import type { Scene, SceneNode } from "../scene/types.js";
-import { effectivePreset } from "../style/presets.js";
+import { effectivePreset, tunePreset } from "../style/presets.js";
 import { characterInk } from "../viz/characters/draw.js";
 import { emitCharacterNode } from "../viz/characterNode.js";
 import { iconNodeGlyph } from "../viz/iconNode.js";
-import { renderShapeBody } from "./shapes.js";
+import { renderShapeBody, type RoughRenderTuning } from "./shapes.js";
 
 type RoughSVG = ReturnType<(typeof rough)["svg"]>;
 
@@ -50,8 +50,11 @@ export interface FigureRender {
  * Draw the figure for `node` and return the body group. The caller appends
  * the node label at `labelCy` (centred) like any other node.
  */
-export function renderCharacterNode(rc: RoughSVG, scene: Scene, node: SceneNode, doc: Document, paintText: TextPainter): FigureRender {
-  const preset = effectivePreset(scene.meta.style, scene.theme.mode);
+export function renderCharacterNode(rc: RoughSVG, scene: Scene, node: SceneNode, doc: Document, paintText: TextPainter, tune: RoughRenderTuning = {}): FigureRender {
+  // `tunePreset` folds in the diagram's declared roughness so a
+  // `defaults { node { roughness: … } }` reaches the figure too — the
+  // character library draws from the preset, not from this node's style.
+  const preset = tunePreset(effectivePreset(scene.meta.style, scene.theme.mode), scene.meta.rough);
   const emitted = emitCharacterNode(node, preset, scene.theme.mode);
   const body = doc.createElementNS(SVG_NS, "g") as SVGGElement;
   body.setAttribute("class", "edd-character");
@@ -67,7 +70,7 @@ export function renderCharacterNode(rc: RoughSVG, scene: Scene, node: SceneNode,
         body.appendChild(t);
         continue;
       }
-      const g = renderShapeBody(rc, part.shape, { x: part.x, y: part.y, w: part.w, h: part.h }, part.style, part.data);
+      const g = renderShapeBody(rc, part.shape, { x: part.x, y: part.y, w: part.w, h: part.h }, part.style, part.data, tune);
       body.appendChild(g);
     } catch (err) {
       // one bad stroke must never blank the figure
@@ -83,8 +86,8 @@ export function renderCharacterNode(rc: RoughSVG, scene: Scene, node: SceneNode,
  * rough.js like every icon in the viz templates) and return the body group;
  * the caller appends the caption at `labelCy`.
  */
-export function renderIconNode(rc: RoughSVG, scene: Scene, node: SceneNode, doc: Document): FigureRender {
-  const preset = effectivePreset(scene.meta.style, scene.theme.mode);
+export function renderIconNode(rc: RoughSVG, scene: Scene, node: SceneNode, doc: Document, tune: RoughRenderTuning = {}): FigureRender {
+  const preset = tunePreset(effectivePreset(scene.meta.style, scene.theme.mode), scene.meta.rough);
   const body = doc.createElementNS(SVG_NS, "g") as SVGGElement;
   body.setAttribute("class", "edd-icon");
   const glyph = iconNodeGlyph(node);
@@ -101,7 +104,7 @@ export function renderIconNode(rc: RoughSVG, scene: Scene, node: SceneNode, doc:
       strokeWidth: (node.style.strokeWidth > 2 ? Math.min(3.2, node.style.strokeWidth) : visual) * (glyph.viewBox / glyph.size),
       roughness: Math.min(0.8, node.style.roughness),
     };
-    body.appendChild(renderShapeBody(rc, "path", { x: glyph.x, y: glyph.y, w: glyph.size, h: glyph.size }, style, { d: glyph.d, vw: glyph.viewBox, vh: glyph.viewBox }));
+    body.appendChild(renderShapeBody(rc, "path", { x: glyph.x, y: glyph.y, w: glyph.size, h: glyph.size }, style, { d: glyph.d, vw: glyph.viewBox, vh: glyph.viewBox }, tune));
   }
   return { body, labelCy: node.y + node.h - glyph.labelH / 2, labelColor: characterInk(node.style.textColor, preset) };
 }

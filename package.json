@@ -1,6 +1,6 @@
 {
   "name": "edododraw",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "type": "module",
   "description": "A 100% code/syntax-to-diagram engine with the Excalidraw hand-drawn aesthetic, magic-move camera, scriptable + real-time annotations, animated arrows, and first-class Mermaid import.",
   "license": "MIT",
@@ -37,6 +37,10 @@
       "types": "./dist-lib/lib/react.d.ts",
       "import": "./dist-lib/react.js"
     },
+    "./demos": {
+      "types": "./dist-lib/lib/demos.d.ts",
+      "import": "./dist-lib/demos.js"
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": [
@@ -50,6 +54,7 @@
   "files": [
     "dist-lib",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
@@ -62,9 +67,11 @@
     "build": "tsc -b && vite build",
     "build:lib": "vite build --config vite.lib.config.ts",
     "build:types": "tsc -p tsconfig.lib.json",
+    "prebuild:pkg": "tsx scripts/gen-llms-txt.mjs",
     "build:pkg": "npm run build:lib && npm run build:types",
     "preview": "vite preview --port 4173 --strictPort",
     "typecheck": "tsc -b --noEmit",
+    "check:edd": "tsx scripts/qa/parse-probe.mts examples/*.edd examples/remotion/src/*.edd",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build:pkg && node scripts/check-dist.mjs"
@@ -73,14 +80,15 @@
     "@dagrejs/dagre": "^1.1.4",
     "roughjs": "^4.6.6"
   },
-  "optionalDependencies": {
-    "@excalidraw/mermaid-to-excalidraw": "^1.1.4"
-  },
   "peerDependencies": {
+    "@excalidraw/mermaid-to-excalidraw": "^1.1.4",
     "react": ">=18",
     "react-dom": ">=18"
   },
   "peerDependenciesMeta": {
+    "@excalidraw/mermaid-to-excalidraw": {
+      "optional": true
+    },
     "react": {
       "optional": true
     },

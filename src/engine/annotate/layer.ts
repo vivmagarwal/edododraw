@@ -16,6 +16,7 @@ import { elementBBox } from "../scene/query.js";
 import { resolveMarker } from "../scene/palette.js";
 import type { Annotation, Scene } from "../scene/types.js";
 import type { SvgRenderer } from "../render/svgRenderer.js";
+import { sceneRoughOptions } from "../render/shapes.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const BIG = 200000;
@@ -46,11 +47,25 @@ export class AnnotationLayer {
   private renderer: SvgRenderer;
   private rc: ReturnType<(typeof rough)["svg"]>;
   private root: SVGGElement;
+  /** The scene currently being drawn — supplies the diagram-wide rough tuning. */
+  private scene: Scene | null = null;
 
   constructor(renderer: SvgRenderer, layer: "annotations" | "live" = "annotations") {
     this.renderer = renderer;
     this.rc = rough.svg(renderer.svg);
     this.root = renderer.getLayer(layer);
+  }
+
+  /**
+   * Fold the diagram's declared roughness and the renderer's zoom compensation
+   * into one of the mark constants below. A mark on a `hand-clean` diagram
+   * comes out as clean as the diagram; a mark on a diagram that declared
+   * nothing comes out exactly as it always did (the ratio is 1 and the scale
+   * is 1, so every field lands back on its literal value).
+   */
+  private ink(o: Options): Options {
+    if (!this.scene) return o;
+    return { ...o, ...sceneRoughOptions(this.scene, o.roughness ?? 1, this.renderer.getRoughnessScale(), o.bowing ?? 1) };
   }
 
   clear(): void {
@@ -60,6 +75,7 @@ export class AnnotationLayer {
   /** Render a set of annotations (replaces current). */
   render(scene: Scene, annotations: Annotation[], animate = true): void {
     this.clear();
+    this.scene = scene;
     // spotlights first (drawn under other annotations)
     const sorted = [...annotations].sort((a, b) => rank(a.kind) - rank(b.kind));
     for (const an of sorted) {
@@ -74,6 +90,9 @@ export class AnnotationLayer {
         console.warn("annotation render failed", an.kind, err);
       }
     }
+    // marks are painted into the renderer's own layer, so they follow its
+    // stroke policy (see SvgRendererOptions.nonScalingStroke)
+    this.renderer.applyStrokePolicy(this.root);
   }
 
   private targetBBox(scene: Scene, an: Annotation): BBox | null {
@@ -188,7 +207,7 @@ export class AnnotationLayer {
   private drawUnderline(g: SVGGElement, box: BBox, an: Annotation): void {
     const color = an.color || "#1971c2";
     const y = box.maxY - 4;
-    const opts: Options = { stroke: color, strokeWidth: 3, roughness: 1.8, bowing: 3, seed: 7 };
+    const opts: Options = this.ink({ stroke: color, strokeWidth: 3, roughness: 1.8, bowing: 3, seed: 7 });
     const style = String(an.options.style ?? "solid");
     if (style === "wavy") {
       const pts: [number, number][] = [];
@@ -207,19 +226,19 @@ export class AnnotationLayer {
   private drawStrike(g: SVGGElement, box: BBox, an: Annotation): void {
     const color = an.color || "#e03131";
     const y = (box.minY + box.maxY) / 2;
-    g.appendChild(this.rc.line(box.minX, y, box.maxX, y, { stroke: color, strokeWidth: 3, roughness: 1.5, seed: 9 }));
+    g.appendChild(this.rc.line(box.minX, y, box.maxX, y, this.ink({ stroke: color, strokeWidth: 3, roughness: 1.5, seed: 9 })));
   }
 
   private drawBox(g: SVGGElement, box: BBox, an: Annotation): void {
     const color = an.color || "#1971c2";
     const b = expandBBox(box, 14);
     g.appendChild(
-      this.rc.rectangle(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY, {
+      this.rc.rectangle(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY, this.ink({
         stroke: color,
         strokeWidth: 2.4,
         roughness: 1.5,
         seed: 11,
-      }),
+      })),
     );
     if (an.text) this.label(g, an.text, { x: b.minX + 6, y: b.minY - 8 }, color, "start");
   }
@@ -229,7 +248,7 @@ export class AnnotationLayer {
     const c = bboxCenter(box);
     const w = (box.maxX - box.minX) * 1.35 + 24;
     const h = (box.maxY - box.minY) * 1.35 + 24;
-    const ring = this.rc.ellipse(c.x, c.y, w, h, { stroke: color, strokeWidth: 2.6, roughness: 1.6, seed: 13 });
+    const ring = this.rc.ellipse(c.x, c.y, w, h, this.ink({ stroke: color, strokeWidth: 2.6, roughness: 1.6, seed: 13 }));
     if (pulse) ring.classList.add("edd-anim-pulse"), (ring.style.animationDuration = "1.3s");
     g.appendChild(ring);
     if (an.text) this.label(g, an.text, { x: c.x, y: box.minY - h * 0.18 }, color, "middle");
@@ -246,7 +265,7 @@ export class AnnotationLayer {
     const tip: Point = { x: c.x + dir.x * ((box.maxX - box.minX) / 2 + 14), y: c.y + dir.y * ((box.maxY - box.minY) / 2 + 14) };
     // curved hand-drawn arrow
     const ctrl: Point = { x: (tail.x + tip.x) / 2 + dir.y * 20, y: (tail.y + tip.y) / 2 - dir.x * 20 };
-    g.appendChild(this.rc.curve([[tail.x, tail.y], [ctrl.x, ctrl.y], [tip.x, tip.y]], { stroke: color, strokeWidth: 2.4, roughness: 1.4, seed: 17 }));
+    g.appendChild(this.rc.curve([[tail.x, tail.y], [ctrl.x, ctrl.y], [tip.x, tip.y]], this.ink({ stroke: color, strokeWidth: 2.4, roughness: 1.4, seed: 17 })));
     // arrowhead at tip
     const ang = Math.atan2(tip.y - ctrl.y, tip.x - ctrl.x);
     const sz = 14;
@@ -257,7 +276,7 @@ export class AnnotationLayer {
           [tip.x, tip.y],
           [tip.x - Math.cos(ang + 0.4) * sz, tip.y - Math.sin(ang + 0.4) * sz],
         ],
-        { stroke: color, strokeWidth: 2.4, roughness: 1, seed: 17 },
+        this.ink({ stroke: color, strokeWidth: 2.4, roughness: 1, seed: 17 }),
       ),
     );
     if (an.text) {
@@ -283,16 +302,16 @@ export class AnnotationLayer {
     const bx = bubble.x - (dir.x < -0.3 ? w : dir.x > 0.3 ? 0 : w / 2);
     const by = bubble.y - h / 2;
     // leader line
-    g.appendChild(this.rc.line(anchor.x, anchor.y, dir.x < -0.3 ? bx + w : dir.x > 0.3 ? bx : bx + w / 2, by + h / 2, { stroke: color, strokeWidth: 2, roughness: 1.2, seed: 19 }));
+    g.appendChild(this.rc.line(anchor.x, anchor.y, dir.x < -0.3 ? bx + w : dir.x > 0.3 ? bx : bx + w / 2, by + h / 2, this.ink({ stroke: color, strokeWidth: 2, roughness: 1.2, seed: 19 })));
     // bubble
-    g.appendChild(this.rc.rectangle(bx, by, w, h, { stroke: color, strokeWidth: 2, roughness: 1.2, seed: 21, fill: "#ffffff", fillStyle: "solid" }));
+    g.appendChild(this.rc.rectangle(bx, by, w, h, this.ink({ stroke: color, strokeWidth: 2, roughness: 1.2, seed: 21, fill: "#ffffff", fillStyle: "solid" })));
     this.label(g, text, { x: bx + w / 2, y: by + h / 2 }, color, "middle", 15);
   }
 
   private drawNoteMarker(g: SVGGElement, box: BBox, an: Annotation): void {
     const color = an.color || "#1971c2";
     const p: Point = { x: box.minX - 6, y: box.minY - 6 };
-    g.appendChild(this.rc.circle(p.x, p.y, 30, { stroke: color, strokeWidth: 2, roughness: 1, seed: 23, fill: "#ffffff", fillStyle: "solid" }));
+    g.appendChild(this.rc.circle(p.x, p.y, 30, this.ink({ stroke: color, strokeWidth: 2, roughness: 1, seed: 23, fill: "#ffffff", fillStyle: "solid" })));
     this.label(g, an.text ?? "●", p, color, "middle", 14);
   }
 
@@ -356,7 +375,7 @@ export class AnnotationLayer {
         tip = { x: c.x + (dx / len) * ((b.maxX - b.minX) / 2 + 8), y: c.y + (dy / len) * ((b.maxY - b.minY) / 2 + 8) };
       }
     }
-    g.appendChild(this.rc.line(tail.x, tail.y, tip.x, tip.y, { stroke: color, strokeWidth: 2.4, roughness: 1.3, seed: 29 }));
+    g.appendChild(this.rc.line(tail.x, tail.y, tip.x, tip.y, this.ink({ stroke: color, strokeWidth: 2.4, roughness: 1.3, seed: 29 })));
     const ang = Math.atan2(tip.y - tail.y, tip.x - tail.x);
     const sz = 14;
     g.appendChild(
@@ -366,7 +385,7 @@ export class AnnotationLayer {
           [tip.x, tip.y],
           [tip.x - Math.cos(ang + 0.4) * sz, tip.y - Math.sin(ang + 0.4) * sz],
         ],
-        { stroke: color, strokeWidth: 2.4, roughness: 1, seed: 29 },
+        this.ink({ stroke: color, strokeWidth: 2.4, roughness: 1, seed: 29 }),
       ),
     );
     if (an.text) this.label(g, an.text, { x: tail.x, y: tail.y - 12 }, color, "middle");
@@ -380,14 +399,14 @@ export class AnnotationLayer {
     const w = Math.max(90, text.length * 8.6 + 24);
     const h = 40;
     g.appendChild(
-      this.rc.rectangle(p.x - w / 2, p.y - h / 2, w, h, {
+      this.rc.rectangle(p.x - w / 2, p.y - h / 2, w, h, this.ink({
         stroke: color,
         strokeWidth: 2,
         roughness: 1.1,
         seed: 31,
         fill: "#fff9db",
         fillStyle: "solid",
-      }),
+      })),
     );
     this.label(g, text, p, "#5c3d00", "middle", 16);
   }

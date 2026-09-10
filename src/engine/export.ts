@@ -28,8 +28,15 @@ export interface ExportOptions {
   background?: string | null;
 }
 
-/** Build a standalone SVG string of the whole scene at content coordinates. */
-export async function exportSVGString(renderer: SvgRenderer, scene: Scene, opts: ExportOptions = {}): Promise<string> {
+/**
+ * Build a standalone SVG string of the whole scene at content coordinates —
+ * SYNCHRONOUSLY. Nothing in this path awaits (the hand-drawn font is embedded
+ * as a base64 data URI, not fetched), so frame-driven hosts can call it inside
+ * a React `useMemo` / render pass without a promise round-trip.
+ *
+ * `exportSVGString` is the async wrapper kept for compatibility.
+ */
+export function renderSceneToSVGString(renderer: SvgRenderer, scene: Scene, opts: ExportOptions = {}): string {
   const padding = opts.padding ?? 40;
   const box = expandBBox(sceneBBox(scene), padding);
   const rect = bboxToRect(Number.isFinite(box.minX) ? box : { minX: 0, minY: 0, maxX: 400, maxY: 300 });
@@ -78,6 +85,15 @@ export async function exportSVGString(renderer: SvgRenderer, scene: Scene, opts:
   let out = new XMLSerializer().serializeToString(clone);
   if (!/^<svg[^>]*\sxmlns=/.test(out)) out = out.replace(/^<svg/, `<svg xmlns="${SVG_NS}"`);
   return '<?xml version="1.0" encoding="UTF-8"?>\n' + out;
+}
+
+/**
+ * Async wrapper around {@link renderSceneToSVGString}, kept so existing callers
+ * (`await edd.toSVG()`, downloadSVG, exportPNGBlob) keep working unchanged.
+ * There is no asynchronous work — prefer the synchronous function in new code.
+ */
+export async function exportSVGString(renderer: SvgRenderer, scene: Scene, opts: ExportOptions = {}): Promise<string> {
+  return renderSceneToSVGString(renderer, scene, opts);
 }
 
 export async function exportPNGBlob(renderer: SvgRenderer, scene: Scene, opts: ExportOptions = {}): Promise<Blob> {

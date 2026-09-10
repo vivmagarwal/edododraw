@@ -18,15 +18,16 @@ import { CameraController } from "../engine/camera/controller.js";
 import { cameraForBBox } from "../engine/camera/fit.js";
 import { compileEdd } from "../engine/dsl/index.js";
 import type { Diagnostic } from "../engine/dsl/diagnostics.js";
-import { downloadJSON, downloadPNG, downloadSVG, exportPNGBlob, exportSVGString } from "../engine/export.js";
+import { downloadJSON, downloadPNG, downloadSVG, exportPNGBlob, exportSVGString, renderSceneToSVGString, type ExportOptions } from "../engine/export.js";
 import type { Point } from "../engine/geometry.js";
 import { SvgRenderer } from "../engine/render/svgRenderer.js";
+import { whenFontsReady } from "../engine/render/theme.css.js";
 import { sceneBBox } from "../engine/scene/query.js";
 import { applyOverrides } from "../engine/scene/overrides.js";
 import type { Scene } from "../engine/scene/types.js";
 import { TimelinePlayer, type PlayerState } from "../engine/timeline/player.js";
 import { resolveCameraDirective, stepStateAt, type StepState } from "../engine/timeline/stepState.js";
-import { convertMermaid, extractMermaidBlocks, injectMermaid } from "../engine/import/mermaid.js";
+import { convertMermaid, extractMermaidBlocks, injectMermaid, MERMAID_INSTALL_HINT } from "../engine/import/mermaid.js";
 
 export interface EdodoDrawOptions {
   /** Enable pan (drag) + zoom (wheel) + live-annotation pointer handling. */
@@ -226,7 +227,24 @@ export class EdodoDraw {
         try {
           injectMermaid(scene, await convertMermaid(body, scene.theme.mode));
         } catch (err) {
-          diags = [...diags, { severity: "error", code: "M-PARSE", message: `mermaid: ${(err as Error).message}`, line: 1, col: 1, start: 0, end: 0 }];
+          // The most common cause by far is the optional peer dependency simply
+          // not being installed — say so, with the command, instead of leaking a
+          // module-resolution error.
+          const msg = (err as Error).message ?? String(err);
+          const missing = msg.includes(MERMAID_INSTALL_HINT) || /mermaid-to-excalidraw/.test(msg);
+          diags = [
+            ...diags,
+            {
+              severity: "error",
+              code: "M-PARSE",
+              message: `mermaid: ${msg}`,
+              hint: missing ? "npm i @excalidraw/mermaid-to-excalidraw" : "check the mermaid syntax of this block",
+              line: 1,
+              col: 1,
+              start: 0,
+              end: 0,
+            },
+          ];
         }
       }
       if (scene.nodes.every((n) => n.pinned)) scene.meta.layout = "manual";
@@ -404,6 +422,29 @@ export class EdodoDraw {
   setRevealProgress(id: string, p: number): void {
     this.renderer.setRevealProgress(id, p);
   }
+  /**
+   * Batch draw-on, and the ONLY safe form when frames are produced out of order
+   * (Remotion seeks, a scrubber): every drawable NOT named in `map` is restored
+   * to fully drawn, so the picture is a total function of the map rather than
+   * of whatever the previous frame happened to mutate.
+   *
+   *   edd.setRevealProgressAll({ api: 0.4, db: 0 });  // everything else = done
+   */
+  setRevealProgressAll(map: Record<string, number>): void {
+    this.renderer.setRevealProgressAll(map);
+  }
+  /**
+   * Resolve once the embedded hand-drawn font is decoded — wire it to your
+   * host's "hold this frame" primitive (Remotion's `delayRender`), or a
+   * headless capture will screenshot with fallback metrics and shifted text.
+   */
+  whenFontsReady(): Promise<void> {
+    return whenFontsReady(this.container.ownerDocument);
+  }
+  /** The renderer this facade owns — for engine-level calls the facade doesn't wrap. */
+  get view(): SvgRenderer {
+    return this.renderer;
+  }
   /** Hide/show elements directly (ids to hide; others become visible). */
   applyVisibility(hiddenIds: Iterable<string>): void {
     this.renderer.applyVisibility(new Set(hiddenIds));
@@ -480,6 +521,11 @@ export class EdodoDraw {
   // ---- export -------------------------------------------------------------
   toSVG(): Promise<string> {
     return exportSVGString(this.renderer, this.scene);
+  }
+  /** Synchronous `toSVG()` — nothing in the export path awaits (the font is
+   *  embedded, not fetched), so it is safe inside a React `useMemo`. */
+  toSVGSync(opts?: ExportOptions): string {
+    return renderSceneToSVGString(this.renderer, this.scene, opts);
   }
   toPNG(): Promise<Blob> {
     return exportPNGBlob(this.renderer, this.scene);

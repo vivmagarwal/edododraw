@@ -9,6 +9,11 @@ export type { LabelOptions, LineOptions, ShapeOptions } from "./context.js";
 export { registerViz, registerVizAlias, getViz, listViz, listVizAliases, listVizTemplates, runViz } from "./registry.js";
 export type { VizTemplateInfo } from "./registry.js";
 export { VIZ_ALIASES } from "./aliases.js";
+export {
+  VIZ_DEMOS, listVizDemos, getVizDemo, listVizDemoCategories, listVizDemosInCategory,
+  animatedVizDemo, animateVizSource, injectVizOptions, VIZ_ANIMATION_DEFAULTS,
+} from "./demos.js";
+export type { VizDemo, VizAnimationOptions } from "./demos.js";
 export { measureText, measureBlock, wrapText } from "./text.js";
 export { iconPath, iconEntry, registerIcon, listIcons, ICON_VIEWBOX } from "./icons.js";
 export { vizToScene, vizItem } from "./compose.js";

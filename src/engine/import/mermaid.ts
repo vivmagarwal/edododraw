@@ -11,6 +11,16 @@
 import { makeEdge, makeNode } from "../scene/defaults.js";
 import type { SceneEdge, SceneNode, ShapeKind } from "../scene/types.js";
 
+/**
+ * The install hint every "mermaid didn't work" path must end with. Mermaid is
+ * an OPTIONAL PEER dependency: `@excalidraw/mermaid-to-excalidraw` drags in
+ * mermaid -> d3 -> cytoscape -> katex (122 packages / 66 MB versus 8 / 4.2 MB
+ * without it), so `npm i edododraw` no longer installs it and diagrams that use
+ * a `mermaid` block must ask for it explicitly.
+ */
+export const MERMAID_INSTALL_HINT =
+  "the optional peer dependency @excalidraw/mermaid-to-excalidraw is not installed — run `npm i @excalidraw/mermaid-to-excalidraw` to enable `mermaid \"\"\" … \"\"\"` blocks (the rest of the diagram renders without it)";
+
 // mermaid is heavy (it pulls in every diagram type + katex). It is lazy-loaded
 // on first use so it never bloats the main bundle — only pages that actually
 // contain a `mermaid` block pay for it.
@@ -18,10 +28,32 @@ type ParseFn = (def: string, config?: unknown) => Promise<{ elements: SkeletonEl
 let _parse: ParseFn | null = null;
 async function loadParser(): Promise<ParseFn> {
   if (!_parse) {
-    const mod = await import("@excalidraw/mermaid-to-excalidraw");
-    _parse = mod.parseMermaidToExcalidraw as unknown as ParseFn;
+    let mod: { parseMermaidToExcalidraw?: unknown };
+    try {
+      mod = await import("@excalidraw/mermaid-to-excalidraw");
+    } catch {
+      // A bare module-resolution failure ("Failed to resolve module specifier
+      // …") tells the user nothing actionable, and it is the FIRST thing a
+      // fresh `npm i edododraw` hits. Replace it with the fix.
+      throw new Error(MERMAID_INSTALL_HINT);
+    }
+    if (typeof mod?.parseMermaidToExcalidraw !== "function") throw new Error(MERMAID_INSTALL_HINT);
+    _parse = mod.parseMermaidToExcalidraw as ParseFn;
   }
   return _parse;
+}
+
+/**
+ * Is the Mermaid runtime installed? Resolves without throwing, so a host can
+ * warn up front (or hide a Mermaid affordance) instead of failing per block.
+ */
+export async function isMermaidAvailable(): Promise<boolean> {
+  try {
+    await loadParser();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 interface SkeletonElement {

@@ -65,6 +65,11 @@ const PYRAMID = ["Essence", "Personality", "Benefits", "Attributes", "Features",
 const PIE = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Others"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+const mindmapBranches = (type: string, ns: number[]) =>
+  counts(ns, "branches", (n) =>
+    block(type, "Launch", range(n).map((i) => `  item "${["Marketing", "Engineering", "Sales", "Support", "Legal"][i]}" { item "Task A"; item "Task B" }`)),
+  );
+
 const BUILDERS: Record<string, () => Variation[]> = {
   // ---- Process --------------------------------------------------------------
   flowchart: () => counts([3, 4, 6], "steps", (n) => block("flowchart", "Process", itemLines(n, { icon: true })), undefined),
@@ -193,6 +198,10 @@ const BUILDERS: Record<string, () => Variation[]> = {
 
   // ---- Brainstorming / Parts of a whole -------------------------------------
   mindmap: () => counts([3, 4, 5], "branches", (n) => block("mindmap", "Launch", range(n).map((i) => `  item "${["Marketing", "Engineering", "Sales", "Support", "Legal"][i]}" { item "Task A"; item "Task B" }`))),
+  "mindmap-left": () => mindmapBranches("mindmap-left", [2, 3, 4]),
+  "mindmap-right": () => mindmapBranches("mindmap-right", [2, 3, 4]),
+  "mindmap-horizontal": () => mindmapBranches("mindmap-horizontal", [2, 4, 6]),
+  "mindmap-vertical": () => mindmapBranches("mindmap-vertical", [2, 4, 6]),
   "key-ideas": () => counts([2, 3, 4], "ideas", (n, long) => block("key-ideas", "Themes", itemLines(n, { detail: true, long })), 3),
   list: () => counts([3, 5, 7], "items", (n) => block("list", "Values", itemLines(n, { detail: true, icon: true }))),
   diverge: () => counts([3, 4], "options", (n, long) => block("diverge", "How might we grow?", itemLines(n, { detail: true, icon: true, long }))),

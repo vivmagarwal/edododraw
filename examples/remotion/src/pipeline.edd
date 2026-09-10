@@ -1,0 +1,77 @@
+edd 1.0
+
+// A request pipeline, choreographed for video.
+//
+// Two things make this a VIDEO source rather than a slide:
+//   1. `style: hand-clean` — low-jitter hand-drawn geometry that survives a
+//      4x camera punch-in (see docs/STYLES_GUIDE.md §5).
+//   2. beat zero hides everything, so a frame-driven host starts from an empty
+//      canvas instead of flashing the finished diagram.
+//
+// Note the BLOCK form of reveal: `reveal { show a with draw-on }`.
+// A bare `reveal a with draw-on` outside braces is not the reveal statement.
+
+meta {
+  title: "Request Pipeline"
+  style: hand-clean
+}
+
+defaults {
+  edge { endArrow: arrow }
+}
+
+scene {
+  layout dag { direction: right, gap: 70, rankGap: 120 }
+
+  actor       client  "Browser"
+  cloud       cdn     "CDN"
+  hexagon     gw      "API Gateway"
+  round-rect  api     "API Service"
+  cylinder    db      "Postgres"
+  round-rect  cache   "Redis"
+
+  client --> cdn "GET /order"
+  cdn    --> gw  "miss"
+  gw     --> api
+  api    --> cache "read-through"
+  api    --> db    "write"
+}
+
+timeline story {
+  beat zero "Empty canvas" {
+    reveal { hide all }
+    camera fit-all
+    narrate: "Every request starts in a browser."
+  }
+
+  beat edge "At the edge" {
+    reveal { show [client, cdn, e0_client_cdn] with draw-on }
+    camera focus [client, cdn] zoom 1.6 ease ease-in-out
+    narrate: "The CDN answers what it can from the edge."
+    hold: 3s
+  }
+
+  beat gateway "Through the gateway" {
+    reveal { show [gw, api, e1_cdn_gw, e2_gw_api] with draw-on }
+    camera focus [cdn, gw, api] zoom 1.3
+    narrate: "A miss falls through to the gateway, then the API."
+    hold: 3s
+  }
+
+  beat state "State" {
+    reveal { show [cache, db, e3_api_cache, e4_api_db] with draw-on }
+    camera focus [api, cache, db] zoom 1.4
+    annotate {
+      circle-mark db { color: #e03131 }
+      callout cache "read-through" { placement: top }
+    }
+    narrate: "Reads go through Redis; writes land in Postgres."
+    hold: 3s
+  }
+
+  beat all "The whole path" {
+    camera fit-all
+    narrate: "One request, five hops."
+    hold: 2s
+  }
+}

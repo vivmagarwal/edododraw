@@ -22,7 +22,7 @@
  * "seam"). Recomputed automatically if the background changes.
  */
 
-import type { EdgeStyle, FillStyle, FontKind, NodeStyle, Theme } from "../scene/types.js";
+import type { EdgeStyle, FillStyle, FontKind, NodeStyle, RoughTuning, SceneRough, Theme } from "../scene/types.js";
 import { contrastInk, darken, lighten, luma, mix, withAlpha } from "./color.js";
 
 export interface PresetFonts {
@@ -37,7 +37,7 @@ export interface PresetFonts {
   headingWeight?: number;
 }
 
-export interface StylePreset {
+export interface StylePreset extends RoughTuning {
   /** kebab-case id used in `meta { style: <name> }`. */
   name: string;
   /** Former ids that still resolve to this preset (backwards-compatible renames). */
@@ -65,6 +65,12 @@ export interface StylePreset {
   /** Stroke derivation: darken/same hue, neutral ink, canvas seam, or none. */
   strokeMode: "darken" | "same" | "ink" | "seam" | "none";
   strokeWidth: number;
+  /**
+   * Hand-drawn intensity (0..3). The inherited RoughTuning fields (`bowing`,
+   * `maxRandomnessOffset`, `preserveVertices`, `disableMultiStroke`) tune the
+   * SHAPE of that wobble; leaving them unset keeps rough.js's defaults, which
+   * is what every preset written before video mattered does.
+   */
   roughness: number;
   fonts: PresetFonts;
   /** Primary text/ink on the canvas. */
@@ -87,7 +93,7 @@ export interface StylePreset {
 }
 
 /** The style a viz generator applies to the i-th series/item shape. */
-export interface RoleStyle {
+export interface RoleStyle extends RoughTuning {
   stroke: string;
   fill: string | null;
   fillStyle: FillStyle;
@@ -193,6 +199,7 @@ export function roleStyle(preset: StylePreset, i: number, opts: RoleOptions = {}
     fillStyle: fill === null ? "none" : preset.fillStyle,
     strokeWidth: preset.strokeWidth,
     roughness: preset.roughness,
+    ...roughTuning(preset),
     textColor,
     fontFamily: preset.fonts.body as FontKind,
     roundness: preset.cornerRadius,
@@ -219,6 +226,43 @@ function inkFor(preset: StylePreset, want: "dark" | "light"): string {
   return preset.mode === "dark" ? preset.ink : "#ffffff";
 }
 
+/**
+ * The preset's rough.js tuning as a spreadable object, with UNSET fields
+ * omitted entirely — spreading `{ bowing: undefined }` over a cascade would
+ * clobber a value someone else set, and every pre-video preset leaves all four
+ * unset.
+ */
+export function roughTuning(src: RoughTuning): RoughTuning {
+  const out: RoughTuning = {};
+  if (src.bowing !== undefined) out.bowing = src.bowing;
+  if (src.maxRandomnessOffset !== undefined) out.maxRandomnessOffset = src.maxRandomnessOffset;
+  if (src.preserveVertices !== undefined) out.preserveVertices = src.preserveVertices;
+  if (src.disableMultiStroke !== undefined) out.disableMultiStroke = src.disableMultiStroke;
+  return out;
+}
+
+/** True when a preset carries rough tuning of its own (i.e. it was authored
+ *  with video in mind). Only the `hand-clean` family does today. */
+export function presetDeclaresRoughTuning(preset: StylePreset): boolean {
+  return Object.keys(roughTuning(preset)).length > 0;
+}
+
+/**
+ * A copy of `preset` with the diagram's declared roughness folded in, so viz
+ * templates and figures — which read `preset.roughness` directly rather than a
+ * per-element style — obey `defaults { node { roughness: … } }` like everything
+ * else. Returns the preset untouched when nothing was declared.
+ */
+export function tunePreset(preset: StylePreset, rough: SceneRough | undefined): StylePreset {
+  if (!rough || (rough.roughness === undefined && !Object.keys(roughTuning(rough)).length)) return preset;
+  return {
+    ...preset,
+    roughness: rough.roughness ?? preset.roughness,
+    ...roughTuning(preset),
+    ...roughTuning(rough),
+  };
+}
+
 /** Scene theme derived from a preset. */
 export function presetTheme(preset: StylePreset): Theme {
   return {
@@ -240,6 +284,7 @@ export function presetNodeDefaults(preset: StylePreset): Partial<NodeStyle> {
     fillStyle: preset.fillStyle,
     strokeWidth: preset.strokeWidth,
     roughness: preset.roughness,
+    ...roughTuning(preset),
     fontFamily: preset.fonts.body as FontKind,
     textColor: preset.ink,
     roundness: preset.cornerRadius,
@@ -253,6 +298,7 @@ export function presetEdgeDefaults(preset: StylePreset): Partial<EdgeStyle> {
     stroke: preset.edge,
     strokeWidth: Math.min(2.2, Math.max(1.2, preset.strokeWidth)),
     roughness: preset.roughness,
+    ...roughTuning(preset),
     fontFamily: preset.fonts.body as FontKind,
     textColor: preset.ink,
     labelBg: preset.background,
@@ -297,10 +343,30 @@ const SHANTELL = '"Shantell Sans", "Excalifont", "Segoe Print", cursive';
  * paper — thick wobbly outlines, bold hand lettering, no fills. Monochrome even
  * for viz (single-ink palette), so it reads as a clean pen sketch everywhere.
  */
+/**
+ * The default look: black-and-white hand-drawn ink, hand lettering, no fills.
+ *
+ * **The strokes are deliberately CLEAN.** Up to 0.14.0 this preset ran at
+ * `roughness: 1.15` with rough.js's defaults, which means two overlapping passes
+ * per edge, free-floating corners and ±2px of jitter in *world* units. That
+ * looks fine on a web page at scale 1 and bad anywhere a camera moves: the
+ * camera is a `scale(zoom)` on the world group, so screen jitter is
+ * `zoom x world jitter` and stroke width magnifies with it. Measured on a
+ * 320x140 rect: 1.71px of corner error at 1x became **4.84px at 4x**, and the
+ * doubled pass darkened every outline unevenly.
+ *
+ * `preserveVertices` pins corners to their exact coordinates (corner error ->
+ * 0.00px), `disableMultiStroke` draws one confident pass instead of two, and the
+ * lower `roughness`/`bowing`/`maxRandomnessOffset` keep a hand-drawn wobble
+ * without the scratch. It still reads as drawn by a person; it no longer reads
+ * as drawn twice.
+ *
+ * The pre-0.15 values live on as `classic-rough` for anyone who wants them.
+ */
 export const CLASSIC_PRESET: StylePreset = {
   name: "classic",
   label: "Classic",
-  description: "Classic Excalidraw-style black-and-white hand-drawn ink: bold wobbly outlines, hand lettering, no fills. The default look everywhere.",
+  description: "Classic Excalidraw-style black-and-white hand-drawn ink: confident single-pass outlines, hand lettering, no fills. The default look everywhere.",
   mode: "light",
   background: "#ffffff",
   palette: ["#1e1e1e"],
@@ -311,13 +377,36 @@ export const CLASSIC_PRESET: StylePreset = {
   fillStyle: "hachure",
   strokeMode: "same",
   strokeWidth: 2.2,
-  roughness: 1.15,
+  roughness: 0.45,
+  bowing: 0.4,
+  maxRandomnessOffset: 1,
+  preserveVertices: true,
+  disableMultiStroke: true,
   fonts: { body: "hand", heading: "hand", bodyWeight: 700, headingWeight: 700 },
   ink: "#1e1e1e",
   mutedInk: "#4a4a4a",
   edge: "#1e1e1e",
   autoColorNodes: false,
   cornerRadius: null,
+};
+
+/**
+ * `classic` exactly as it was up to 0.14.0 — two passes, free corners, the full
+ * ±2px jitter budget. Kept so the old look is one word away, and so a diagram
+ * that WANTS to look hastily sketched can still say so.
+ *
+ * Do not reach for this if the camera is going to move.
+ */
+export const CLASSIC_ROUGH_PRESET: StylePreset = {
+  ...CLASSIC_PRESET,
+  name: "classic-rough",
+  label: "Classic (rough)",
+  description: "Classic before 0.15: two overlapping passes, free-floating corners, the full jitter budget. Sketchier, and it does not survive a zoom.",
+  roughness: 1.15,
+  bowing: 1,
+  maxRandomnessOffset: 2,
+  preserveVertices: false,
+  disableMultiStroke: false,
 };
 
 /** Black-and-white classic on a dark canvas — the default when a diagram is
@@ -348,7 +437,11 @@ export const CLASSIC_COLOR_PRESET: StylePreset = {
   fillStyle: "solid",
   strokeMode: "same",
   strokeWidth: 1.6,
-  roughness: 1.1,
+  roughness: 0.45,
+  bowing: 0.4,
+  maxRandomnessOffset: 1,
+  preserveVertices: true,
+  disableMultiStroke: true,
   fonts: { body: "hand", heading: "hand" },
   ink: "#1e1e1e",
   mutedInk: "#495057",
@@ -358,10 +451,80 @@ export const CLASSIC_COLOR_PRESET: StylePreset = {
   softAmount: 0.75,
 };
 
+/**
+ * Hand Clean — the hand-drawn look built for VIDEO and for punch-ins.
+ *
+ * Everything scratchy about a rough.js stroke is a world-space perturbation,
+ * so a camera `scale(4)` multiplies it by four: `classic` (roughness 1.15)
+ * lands 1.71px off its ideal corners at 1x and 4.84px at 4x, and the two
+ * overlapping passes double-darken every edge. This preset keeps the human
+ * wobble but takes the noise out of it — `preserveVertices` pins every corner
+ * exactly (corner error 1.71px -> 0.00px), `maxRandomnessOffset: 1` halves the
+ * jitter budget, `bowing: 0.35` flattens the mid-segment bulge, and
+ * `disableMultiStroke` draws one confident pass instead of two (path bytes
+ * 1236 -> 363). Measured deviation from the ideal edge: 0.19px.
+ *
+ * The design: warm paper rather than clinical white, pale tints of each hue
+ * under a matching outline, gently rounded corners, and connectors a step
+ * softer than the ink so the boxes come forward and the wiring recedes.
+ */
+export const HAND_CLEAN_PRESET: StylePreset = {
+  name: "hand-clean",
+  label: "Hand Clean",
+  description: "Hand-drawn but crisp: pinned corners, one confident pass, pale tints on warm paper. Built for video punch-ins — stays clean at 4x zoom.",
+  mode: "light",
+  background: "#fbfaf7",
+  palette: ["#2f5eb8", "#c8622f", "#2e7d63", "#7a4fb5", "#b8862c", "#1f7d95", "#b0405c", "#5c7a2e"],
+  neutral: "#9aa0a6",
+  fillMode: "soft",
+  fillStyle: "solid",
+  strokeMode: "same",
+  strokeWidth: 1.8,
+  roughness: 0.35,
+  bowing: 0.35,
+  maxRandomnessOffset: 1,
+  preserveVertices: true,
+  disableMultiStroke: true,
+  fonts: { body: "hand", heading: "hand", headingWeight: 700 },
+  ink: "#1f2124",
+  mutedInk: "#6b6f76",
+  edge: "#3f434a",
+  autoColorNodes: true,
+  cornerRadius: 10,
+  softAmount: 0.86,
+  emphasis: "#c04a26",
+};
+
+/**
+ * Hand Clean on a dark stage — designed dark, not inverted. The fills become
+ * translucent glass (16% of the hue over charcoal) instead of pastel blobs,
+ * the palette lifts to low-chroma tints that glow without vibrating, and the
+ * ink is a warm off-white so hand lettering reads as chalk rather than pixels.
+ */
+export const HAND_CLEAN_DARK_PRESET: StylePreset = {
+  ...HAND_CLEAN_PRESET,
+  name: "hand-clean-dark",
+  label: "Hand Clean (dark)",
+  description: "Hand Clean on a charcoal stage: translucent glass fills, lifted low-chroma hues, warm chalk ink. Built for video punch-ins.",
+  mode: "dark",
+  background: "#16181d",
+  palette: ["#7aa5f0", "#f0a06a", "#6fd0a8", "#b79bf0", "#e8cb7a", "#6fc9dd", "#f08fa6", "#b6d47a"],
+  neutral: "#6b727c",
+  fillMode: "translucent",
+  fillOpacity: 0.16,
+  ink: "#e9e7e2",
+  mutedInk: "#9aa1ab",
+  edge: "#868e99",
+  emphasis: "#ffb26b",
+};
+
 const BUILTIN_PRESETS: StylePreset[] = [
   CLASSIC_PRESET,
   CLASSIC_DARK_PRESET,
   CLASSIC_COLOR_PRESET,
+  CLASSIC_ROUGH_PRESET,
+  HAND_CLEAN_PRESET,
+  HAND_CLEAN_DARK_PRESET,
   {
     name: "colorful-lines",
     label: "Colorful Lines",
@@ -516,9 +679,9 @@ const BUILTIN_PRESETS: StylePreset[] = [
 
 for (const p of BUILTIN_PRESETS) registerStylePreset(p);
 
-/** The reference styles (excludes the classic family). */
+/** The reference styles (excludes the classic family and the dark auto-variants). */
 export function listReferencePresets(): StylePreset[] {
-  return listStylePresets().filter((p) => !p.name.startsWith("classic"));
+  return listStylePresets().filter((p) => !p.name.startsWith("classic") && p.name !== "hand-clean-dark");
 }
 
 /**
@@ -527,11 +690,12 @@ export function listReferencePresets(): StylePreset[] {
  * `classic-dark` auto-variant.
  */
 export function listStyleChoices(): StylePreset[] {
-  const order = ["classic", "classic-color", "colorful-lines", "neutral-lines", "earthy-gradient", "crayon", "chalkboard", "fine-line", "mono-accent"];
+  const order = ["classic", "classic-color", "hand-clean", "classic-rough", "colorful-lines", "neutral-lines", "earthy-gradient", "crayon", "chalkboard", "fine-line", "mono-accent"];
   const seen = new Set(order);
   const ordered = order.map((n) => getStylePreset(n)).filter((p): p is StylePreset => !!p);
   // append any future presets not in the explicit order (except internal darks)
-  for (const p of listStylePresets()) if (!seen.has(p.name) && p.name !== "classic-dark") ordered.push(p);
+  const internalDarks = new Set(["classic-dark", "hand-clean-dark"]);
+  for (const p of listStylePresets()) if (!seen.has(p.name) && !internalDarks.has(p.name)) ordered.push(p);
   return ordered;
 }
 

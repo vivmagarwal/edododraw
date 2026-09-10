@@ -10,6 +10,18 @@
 
 import { HAND_FONT_WOFF2_DATA_URI } from "./fontData.js";
 
+/**
+ * The exact `font-family` NAME of the embedded hand-drawn face — what you pass
+ * to `document.fonts.load()` / `document.fonts.check()`. `FONT_FAMILY.hand` is
+ * the full CSS stack (with fallbacks); this is the one family that must
+ * actually be decoded before a headless frame is captured, or text is measured
+ * and laid out with fallback metrics and every label shifts.
+ */
+export const EXCALIFONT_FAMILY = "Excalifont";
+
+/** The embedded font itself, as a `data:` URI — no network fetch, ever. */
+export { HAND_FONT_WOFF2_DATA_URI } from "./fontData.js";
+
 export const FONT_FAMILY = {
   hand: '"Excalifont", "Virgil", "Segoe Print", "Comic Sans MS", cursive',
   normal: '"Nunito", "Assistant", system-ui, -apple-system, sans-serif',
@@ -128,12 +140,45 @@ const CSS = `
 .edd-static, .edd-static * { transition: none !important; animation: none !important; }
 `;
 
-let injected = false;
+// Keyed on the DOCUMENT, not the module: one page can own several documents
+// (iframes, a Remotion preview inside a Studio shell, jsdom fixtures per test).
+// A module-level boolean would report "already injected" for a document that
+// has no <style> yet and silently render an unstyled, unfonted diagram.
+const styledDocs = new WeakSet<Document>();
+
 export function ensureEngineStyles(doc: Document = document): void {
-  if (injected && doc.getElementById("edd-engine-styles")) return;
-  const style = doc.createElement("style");
-  style.id = "edd-engine-styles";
-  style.textContent = CSS;
-  doc.head.appendChild(style);
-  injected = true;
+  if (styledDocs.has(doc) && doc.getElementById("edd-engine-styles")) return;
+  if (!doc.getElementById("edd-engine-styles")) {
+    const style = doc.createElement("style");
+    style.id = "edd-engine-styles";
+    style.textContent = CSS;
+    doc.head.appendChild(style);
+  }
+  styledDocs.add(doc);
+}
+
+/**
+ * Resolve once the embedded hand-drawn font is actually DECODED and usable.
+ *
+ * `ensureEngineStyles` injects the `@font-face` fire-and-forget, so a headless
+ * or frame-driven renderer can screenshot before the face is ready and get
+ * fallback metrics — every label shifts, and the frame is silently wrong. Wire
+ * this into whatever your host uses to hold a frame:
+ *
+ *   const handle = delayRender("edododraw fonts");
+ *   whenFontsReady().then(() => continueRender(handle), cancelRender);
+ *
+ * Injects the styles first (so there is something to load), never rejects, and
+ * resolves immediately in environments with no FontFaceSet (jsdom, older
+ * browsers) — callers must not block forever on a missing API.
+ */
+export function whenFontsReady(doc: Document = document): Promise<void> {
+  ensureEngineStyles(doc);
+  const fonts = (doc as Document & { fonts?: FontFaceSet }).fonts;
+  if (!fonts) return Promise.resolve();
+  const sizes = [`16px "${EXCALIFONT_FAMILY}"`, `32px "${EXCALIFONT_FAMILY}"`];
+  const loads = typeof fonts.load === "function" ? sizes.map((s) => fonts.load(s)) : [];
+  return Promise.all([...loads, fonts.ready])
+    .then(() => undefined)
+    .catch(() => undefined);
 }

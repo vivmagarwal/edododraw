@@ -16,7 +16,7 @@ scene {
 
 ## Why it exists
 
-Excalidraw is a joy to draw *by hand*. EDodoDraw is a joy to drive *by code* — while keeping the same pleasant look. It is built from the ground up (no Excalidraw runtime baggage), reusing only the good primitives: rough.js for strokes, dagre for layout, the Virgil/Excalifont hand-drawn font, and `@excalidraw/mermaid-to-excalidraw` for import.
+Excalidraw is a joy to draw *by hand*. EDodoDraw is a joy to drive *by code* — while keeping the same pleasant look. It is built from the ground up (no Excalidraw runtime baggage), reusing only the good primitives: rough.js for strokes, dagre for layout, the Virgil/Excalifont hand-drawn font, and (optionally) `@excalidraw/mermaid-to-excalidraw` for import.
 
 ## Features
 
@@ -25,10 +25,12 @@ Excalidraw is a joy to draw *by hand*. EDodoDraw is a joy to drive *by code* —
 - **Magic-move camera.** `camera focus [db, cache] zoom 1.7` — smooth, interruptible, spring-eased. Pan/zoom by mouse too.
 - **Timeline presentations.** A `timeline` of `beat`s turns a static diagram into a guided walkthrough.
 - **Annotations, scripted + live.** Highlight / underline / box / circle / point-at / callout / spotlight. Draw them with the toolbar, then **commit to code**.
-- **More animated arrows** than Excalidraw: flow, dash-march, draw-on, comet, gradient-flow, electric, pulse.
+- **More animated arrows** than Excalidraw: flow, dash-march, draw-on, comet, gradient-flow, electric, pulse — each also available as a *pure function of time* (`edgeCenterline` + `arrowFrameStyle`) so a video renderer can drive them frame by frame.
 - **15+ hand-drawn shapes** + a **plugin registry** to add your own without touching the core.
 - **People in your diagrams.** `character brad "Brad" { pose: thinking, emotion: curious, flip: true }` puts a sketchnote figure beside the diagram as an ordinary node (44 poses × 26 emotions × shirts/hair/accessories/effects/props) — plus `icon` nodes for a captioned glyph.
 - **Export** to self-contained SVG (font embedded), PNG, or JSON.
+- **Video-ready.** A frame-driven mode with no wall clock anywhere: compile once, render once, then drive visibility, hand-drawing and a magic-move camera from a frame number. There is a copy-pasteable **[Remotion recipe](docs/REMOTION_RECIPE.md)** and a runnable [example project](examples/remotion/).
+- **Strokes that survive a zoom.** The default look pins every corner and draws one confident pass, so a 4× camera punch-in stays crisp (0.00 px corner error, against 1.71 px pre-0.15). `meta { style: hand-clean }` is the designed version of that on warm paper; `meta { style: classic-rough }` gets the old scratchier geometry back.
 
 ## Use it in your app
 
@@ -52,20 +54,26 @@ A React wrapper lives at `edododraw/react` (`<EdodoDrawView source={code} />`), 
 pure, DOM-free compiler (`compileEdd(source) → { scene, diagnostics }`) is exported for
 Node/SSR. See the **[Embed guide](docs/INTEGRATION_GUIDE.md)** for the full API.
 
+Putting a diagram in a video? Start at the **[Remotion recipe](docs/REMOTION_RECIPE.md)**.
+
+> Mermaid import needs one extra package — `npm i @excalidraw/mermaid-to-excalidraw`. It is an
+> *optional peer* dependency as of 0.15.0, because it pulls in mermaid → d3 → cytoscape → katex
+> (122 packages / 68 MB, against 8 / 4.4 MB without it). Everything else works without it.
+
 ## Run this repo (playground + docs site)
 
 ```bash
 git clone https://github.com/vivmagarwal/edododraw.git
 cd edododraw && npm install
 npm run dev     # http://localhost:5273
-npm test        # 200+ unit tests
+npm test        # 600+ unit tests
 ```
 
 Open the app, pick an example (Welcome · Flowchart · Architecture · Animated Arrows · Mermaid), and edit the code on the left — the diagram updates live.
 
 ## Docs
 
-**The documentation lives in one place: https://vivmagarwal.github.io/edododraw/** — the language reference, camera/timeline, annotations, import/export, the embed guide, and the extend/plugins guide, alongside a live gallery and playground. The site renders the markdown in [`docs/`](docs/) verbatim, so those files are the single source of truth (edit them, then redeploy). AI-agent guidance is in [CLAUDE.md](CLAUDE.md); `design-notes/` holds historical design explorations that are **not** current documentation.
+**The documentation lives in one place: https://vivmagarwal.github.io/edododraw/** — the language reference, camera/timeline, annotations, import/export, the embed guide, the [Remotion recipe](docs/REMOTION_RECIPE.md), and the extend/plugins guide, alongside a live gallery and playground. The site renders the markdown in [`docs/`](docs/) verbatim, so those files are the single source of truth (edit them, then redeploy). AI-agent guidance is in [CLAUDE.md](CLAUDE.md); `design-notes/` holds historical design explorations that are **not** current documentation.
 
 ## License
 

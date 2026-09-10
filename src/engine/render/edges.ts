@@ -20,17 +20,22 @@ import { getArrowAnimation } from "../plugins/registry.js";
 import { resolveAnchor, nodeRect } from "../scene/anchors.js";
 import { getNode } from "../scene/query.js";
 import type { EdgeStyle, Scene, SceneEdge } from "../scene/types.js";
+import { applyNonScalingStroke, DEFAULT_MAX_RANDOMNESS_OFFSET, type RoughRenderTuning } from "./shapes.js";
 
 type RoughSVG = ReturnType<(typeof rough)["svg"]>;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-export function edgeRoughOptions(style: EdgeStyle): Options {
+export function edgeRoughOptions(style: EdgeStyle, tune: RoughRenderTuning = {}): Options {
+  const k = tune.roughnessScale ?? 1;
   const opts: Options = {
     stroke: style.stroke,
     strokeWidth: style.strokeWidth,
-    roughness: style.roughness,
+    roughness: style.roughness * k,
     seed: style.seed,
-    bowing: 1,
+    bowing: style.bowing ?? 1,
+    preserveVertices: style.preserveVertices ?? false,
+    disableMultiStroke: style.disableMultiStroke ?? false,
+    maxRandomnessOffset: (style.maxRandomnessOffset ?? DEFAULT_MAX_RANDOMNESS_OFFSET) * k,
   };
   if (style.strokeStyle === "dashed") opts.strokeLineDash = [9, 9];
   else if (style.strokeStyle === "dotted") opts.strokeLineDash = [1.6, 6];
@@ -134,7 +139,7 @@ function norm(v: Point): Point {
  * fanned parallel edge (which handles its own bow). Endpoints are re-clipped to
  * the node borders aimed at the first/last bend.
  */
-function dagreRoute(scene: Scene, edge: SceneEdge): Point[] | null {
+export function dagreRoute(scene: Scene, edge: SceneEdge): Point[] | null {
   const raw = edge.points;
   if (!raw || raw.length < 3) return null;
   if ((edge.data as { parallel?: unknown } | undefined)?.parallel) return null;
@@ -148,7 +153,7 @@ function dagreRoute(scene: Scene, edge: SceneEdge): Point[] | null {
 }
 
 /** Catmull-Rom smooth path through points (for the animated overlay). */
-function smoothPath(points: Point[]): string {
+export function smoothPath(points: Point[]): string {
   if (points.length < 3) return "M" + points.map((p) => `${p.x},${p.y}`).join(" L");
   let d = `M${points[0].x},${points[0].y}`;
   for (let i = 0; i < points.length - 1; i++) {
@@ -166,8 +171,8 @@ function smoothPath(points: Point[]): string {
 }
 
 /** Draw the rough base stroke of an edge. */
-function drawBase(rc: RoughSVG, points: Point[], edge: SceneEdge, smooth: boolean): SVGGElement {
-  const opts = edgeRoughOptions(edge.style);
+function drawBase(rc: RoughSVG, points: Point[], edge: SceneEdge, smooth: boolean, tune: RoughRenderTuning): SVGGElement {
+  const opts = edgeRoughOptions(edge.style, tune);
   if (smooth && points.length >= 3) {
     return rc.curve(points.map((p) => [p.x, p.y]) as [number, number][], opts);
   }
@@ -185,14 +190,23 @@ function drawArrowhead(
   tip: Point,
   angle: number,
   style: EdgeStyle,
+  tune: RoughRenderTuning = {},
 ): SVGGElement | null {
   if (!kind || kind === "none") return null;
   const size = 11 + style.strokeWidth * 2.4;
+  const k = tune.roughnessScale ?? 1;
   const opts: Options = {
     stroke: style.stroke,
     strokeWidth: style.strokeWidth,
-    roughness: Math.min(style.roughness, 1),
+    // The clamp keeps a head legible on a very sketchy edge; the zoom
+    // compensation then applies to the CLAMPED value, so screen-space jitter
+    // stays constant through a punch-in.
+    roughness: Math.min(style.roughness, 1) * k,
     seed: style.seed,
+    bowing: style.bowing ?? 1,
+    preserveVertices: style.preserveVertices ?? false,
+    disableMultiStroke: style.disableMultiStroke ?? false,
+    maxRandomnessOffset: (style.maxRandomnessOffset ?? DEFAULT_MAX_RANDOMNESS_OFFSET) * k,
   };
   const filledOpts: Options = { ...opts, fill: style.stroke, fillStyle: "solid" };
   const back = (dist: number, spread: number): Point => ({
@@ -400,7 +414,7 @@ export function pathLength(points: Point[]): number {
  * animated overlay entirely (deterministic frame rendering — the hand-drawn
  * base stroke and arrowheads already depict the edge fully).
  */
-export function renderEdge(rc: RoughSVG, scene: Scene, edge: SceneEdge, opts: { static?: boolean } = {}): RenderedEdge {
+export function renderEdge(rc: RoughSVG, scene: Scene, edge: SceneEdge, opts: { static?: boolean } & RoughRenderTuning = {}): RenderedEdge {
   const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
   g.setAttribute("data-edge", edge.id);
   g.setAttribute("class", "edd-edge");
@@ -422,14 +436,14 @@ export function renderEdge(rc: RoughSVG, scene: Scene, edge: SceneEdge, opts: { 
   const len = pathLength(points);
 
   // 1. base rough stroke
-  g.appendChild(drawBase(rc, points, edge, smooth));
+  g.appendChild(drawBase(rc, points, edge, smooth, opts));
 
   // 2. arrowheads
   const endTangent = angleOf(points[points.length - 2], points[points.length - 1]);
   const startTangent = angleOf(points[1], points[0]);
-  const endHead = drawArrowhead(rc, edge.style.endArrowhead, points[points.length - 1], endTangent, edge.style);
+  const endHead = drawArrowhead(rc, edge.style.endArrowhead, points[points.length - 1], endTangent, edge.style, opts);
   if (endHead) g.appendChild(endHead);
-  const startHead = drawArrowhead(rc, edge.style.startArrowhead, points[0], startTangent, edge.style);
+  const startHead = drawArrowhead(rc, edge.style.startArrowhead, points[0], startTangent, edge.style, opts);
   if (startHead) g.appendChild(startHead);
 
   // 3. animated overlay (flow/march/draw-on/comet/gradient/pulse/electric) —
@@ -437,5 +451,6 @@ export function renderEdge(rc: RoughSVG, scene: Scene, edge: SceneEdge, opts: { 
   const overlay = opts.static ? null : animationOverlay(edge, centerline, len);
   if (overlay) g.appendChild(overlay);
 
+  if (opts.nonScalingStroke) applyNonScalingStroke(g);
   return { group: g, points, centerline, length: len };
 }

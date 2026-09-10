@@ -994,20 +994,42 @@ class Parser {
   private parseReveal(): RevealBlock {
     const t = this.advance(); // reveal
     const commands: RevealCmd[] = [];
+    // BARE FORM (no braces): `reveal a with draw-on`, `reveal [a,b] with pop`,
+    // `reveal all`, or an explicit verb (`reveal show a` / `reveal hide b`).
+    // A leading word that isn't a reveal verb is the TARGET of an implicit
+    // `show`. Without this branch the block loop below would spin forever on
+    // the next `key: value` beat item — parseRevealCmd consumes nothing at a
+    // `:` yet still returns a command (see the progress guard below).
+    if (!this.is(T.LBrace)) {
+      const explicitVerb = this.is(T.Ident) && REVEAL_VERBS.has(this.cur().text);
+      const cmd = explicitVerb ? this.parseRevealCmd() : this.parseRevealCmd("show");
+      if (cmd) commands.push(cmd);
+      return { type: "reveal", commands, span: this.spanFrom(t) };
+    }
     this.eat(T.LBrace);
     this.skipSeps();
     while (!this.is(T.RBrace) && !this.atEnd()) {
+      const before = this.i;
       const cmd = this.parseRevealCmd();
       if (cmd) commands.push(cmd);
+      // progress guard: parseRevealCmd can legally consume nothing (e.g. at a
+      // stray `:`); without this the loop never terminates and the compiler
+      // allocates a command per iteration until the heap dies.
+      if (this.i === before) this.advance();
       this.skipSeps();
     }
     this.eat(T.RBrace);
     return { type: "reveal", commands, span: this.spanFrom(t) };
   }
 
-  private parseRevealCmd(): RevealCmd | null {
+  /**
+   * `[verb] [targets] [with <effect>] [{ attrs }]`.
+   * `implicitVerb` supplies the verb for the bare `reveal <target>` form, where
+   * the first word is a target rather than a verb.
+   */
+  private parseRevealCmd(implicitVerb?: string): RevealCmd | null {
     const t = this.cur();
-    const verb = this.eat(T.Ident)?.text ?? "";
+    const verb = implicitVerb ?? (this.eat(T.Ident)?.text ?? "");
     const targets: Value[] = [];
     // targets until 'with' / block / sep
     while (this.canStartValue() && !this.isKw("with")) {
@@ -1031,6 +1053,7 @@ class Parser {
     this.eat(T.LBrace);
     this.skipSeps();
     while (!this.is(T.RBrace) && !this.atEnd()) {
+      const before = this.i;
       const w = this.cur().text;
       if (this.cur().kind === T.Ident && isAnnotKind(w)) {
         const c = this.parseAnnotationCmd();
@@ -1039,6 +1062,8 @@ class Parser {
         const c = this.parseRevealCmd();
         if (c) commands.push(c);
       }
+      // progress guard — same hang as parseReveal (a stray `:` consumes nothing)
+      if (this.i === before) this.advance();
       this.skipSeps();
     }
     this.eat(T.RBrace);

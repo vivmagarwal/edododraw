@@ -17,7 +17,7 @@ import { ensurePluginStyles } from "../plugins/registry.js";
 import { AnnotationLayer } from "../annotate/layer.js";
 import { renderEdge } from "./edges.js";
 import { renderCharacterNode, renderIconNode } from "./figures.js";
-import { labelBelow, renderShapeBody } from "./shapes.js";
+import { applyNonScalingStroke, labelBelow, renderShapeBody, sceneRoughOptions, type RoughRenderTuning } from "./shapes.js";
 import { ensureEngineStyles, FONT_FAMILY } from "./theme.css.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -27,6 +27,11 @@ const REVEAL_EFFECT_CLASS: Record<string, string | undefined> = {
   fade: "edd-reveal-fade",
   pop: "edd-reveal-pop",
   sweep: "edd-reveal-sweep",
+  // `draw-on` is a real stroke-by-stroke drawing — only a frame-driven host can
+  // play it (setRevealProgressAll). The interactive player has no wall-clock
+  // stroke animation, so it degrades to the sweep wipe (its behaviour before
+  // "draw-on" became a distinct revealFx value).
+  "draw-on": "edd-reveal-sweep",
 };
 
 export interface CameraTransform {
@@ -55,6 +60,19 @@ export interface SvgRendererOptions {
    * unaffected either way).
    */
   annotations?: boolean;
+  /**
+   * Stamp `vector-effect="non-scaling-stroke"` on every generated drawable, so
+   * a 2px line stays 2px at any camera zoom instead of becoming 8px at 4x.
+   * Default false (an interactive canvas wants strokes to zoom like the
+   * drawing); video/punch-in hosts want it on. Pairs with
+   * `setRoughnessScale()`: one holds stroke WIDTH constant on screen, the
+   * other holds stroke JITTER constant.
+   */
+  nonScalingStroke?: boolean;
+  /**
+   * Initial roughness scale — see `setRoughnessScale()`. Default 1.
+   */
+  roughnessScale?: number;
 }
 
 export class SvgRenderer {
@@ -63,6 +81,8 @@ export class SvgRenderer {
   readonly isStatic: boolean;
   /** See SvgRendererOptions.annotations. */
   readonly paintsAnnotations: boolean;
+  /** See SvgRendererOptions.nonScalingStroke. */
+  readonly nonScalingStroke: boolean;
   svg!: SVGSVGElement;
   private defs!: SVGDefsElement;
   private bg!: SVGRectElement;
@@ -74,11 +94,58 @@ export class SvgRenderer {
   private camera: CameraTransform = { cx: 0, cy: 0, zoom: 1 };
   private viewport = { w: 800, h: 600 };
   private scene: Scene | null = null;
+  private roughnessScale = 1;
 
   constructor(container: HTMLElement, options: SvgRendererOptions = {}) {
     this.container = container;
     this.isStatic = options.static ?? false;
     this.paintsAnnotations = options.annotations ?? true;
+    this.nonScalingStroke = options.nonScalingStroke ?? false;
+    this.roughnessScale = clampScale(options.roughnessScale ?? 1);
+  }
+
+  /** The render-time rough knobs, as every draw call wants them. */
+  private roughTune(): RoughRenderTuning {
+    return { roughnessScale: this.roughnessScale, nonScalingStroke: this.nonScalingStroke };
+  }
+
+  /** Current roughness scale — see `setRoughnessScale()`. */
+  getRoughnessScale(): number {
+    return this.roughnessScale;
+  }
+
+  /**
+   * Scale every `roughness` and `maxRandomnessOffset` by `k` and repaint.
+   *
+   * rough.js perturbs geometry in WORLD units and the camera is a
+   * `scale(zoom)` on the world group, so on-screen jitter is `zoom x world
+   * jitter`: a punch-in magnifies the scratchiness along with the drawing. A
+   * frame-driven host cancels that by passing `k = 1/zoom`.
+   *
+   * Regenerating strokes is a full re-render (single-digit ms for a normal
+   * diagram, but not free), so QUANTISE the zoom — e.g.
+   * `k = 1 / 2 ** Math.round(Math.log2(zoom))` — and this will regenerate a
+   * handful of times per composition instead of once per frame. Calling it
+   * with the value it already has is a no-op, so quantised callers are safe to
+   * call it every frame.
+   *
+   * Seeds are untouched, so the strokes stay deterministic: the same scene at
+   * the same scale always draws identically.
+   */
+  setRoughnessScale(k: number): void {
+    const next = clampScale(k);
+    if (next === this.roughnessScale) return;
+    this.roughnessScale = next;
+    if (this.scene) this.render(this.scene);
+  }
+
+  /**
+   * Apply this renderer's stroke policy to a subtree someone else painted into
+   * one of its layers (the annotation layer does exactly that). No-op unless
+   * `nonScalingStroke` is on.
+   */
+  applyStrokePolicy(root: Element): void {
+    if (this.nonScalingStroke) applyNonScalingStroke(root);
   }
 
   mount(): void {
@@ -169,6 +236,29 @@ export class SvgRenderer {
     }
     this.viewport = { w: Math.max(1, w), h: Math.max(1, h) };
     return this.viewport;
+  }
+
+  /**
+   * State the viewport explicitly instead of measuring the container.
+   *
+   * `measure()` reads `clientWidth`/`clientHeight`, which a frame-driven host
+   * often cannot rely on: Remotion mounts a composition inside a 0x0
+   * off-screen wrapper during the layout pass, so a `measure()` call from a
+   * `useLayoutEffect` sees 0x0 and pins the camera viewport at 1x1 — every
+   * later `applyCamera` then translates by half a pixel and the diagram lands
+   * in the top-left corner. Such a host knows the real size already
+   * (Remotion's `useVideoConfig()`), so it should say so.
+   *
+   * Non-finite or non-positive dimensions are clamped to 1, exactly as
+   * `measure()` clamps them. Re-applies the current camera so the world
+   * transform matches the new viewport immediately.
+   */
+  setViewport(size: { w: number; h: number }): { w: number; h: number } {
+    const w = Number.isFinite(size.w) ? size.w : 0;
+    const h = Number.isFinite(size.h) ? size.h : 0;
+    this.viewport = { w: Math.max(1, w), h: Math.max(1, h) };
+    this.applyCamera(this.camera);
+    return { ...this.viewport };
   }
 
   getViewportSize(): { w: number; h: number } {
@@ -291,6 +381,53 @@ export class SvgRenderer {
     });
   }
 
+  /**
+   * Batch form of {@link setRevealProgress} for frame-driven hosts, and the
+   * ONLY safe one when frames are produced out of order (Remotion seeks, a
+   * scrubber, a re-render worker).
+   *
+   * `setRevealProgress` MUTATES an element's dash pattern and only restores it
+   * at `p >= 1`, so a frame that simply stops mentioning an id leaves that
+   * element frozen mid-draw forever. This method takes the whole picture at
+   * once: every drawable in the SVG that the map does NOT mention is restored
+   * to `1` (fully drawn), so the DOM is always a total function of the map —
+   * the same map always yields the same frame, whatever ran before it.
+   *
+   * Pass `0` to keep something un-drawn; omit an id to mean "finished".
+   *
+   *   renderer.setRevealProgressAll({ api: 0.4, db: 0 });   // everything else = done
+   *
+   * Ids are node ids, edge ids, and viz-item keys (`"block.item"`). Partial
+   * progress wins over the implied restore when both address the same element
+   * (a viz item and the nodes inside it), so nesting behaves as authored.
+   */
+  setRevealProgressAll(map: Record<string, number>): void {
+    const ids = new Set<string>();
+    this.svg.querySelectorAll<SVGElement>("[data-node],[data-edge],[data-viz-item]").forEach((el) => {
+      for (const attr of ["data-node", "data-edge", "data-viz-item"]) {
+        const id = el.getAttribute(attr);
+        if (id) ids.add(id);
+      }
+    });
+    for (const id of Object.keys(map)) ids.add(id);
+    // Restore first, then apply the partials: a viz item and its member nodes
+    // share elements, so the in-progress value must be written last.
+    const partial: string[] = [];
+    for (const id of ids) {
+      const p = map[id];
+      if (p == null || p >= 1) this.setRevealProgress(id, 1);
+      else partial.push(id);
+    }
+    for (const id of partial) this.setRevealProgress(id, map[id]);
+    // Restoring clears inline opacity with `style.opacity = ""`, which leaves an
+    // EMPTY `style=""` attribute behind. It changes nothing on screen, but it
+    // makes a restored element serialize differently from one that was never
+    // touched — so exportSVGString/renderSceneToSVGString would stop being
+    // byte-identical across seeks. Drop the empty leftovers so the serialized
+    // frame is a total function of the map too, not just the painted one.
+    this.svg.querySelectorAll('[style=""]').forEach((el) => el.removeAttribute("style"));
+  }
+
   render(scene: Scene): void {
     this.scene = scene;
     // keyframes from runtime-registered arrow animations (cheap, idempotent)
@@ -318,7 +455,7 @@ export class SvgRenderer {
     const edges = [...scene.edges].sort((a, b) => a.z - b.z);
     for (const edge of edges) {
       try {
-        const r = renderEdge(this.rc, scene, edge, { static: this.isStatic });
+        const r = renderEdge(this.rc, scene, edge, { static: this.isStatic, ...this.roughTune() });
         if (edge.label) r.group.appendChild(this.edgeLabel(scene, edge, r.points));
         this.applyVizTags(r.group, edge.data);
         this.layers.edges.appendChild(r.group);
@@ -344,6 +481,11 @@ export class SvgRenderer {
     // Step-scoped marks stay the timeline's job — TimelinePlayer/EdodoDraw
     // re-render this same layer with the step's set immediately after.
     if (this.paintsAnnotations) this.annotationLayer().render(scene, scene.annotations, false);
+  }
+
+  /** The scene the last `render()` painted (null before the first one). */
+  getScene(): Scene | null {
+    return this.scene;
   }
 
   private annotationLayerCache: AnnotationLayer | null = null;
@@ -411,7 +553,7 @@ export class SvgRenderer {
       // painted inside this node group; the label hangs under the feet,
       // inside the node box (so the bbox the layout computed is honoured).
       const paintText = (...args: Parameters<SvgRenderer["textBlock"]>) => this.textBlock(...args);
-      const { body, labelCy, labelColor } = renderCharacterNode(this.rc, scene, node, doc, paintText);
+      const { body, labelCy, labelColor } = renderCharacterNode(this.rc, scene, node, doc, paintText, this.roughTune());
       g.appendChild(body);
       if (node.label) {
         g.appendChild(this.textBlock(node.label, node.x + node.w / 2, labelCy, node.style.fontSize, labelColor, node.style.fontFamily, "center", node.style.fontWeight));
@@ -420,7 +562,7 @@ export class SvgRenderer {
     }
     if (node.shape === "icon") {
       // Glyph + caption: the sketchnote "icon + word" unit.
-      const { body, labelCy, labelColor } = renderIconNode(this.rc, scene, node, doc);
+      const { body, labelCy, labelColor } = renderIconNode(this.rc, scene, node, doc, this.roughTune());
       g.appendChild(body);
       if (node.label) {
         g.appendChild(this.textBlock(node.label, node.x + node.w / 2, labelCy, node.style.fontSize, labelColor, node.style.fontFamily, "center", node.style.fontWeight));
@@ -430,7 +572,7 @@ export class SvgRenderer {
 
     const fill = this.resolveGradientFill(node.style.fill);
     const style = fill === node.style.fill ? node.style : { ...node.style, fill };
-    const body = renderShapeBody(this.rc, node.shape, { x: node.x, y: node.y, w: node.w, h: node.h }, style, node.data);
+    const body = renderShapeBody(this.rc, node.shape, { x: node.x, y: node.y, w: node.w, h: node.h }, style, node.data, this.roughTune());
     g.appendChild(body);
 
     if (node.label) {
@@ -527,16 +669,26 @@ export class SvgRenderer {
     const g = doc.createElementNS(SVG_NS, "g") as SVGGElement;
     g.setAttribute("data-group", group.id);
     const stroke = group.style.stroke ?? "#adb5bd";
+    // The frame has no per-element style of its own, so it follows the
+    // diagram-wide declaration (`defaults { node { roughness … } }` or a preset
+    // that carries rough tuning). Untouched — 0.8 / seed 42 — when nothing was
+    // declared, which is every diagram written before this existed.
     const rectEl = this.rc.path(
       `M${minX - pad},${minY - pad} h${maxX - minX + pad * 2} v${maxY - minY + pad * 2} h${-(maxX - minX + pad * 2)} Z`,
-      { stroke, strokeWidth: 1.2, roughness: 0.8, seed: 42, strokeLineDash: [6, 6], fill: group.style.fill ?? undefined, fillStyle: "solid" },
+      { ...sceneRoughOptions(scene, 0.8, this.roughnessScale), stroke, strokeWidth: 1.2, seed: 42, strokeLineDash: [6, 6], fill: group.style.fill ?? undefined, fillStyle: "solid" },
     );
     g.appendChild(rectEl);
+    if (this.nonScalingStroke) applyNonScalingStroke(rectEl);
     if (group.label) {
       g.appendChild(this.textBlock(group.label, minX - pad + 4, minY - pad - 2, 15, stroke, "hand", "left"));
     }
     return g;
   }
+}
+
+/** Roughness scales are multipliers: finite and non-negative. */
+function clampScale(k: number): number {
+  return Number.isFinite(k) && k > 0 ? k : 1;
 }
 
 // ---- reveal-progress helpers -------------------------------------------------

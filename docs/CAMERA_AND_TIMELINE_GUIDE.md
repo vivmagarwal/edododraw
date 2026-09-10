@@ -53,8 +53,44 @@ The behaviors an author or embedder can rely on (all from `controller.ts` / `fit
 |---|---|
 | Camera | **Sticky** — a beat with no `camera` keeps the current one. |
 | Visibility (`show`/`hide`) | **Sticky** until changed. |
-| Reveal effect (`with fade-in`/`pop`/`draw-on`) | **Beat-scoped** — replayed each time the beat is entered (only when animating). |
+| Reveal effect (`reveal { show a with pop }`) | **Beat-scoped** — replayed each time the beat is entered (only when animating). Recorded on the step as `revealFx[id]`. |
 | Annotations | **Beat-scoped** — replaced each beat (always-on `annotate` block persists underneath). |
+
+### Writing a reveal — both forms
+
+Reveal is a **statement with two spellings**, and the DSL guide's table is the authority
+([DSL_LANGUAGE_GUIDE §10](DSL_LANGUAGE_GUIDE.md)). Both of these compile to the same step:
+
+```edd
+beat one "A" {
+  reveal { show [a, b] with draw-on }   // BLOCK form — several commands, one block
+}
+
+beat one "A" {
+  reveal [a, b] with draw-on            // BARE form — exactly one command, no braces
+}
+```
+
+- **Block form** `reveal { … }` takes any number of commands: `show`, `hide`, and the
+  effect-verbs `fade-in` / `pop` / `draw-on` used directly (`reveal { draw-on [gw] }`).
+- **Bare form** `reveal <targets> [with <effect>]` is shorthand for a single implicit
+  `show`. `reveal all`, `reveal a`, `reveal [a, b] with pop`, and the explicit
+  `reveal hide [c]` all work.
+
+Prefer the block form when a beat does more than one thing — it is the form every example in
+the docs uses, and it never becomes ambiguous next to a `narrate:` or `hold:` on the following
+line.
+
+> **Historical note.** Before 0.15.0 the bare form silently compiled to nothing, and a bare
+> `reveal a with draw-on` followed by any `key: value` beat item (`narrate:`, `hold:`,
+> `caption:`) sent the parser into an infinite loop that exhausted the heap. Both are fixed;
+> if you are pinned to an older version, use the block form.
+
+**Effect values.** `revealFx[id]` holds one of `"fade" | "pop" | "sweep" | "draw-on"`.
+`draw-on` is its own effect, **not** an alias of `sweep`: `sweep` is a clip-path wipe, while
+`draw-on` is a real stroke-by-stroke hand-drawing that only a frame-driven host can play
+(`SvgRenderer.setRevealProgressAll`). The interactive player has no wall-clock stroke
+animation, so it falls back to the sweep wipe for `draw-on`.
 
 API: `player.load(scene)`, `play()`, `pause()`, `next()`, `prev()`, `restart()`, `goto(i)`. It emits `PlayerState { index, total, caption, stepName, playing }` for the UI. **`index === -1`** is the home/overview state (before any beat; `stepName` is `"Overview"`) — `prev()` from beat 0 returns there and re-fits. Auto-advance uses each beat's `hold:` (default 3.2s).
 
@@ -113,6 +149,34 @@ mixCameras(fromCam, toCam, easingByName("ease-in-out")(t));
 Apply a state with `renderer.applyVisibility(new Set(state.hidden))` +
 `annotationLayer.render(scene, state.annotations, false)` + `renderer.applyCamera(cam)` —
 or in one call via the facade: `edd.applyStepState(edd.stepState(i))`. Pair with
-`{ static: true }` (no wall-clock CSS) — see
-[INTEGRATION_GUIDE §6](INTEGRATION_GUIDE.md) for the full video-pipeline recipe,
-including `setRevealProgress()` for host-driven draw-on.
+`{ static: true }` (no wall-clock CSS).
+
+Three rules make a frame-driven host correct when frames are produced **out of order** — which
+is the normal case for a video renderer, a scrubber, or a parallel render farm:
+
+1. **Every per-frame write is a total function of the frame number.** Never accumulate, never
+   read your own previous value, never consult a clock.
+2. **Never call `render(scene)` per frame.** Compile once, render once, then only
+   `applyCamera` / `applyVisibility` / `setRevealProgressAll` / `AnnotationLayer.render`.
+   Measured: `applyCamera` 0.003 ms, `applyVisibility` 0.21 ms, `setRevealProgressAll`
+   0.27 ms — against 8–30 ms for a full `render()`.
+3. **Use `setRevealProgressAll(map)`, not bare `setRevealProgress` calls.**
+   `setRevealProgress` *mutates* an element's dash pattern and only restores it at `p >= 1`,
+   so a frame that stops mentioning an id leaves it frozen mid-draw. `setRevealProgressAll`
+   restores every drawable the map does not mention, making the DOM a total function of the
+   map.
+4. **Order the frame: repaints first, DOM state second.** `setRoughnessScale` regenerates
+   strokes, and that rebuilds the node/edge layers — discarding the `edd-hidden` classes
+   `applyVisibility` set and the dash attributes `setRevealProgressAll` wrote. Camera and
+   roughness scale first; visibility, annotations and draw-on after. (`applyCamera` alone never
+   repaints.)
+
+**The interactive camera is forbidden here.** `CameraController` (and everything built on it —
+`TimelinePlayer`, `edd.play()`, `edd.focus()`, `edd.fit(true)`) is a `requestAnimationFrame`
+loop over `performance.now()`. `edd.camera.setImmediate(cam)` is safe; it is a single
+`applyCamera` with no tween. The CSS-keyframe arrow animations are forbidden for the same
+reason — rebuild them from `edgeCenterline()` + `arrowFrameStyle()`, which are the same motion
+as pure functions.
+
+Full worked examples: **[REMOTION_RECIPE.md](REMOTION_RECIPE.md)** (a complete, copy-pasteable
+Remotion component) and [INTEGRATION_GUIDE §6](INTEGRATION_GUIDE.md) (the API in context).

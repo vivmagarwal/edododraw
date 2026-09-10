@@ -16,12 +16,24 @@ React, or a server. Everything here is checked against the published API in
 npm i edododraw
 ```
 
+A clean install is **8 packages / 4.4 MB**.
+
 - **Runtime dependencies install automatically:** `roughjs` (hand-drawn strokes)
   and `@dagrejs/dagre` (auto-layout).
-- **Mermaid import** (`@excalidraw/mermaid-to-excalidraw`) ships as an
-  _optionalDependency_: it's installed by default, but install won't fail if it's
-  unavailable, and it's **lazy-loaded** only when a `mermaid` block is actually
-  rendered. See [§7](#7-mermaid-note).
+- **Mermaid import** (`@excalidraw/mermaid-to-excalidraw`) is an **optional peer
+  dependency** and is **not installed for you**. It pulls in mermaid -> d3 ->
+  cytoscape -> katex — 122 packages / 68 MB instead of 8 / 4.4 MB — which no
+  project that never writes a `mermaid` block should pay for. If you do want
+  Mermaid blocks, ask for it explicitly:
+
+  ```bash
+  npm i @excalidraw/mermaid-to-excalidraw
+  ```
+
+  Without it, a `mermaid` block reports an `M-PARSE` diagnostic naming that exact
+  command and **the rest of the diagram still renders**. See
+  [§7](#7-mermaid-note). *(Changed in 0.15.0 — it used to be an
+  `optionalDependency`, which npm installs by default.)*
 - **React is optional.** It's a _peer_ dependency needed only for the
   `edododraw/react` entry. For the core `edododraw` entry you don't need React at
   all.
@@ -402,6 +414,12 @@ const r = new SvgRenderer(el, { annotations: false });
 
 ## 6. Frame-driven / video integration (Remotion, capture pipelines)
 
+> **Building a Remotion composition?** Start at **[REMOTION_RECIPE.md](REMOTION_RECIPE.md)** —
+> a complete, copy-pasteable component, the list of what is forbidden and why, and the
+> stroke-quality settings for a camera punch-in. A runnable project skeleton is in
+> [`examples/remotion/`](../examples/remotion/). This section is the same API in the context of
+> the rest of the embedding surface.
+
 Hosts that own time — video renderers (Remotion), Puppeteer capture, scrubbers,
 bake pipelines — should not rely on the interactive player's rAF tweens or the
 engine's wall-clock CSS: a frame screenshot can catch a 0.45 s opacity
@@ -417,6 +435,37 @@ const edd = new EdodoDraw(el, {
 });
 await edd.render(source);
 ```
+
+At the engine level the same options live on `SvgRenderer`, plus two that matter once a camera
+zooms in:
+
+```ts
+const renderer = new SvgRenderer(host, {
+  static: true,
+  annotations: false,     // something else owns the annotations layer
+  nonScalingStroke: true, // a 2px line stays 2px at 4x instead of becoming 8px
+  roughnessScale: 1,      // see setRoughnessScale() below
+});
+```
+
+**Set the viewport, don't measure it.** `measure()` reads the container's
+`clientWidth`/`clientHeight`, which is the right thing in an interactive page but
+wrong in a frame-driven host: Remotion mounts a composition inside a 0x0
+off-screen wrapper during the layout pass, so a `measure()` call from a
+`useLayoutEffect` sees 0x0, clamps the camera viewport to `1x1`, and every later
+`applyCamera` translates by half a pixel — the diagram paints in the top-left
+corner and a `focus` beat shows blank canvas. State the size instead, using the
+same viewport you hand to `resolveCameraDirective`:
+
+```ts
+renderer.mount();
+renderer.setViewport({ w: width, h: height });   // e.g. Remotion's useVideoConfig()
+renderer.render(scene);
+```
+
+`setViewport` clamps non-finite or non-positive dimensions to 1 exactly as
+`measure()` does, and re-applies the current camera so the world transform
+matches immediately.
 
 **What `static: true` guarantees**
 
@@ -468,6 +517,84 @@ edd.setRevealProgress("brad", p);             // a `character` node: the whole f
 // p ≥ 1 restores the untouched rendering (original dash patterns included)
 ```
 
+
+**Out-of-order frames need the batch form.** `setRevealProgress` *mutates* an element's dash
+pattern and only restores it at `p >= 1`, so a frame that simply stops mentioning an id leaves
+that element frozen mid-draw forever — and a video renderer, a scrubber and a render farm all
+produce frames out of order. `setRevealProgressAll(map)` takes the whole picture at once: every
+drawable the map does **not** mention is restored to fully drawn, so the DOM is a total function
+of the map.
+
+```ts
+edd.setRevealProgressAll({ api: 0.4, db: 0 });   // everything else = done
+// or, straight from the beat: only the ids this beat draws on
+const state = edd.stepState(i);
+const drawing = Object.fromEntries(
+  Object.entries(state.revealFx).filter(([, fx]) => fx === "draw-on").map(([id]) => [id, p]),
+);
+edd.setRevealProgressAll(drawing);
+```
+
+`revealFx[id]` is one of `"fade" | "pop" | "sweep" | "draw-on"`. **`draw-on` is its own effect**,
+not an alias of `sweep`: `sweep` is a clip-path wipe, `draw-on` is a real stroke-by-stroke
+drawing that only `setRevealProgress`/`setRevealProgressAll` can play. The interactive player
+falls back to the sweep wipe for it.
+
+**Fonts.** `ensureEngineStyles()` injects the hand-drawn face as a base64 `@font-face`
+fire-and-forget, so a headless capture can screenshot before it decodes and lay every label out
+with fallback metrics. `whenFontsReady()` (also `edd.whenFontsReady()`) resolves once it is
+usable, never rejects, and resolves immediately where there is no `FontFaceSet` (jsdom):
+
+```ts
+const handle = delayRender("edododraw fonts");
+whenFontsReady().then(() => continueRender(handle), cancelRender);
+```
+
+**Flowing arrows, frame-driven.** The CSS-keyframe arrow animations are wall-clock, so
+`{ static: true }` emits no overlay at all. Rebuild them as pure functions:
+
+```ts
+import { arrowFrameStyle, edgeCenterlines } from "edododraw";
+
+const lines = edgeCenterlines(scene);                 // pure: routed d/points/length/style
+const s = arrowFrameStyle(lines[0], frame / fps);     // SVG attrs at one instant, or null
+```
+
+`ARROW_ANIMATIONS`, `DASH_MARCH_CYCLE_PX` (18), `COMET_HEAD_FRACTION` (0.14),
+`COMET_HEAD_MIN_PX` (24) and `FLOW_GRADIENT_URL` are exported too, if you want to roll your own.
+`edgeCenterline` / `edgeCenterlines` are DOM-free, so they work in `useMemo`, in Node and during
+SSR — no scraping `[data-edge] path` out of the document.
+
+**Stroke quality under a camera punch-in.** rough.js perturbs geometry in *world* units and the
+camera is a `scale(zoom)` on the world group, so on-screen jitter is `zoom × world jitter`. Three
+levers, all additive:
+
+```edd
+meta { style: hand-clean }                                  // the video-grade preset
+defaults { node { roughness: clean, pinCorners: true } }    // or declare it yourself
+```
+
+```ts
+new SvgRenderer(host, { nonScalingStroke: true });          // stroke WIDTH stays constant
+renderer.setRoughnessScale(1 / zoom);                       // stroke JITTER stays constant
+```
+
+`setRoughnessScale` **re-renders** (8–30 ms) whenever the value changes, so quantise it —
+`k = 1 / Math.max(1, 2 ** Math.floor(Math.log2(zoom)))` — and it regenerates a handful of times
+per composition instead of once per frame. Repeating a value is a no-op, and seeds are untouched,
+so strokes stay deterministic.
+
+Because it repaints, **order the frame**: camera and roughness scale first, then
+`applyVisibility` / `AnnotationLayer.render` / `setRevealProgressAll`. A repaint rebuilds the
+node and edge layers, so a scale change after those writes silently throws them away — the
+composition looks right while you scrub forward and differs on a seek. Measured: `classic` (roughness 1.15) is 1.71 px off its ideal corners at 1× and
+4.84 px at 4×; `hand-clean` is 0.00 px and 0.76 px. Full numbers in
+[STYLES_GUIDE §5](STYLES_GUIDE.md).
+
+**A standalone SVG string, synchronously.** `renderSceneToSVGString(renderer, scene, opts)` (and
+`edd.toSVGSync()`) do everything `exportSVGString` does with no promise — the font is embedded as
+a data URI, not fetched — so they are safe inside a React `useMemo`.
+
 Standalone `character` and `icon` nodes (DSL_LANGUAGE_GUIDE §3) are ordinary
 draw-on-able units: one `data-node` group each, so `setRevealProgress`,
 `applyVisibility`, `camera focus` and annotations address a whole person or
@@ -516,20 +643,22 @@ scene {
 }
 ```
 
-- The Mermaid engine (`@excalidraw/mermaid-to-excalidraw`) is an **optional
-  dependency, lazy-loaded** via dynamic `import()` on the **first** `mermaid` block
-  rendered — so apps that never use Mermaid don't pay for it (it's heavy).
+- The Mermaid engine (`@excalidraw/mermaid-to-excalidraw`) is an **optional PEER
+  dependency** — you install it yourself (`npm i @excalidraw/mermaid-to-excalidraw`)
+  — and it is **lazy-loaded** via dynamic `import()` on the **first** `mermaid`
+  block rendered, so it never enters your bundle unless a diagram uses one.
 - The facade's `render()` extracts `mermaid """ … """` blocks, converts each, and
   injects the resulting nodes/edges into the scene.
-- **If the package isn't installed**, the lazy import fails; the facade catches it
-  and reports a diagnostic (code `M-PARSE`) for that block. The rest of the diagram
-  still renders — `import { EdodoDraw } from "edododraw"` stays fully functional.
-  Install it explicitly if you need Mermaid: `npm i @excalidraw/mermaid-to-excalidraw`.
+- **If the package isn't installed**, the lazy import fails and the facade reports
+  a diagnostic (code `M-PARSE`, `hint: "npm i @excalidraw/mermaid-to-excalidraw"`)
+  for that block. The rest of the diagram still renders — `import { EdodoDraw }
+  from "edododraw"` stays fully functional. Call `await isMermaidAvailable()` to
+  check up front (it resolves `false`, never throws).
 - Mermaid conversion runs in the **browser only** (it renders to a hidden SVG). The
   pure `compileEdd` path stays synchronous and ignores Mermaid runtime.
 
-Helpers `convertMermaid`, `extractMermaidBlocks`, and `injectMermaid` are also
-exported from `edododraw` if you want to drive the import yourself. See
+Helpers `convertMermaid`, `extractMermaidBlocks`, `injectMermaid`,
+`isMermaidAvailable` and `MERMAID_INSTALL_HINT` are also exported from `edododraw` if you want to drive the import yourself. See
 [IMPORT_AND_EXPORT_GUIDE.md](IMPORT_AND_EXPORT_GUIDE.md).
 
 ---

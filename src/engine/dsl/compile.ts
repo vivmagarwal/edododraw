@@ -10,7 +10,7 @@ import { emptyScene, makeEdge, makeNode } from "../scene/defaults.js";
 import { getLayoutPlugin } from "../plugins/registry.js";
 import { getEdge, getGroup, getNode, vizItemMembers } from "../scene/query.js";
 import { isLightColor, resolveMarker } from "../scene/palette.js";
-import { effectivePreset, getStylePreset, presetEdgeDefaults, presetNodeDefaults, presetTheme, roleStyle } from "../style/presets.js";
+import { effectivePreset, getStylePreset, presetDeclaresRoughTuning, presetEdgeDefaults, presetNodeDefaults, presetTheme, roleStyle, roughTuning, tunePreset } from "../style/presets.js";
 import { runViz } from "../viz/registry.js";
 import "../viz/generators/index.js"; // register the built-in viz templates
 import { characterNodeBox } from "../viz/characterNode.js";
@@ -27,6 +27,7 @@ import type {
   NodeStyle,
   Scene,
   SceneGroup,
+  SceneRough,
   Step,
 } from "../scene/types.js";
 import type {
@@ -50,6 +51,8 @@ import {
   mapArrowhead,
   mapEasing,
   mapFillStyle,
+  mapBool,
+  mapBowing,
   mapRoughness,
   mapRouting,
   mapShape,
@@ -272,6 +275,24 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
   }
   applyMeta(scene, metaAttrs, tokenMap);
 
+  // ---- diagram-wide rough tuning ------------------------------------------
+  // The annotation layer, group frames and the viz templates have no per-element
+  // style to read, so they follow ONE declaration: the rough attrs of
+  // `defaults { node { … } }`, over the active preset's own tuning (only the
+  // hand-clean family carries any). Left undefined when the author declared
+  // nothing, which is how every existing diagram keeps its exact rendering.
+  {
+    const declared = buildNodeStyle(defaults.get("node") ?? [], tokenMap, mode).style;
+    const rough: SceneRough = {};
+    if (preset && presetDeclaresRoughTuning(preset)) {
+      rough.roughness = preset.roughness;
+      Object.assign(rough, roughTuning(preset));
+    }
+    if (declared.roughness !== undefined) rough.roughness = declared.roughness;
+    Object.assign(rough, roughTuning(declared));
+    if (Object.keys(rough).length) scene.meta.rough = rough;
+  }
+
   // node styling
   const styleFor = (kind: "node" | "edge", classes: string[], inline: AttrBlock): AttrBlock => {
     const layered: AttrBlock = [];
@@ -462,7 +483,9 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
   // (viz output is pinned Scene IR — camera/annotations/editing work as usual).
   const animatedSpecs: VizSpecLike[] = [];
   if (vizDecls.length) {
-    const vizPreset = preset ?? effectivePreset(undefined, mode);
+    // Templates read `ctx.preset.roughness` directly rather than a per-element
+    // style, so fold the diagram's declaration into the preset they see.
+    const vizPreset = tunePreset(preset ?? effectivePreset(undefined, mode), scene.meta.rough);
     let cursorY = contentMaxY(scene) + (scene.nodes.length ? 100 : 40);
     for (let i = 0; i < vizDecls.length; i++) {
       const spec = lowerViz(vizDecls[i], i, tokenMap);
@@ -708,6 +731,31 @@ function buildNodeStyle(attrs: AttrBlock, tokens: Map<string, Value>, _mode: "li
         if (r != null) style.roughness = r;
         break;
       }
+      // --- rough.js shape tuning (see scene/types.ts RoughTuning). All four
+      // are optional and default to rough.js's own behaviour, so a diagram
+      // that names none of them draws exactly as it always has.
+      case "bowing": {
+        const b = mapBowing(v);
+        if (b != null) style.bowing = b;
+        break;
+      }
+      case "jitter":
+      case "maxRandomnessOffset": {
+        if (v.t === "num") style.maxRandomnessOffset = v.v;
+        break;
+      }
+      case "preserveVertices":
+      case "pinCorners": {
+        const b = mapBool(v);
+        if (b != null) style.preserveVertices = b;
+        break;
+      }
+      case "disableMultiStroke":
+      case "singleStroke": {
+        const b = mapBool(v);
+        if (b != null) style.disableMultiStroke = b;
+        break;
+      }
       case "roundness":
       case "radius":
         if (v.t === "num") style.roundness = v.v;
@@ -820,6 +868,31 @@ function buildEdgeStyle(
       case "roughness": {
         const r = mapRoughness(v);
         if (r != null) style.roughness = r;
+        break;
+      }
+      // --- rough.js shape tuning (see scene/types.ts RoughTuning). All four
+      // are optional and default to rough.js's own behaviour, so a diagram
+      // that names none of them draws exactly as it always has.
+      case "bowing": {
+        const b = mapBowing(v);
+        if (b != null) style.bowing = b;
+        break;
+      }
+      case "jitter":
+      case "maxRandomnessOffset": {
+        if (v.t === "num") style.maxRandomnessOffset = v.v;
+        break;
+      }
+      case "preserveVertices":
+      case "pinCorners": {
+        const b = mapBool(v);
+        if (b != null) style.preserveVertices = b;
+        break;
+      }
+      case "disableMultiStroke":
+      case "singleStroke": {
+        const b = mapBool(v);
+        if (b != null) style.disableMultiStroke = b;
         break;
       }
       case "startArrow":
@@ -1122,7 +1195,17 @@ function applyRevealToStep(c: { verb: string; targets: Value[]; with?: string },
   }
 }
 
-/** Normalize a reveal-effect word to a renderer effect ("fade" | "pop" | "sweep"). */
+/**
+ * Normalize a reveal-effect word to a renderer effect
+ * ("fade" | "pop" | "sweep" | "draw-on").
+ *
+ * `draw-on` is its OWN effect, not an alias of `sweep`: `sweep` is a clip-path
+ * wipe, `draw-on` is a real hand-drawing of the strokes
+ * (SvgRenderer.setRevealProgress / setRevealProgressAll). A frame-driven host
+ * reads `step.revealFx[id]` and picks the right implementation; the interactive
+ * player falls back to the sweep CSS class for `draw-on` (there is no
+ * wall-clock stroke animation).
+ */
 function revealEffect(raw: string | undefined): string | undefined {
   switch (raw) {
     case "fade-in":
@@ -1134,6 +1217,7 @@ function revealEffect(raw: string | undefined): string | undefined {
       return "pop";
     case "draw-on":
     case "draw":
+      return "draw-on";
     case "sweep":
       return "sweep";
     default:

@@ -9,6 +9,30 @@ Annotations are the layer of **highlights, underlines, arrows, callouts, spotlig
 
 Both are the same `Annotation` record and both render through `AnnotationLayer` (`src/engine/annotate/layer.ts`), which draws hand-drawn (rough.js) marks in **world space** so they track the camera and their anchored element.
 
+### Marks follow the diagram's roughness
+
+Every mark is drawn with rough.js, and each kind has its own hand-tuned constants (a highlight
+is deliberately looser than a callout leader). Those constants are now **relative**: they are
+scaled by whatever hand-drawn intensity the diagram declared, so a clean diagram gets clean
+marks and a scratchy one gets scratchy marks.
+
+```edd
+defaults { node { roughness: clean, pinCorners: true } }   // or: meta { style: hand-clean }
+annotate { highlight db }                                   // as clean as the diagram
+```
+
+The declaration is `scene.meta.rough`, set by the `defaults { node { … } }` block or by a preset
+that carries rough tuning of its own (today the `hand-clean` family) — see
+[STYLES_GUIDE §5](STYLES_GUIDE.md). It also reaches group frames and `viz` templates, so one
+line governs the whole picture. A diagram that declares nothing leaves it undefined and every
+mark renders **exactly** as it always did: the ratio is 1, so each constant lands back on its
+literal value.
+
+Two more things follow the renderer rather than the scene: `SvgRenderer`'s
+`nonScalingStroke` policy is applied to the mark layer after each render, and
+`setRoughnessScale(k)` (the zoom compensation a video host uses) scales marks along with the
+diagram — so an annotation stays as crisp as the boxes it points at through a punch-in.
+
 ### Anchoring
 
 `Annotation.target` is a ref to a node/edge/group id (tracks that element), a set (`options.members`), or an absolute world point. When the camera moves or layout changes, the annotation follows because it lives in the transformed world layer and re-resolves its target bbox on render.
@@ -50,3 +74,19 @@ Element-anchored annotations serialize exactly; free-form marks (a floating arro
 ## Animated arrows
 
 The connector animations (`flow`, `dash-march`, `draw-on`, `comet`, `gradient-flow`, `electric`, `pulse`) are a CSS overlay path over the hand-drawn stroke — see `animationOverlay` in `src/engine/render/edges.ts` and the keyframes in `src/engine/render/theme.css.ts`. Set on any edge with `animate:` or the `~>` glyph.
+
+Those keyframes are **wall-clock** motion, so `SvgRenderer { static: true }` emits no overlay at
+all and a frame-driven host must rebuild them. `src/engine/render/frameArrows.ts` exports the
+same motion as pure functions — `edgeCenterline(scene, id)` for the geometry and
+`arrowFrameStyle(centerline, timeSec)` for one instant of the animation, plus the raw constants
+(`ARROW_ANIMATIONS`, `DASH_MARCH_CYCLE_PX`, `COMET_HEAD_FRACTION`, `FLOW_GRADIENT_URL`). See
+[REMOTION_RECIPE §4](REMOTION_RECIPE.md).
+
+## Annotations in a frame-driven host
+
+`stepStateAt(scene, i).annotations` already merges always-on + beat-scoped marks in render
+order, and `AnnotationLayer.render(scene, annotations, false)` replaces the layer wholesale with
+no reveal animation — so one call per frame is both correct and total. Beat-scoped marks appear
+instantly; they have no progress knob. For a mark that *draws itself* on cue, overlay
+`@remotion/rough-notation` positioned from `elementBBox(scene, id)` — see
+[REMOTION_RECIPE §9](REMOTION_RECIPE.md).

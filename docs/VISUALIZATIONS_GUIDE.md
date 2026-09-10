@@ -446,7 +446,7 @@ right for a filled rectangle, fatal for a stick figure. Since 0.13.1
 `drawCharacter` runs the requested ink through `characterInk(want, preset)`,
 which keeps it when it contrasts with `preset.background` and otherwise falls
 back to `preset.ink` (then to plain contrast ink). Nothing is hardcoded — every
-candidate comes from the preset — and figures now read in all nine style
+candidate comes from the preset — and figures now read in all ten style
 choices. The same guard covers the caption under a `character` (and an `icon`
 node's glyph + caption): a figure node has no filled body, so its text sits
 straight on the canvas and must not inherit the white "text on top of this fill"

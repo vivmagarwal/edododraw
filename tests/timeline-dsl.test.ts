@@ -73,11 +73,15 @@ describe("DSL reveal effects -> Step.revealFx", () => {
       beat three "3" { reveal { draw-on [a] } }
       beat four  "4" { reveal { show c } }
       beat five  "5" { reveal { hide c } }
+      beat six   "6" { reveal { show a with sweep } }
     `),
     );
     expect(s[0].revealFx).toMatchObject({ a: "fade", b: "fade", c: "fade" });
     expect(s[1].revealFx).toEqual({ b: "pop" });
-    expect(s[2].revealFx).toEqual({ a: "sweep" });
+    // `draw-on` is its OWN effect (a real stroke drawing), NOT an alias of the
+    // `sweep` clip-path wipe — a frame-driven host must be able to tell them apart.
+    expect(s[2].revealFx).toEqual({ a: "draw-on" });
+    expect(s[5].revealFx).toEqual({ a: "sweep" });
     expect(s[3].revealFx).toBeUndefined(); // plain show = instant
     expect(s[4].hide).toContain("c");
     expect(s[4].revealFx).toBeUndefined(); // hide carries no reveal effect

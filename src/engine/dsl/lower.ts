@@ -113,7 +113,28 @@ export function mapStrokeWidth(v: Value): number | undefined {
 export function mapRoughness(v: Value): number | undefined {
   if (v.t === "num") return v.v;
   if (v.t === "ident") {
-    return { architect: 0, artist: 1, cartoonist: 2 }[v.v];
+    // `clean` = the hand-clean look: still hand-drawn, but tight enough that a
+    // 4x camera punch-in stays crisp (see the hand-clean preset).
+    return { architect: 0, clean: 0.35, artist: 1, cartoonist: 2 }[v.v];
+  }
+  return undefined;
+}
+
+/** `bowing: 0.35` / `bowing: none|slight|normal|loose` -> a rough.js bowing. */
+export function mapBowing(v: Value): number | undefined {
+  if (v.t === "num") return v.v;
+  if (v.t === "ident") {
+    return { none: 0, slight: 0.35, normal: 1, loose: 2, wild: 3 }[v.v];
+  }
+  return undefined;
+}
+
+/** A boolean attribute, written as `true`/`false` or `yes`/`no`/`on`/`off`. */
+export function mapBool(v: Value): boolean | undefined {
+  if (v.t === "bool") return v.v;
+  if (v.t === "num") return v.v !== 0;
+  if (v.t === "ident") {
+    return { true: true, yes: true, on: true, false: false, no: false, off: false }[v.v];
   }
   return undefined;
 }

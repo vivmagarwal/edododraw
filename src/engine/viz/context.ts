@@ -9,7 +9,7 @@
 import { makeEdge, makeNode } from "../scene/defaults.js";
 import type { Annotation, EdgeStyle, FontKind, NodeStyle, SceneEdge, SceneNode, ShapeKind, TextAlign } from "../scene/types.js";
 import type { DiagnosticBag } from "../dsl/diagnostics.js";
-import { roleStyle, type RoleOptions, type RoleStyle, type StylePreset } from "../style/presets.js";
+import { roleStyle, roughTuning, type RoleOptions, type RoleStyle, type StylePreset } from "../style/presets.js";
 import { drawCharacter, type CharacterOptions } from "./characters.js";
 import { measureBlock, measureText, wrapText } from "./text.js";
 import { iconEntry } from "./icons.js";
@@ -147,18 +147,27 @@ export class VizContext {
 
   /** Emit a shape node styled by a RoleStyle (or raw style overrides). */
   shape(shape: ShapeKind, x: number, y: number, w: number, h: number, role: RoleStyle | Partial<NodeStyle>, opts: ShapeOptions = {}): SceneNode {
-    const style: Partial<NodeStyle> = isRole(role)
-      ? {
-          stroke: role.stroke,
-          fill: role.fill,
-          fillStyle: role.fillStyle,
-          strokeWidth: role.strokeWidth,
-          roughness: role.roughness,
-          textColor: role.textColor,
-          fontFamily: role.fontFamily,
-          roundness: role.roundness,
-        }
-      : role;
+    const style: Partial<NodeStyle> = {
+      // The preset's rough tuning is the FLOOR under every generated shape:
+      // generators hand us bare style literals (see line(), arrowhead(),
+      // icon() and every template), so without this a `hand-clean` viz would
+      // draw its roughness but not its pinned corners. Anything explicit
+      // below still wins.
+      ...roughTuning(this.preset),
+      ...(isRole(role)
+        ? {
+            stroke: role.stroke,
+            fill: role.fill,
+            fillStyle: role.fillStyle,
+            strokeWidth: role.strokeWidth,
+            roughness: role.roughness,
+            ...roughTuning(role),
+            textColor: role.textColor,
+            fontFamily: role.fontFamily,
+            roundness: role.roundness,
+          }
+        : role),
+    };
     const node = makeNode({
       id: opts.id ?? this.uid(shape),
       shape,
@@ -275,7 +284,7 @@ export class VizContext {
       fromAnchor: opts.fromAnchor,
       toAnchor: opts.toAnchor,
       label: opts.label,
-      style: { stroke: this.preset.edge, strokeWidth: Math.min(2, this.preset.strokeWidth), roughness: this.preset.roughness, ...opts.style },
+      style: { stroke: this.preset.edge, strokeWidth: Math.min(2, this.preset.strokeWidth), roughness: this.preset.roughness, ...roughTuning(this.preset), ...opts.style },
       routing: opts.routing,
       data: this.tagged(undefined, "edge"),
       mode: this.mode,

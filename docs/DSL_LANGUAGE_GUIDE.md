@@ -90,7 +90,11 @@ rect api "API Service" {
   fillStyle: hachure     // hachure | cross-hatch | solid | zigzag | dots | none
   strokeWidth: bold      // thin | medium | bold | thick | <number>
   strokeStyle: dashed    // solid | dashed | dotted
-  roughness: artist      // architect(0) | artist(1) | cartoonist(2) | <number>
+  roughness: artist      // architect(0) | clean(0.35) | artist(1) | cartoonist(2) | <number>
+  bowing: slight         // none(0) | slight(0.35) | normal(1) | loose(2) | wild(3) | <number>
+  jitter: 1              // = maxRandomnessOffset: per-vertex jitter budget, world units
+  pinCorners: true       // = preserveVertices: pin the drawn path to the exact corners
+  singleStroke: true     // = disableMultiStroke: one confident pass instead of two
   roundness: 16          // corner radius (px)
   font: hand             // hand | normal | code
   fontSize: 22
@@ -103,6 +107,14 @@ rect api "API Service" {
 ```
 
 Apply style classes with `:::` — `rect api "API" :::card :::critical`.
+
+**The stroke defaults.** The default `classic` style declares `roughness: 0.45, bowing: 0.4,
+jitter: 1, pinCorners: true, singleStroke: true` — smooth enough that a camera punch-in stays
+crisp. It was scratchier before 0.15.0; `meta { style: classic-rough }` brings that back in one
+line. The five attributes above cascade like any other style (inline → `style .class` →
+`defaults`), and a `defaults { node { … } }` block also becomes the **diagram-wide** declaration
+that the annotation layer, group frames and every `viz` template follow. Full reference with the
+measured numbers: [STYLES_GUIDE §5](STYLES_GUIDE.md).
 
 ### Named colors
 
@@ -223,6 +235,7 @@ a -> b {
   startArrow: dot          // none arrow triangle bar dot circle diamond crow …
   endArrow: triangle
   curve: curved            // straight | curved | orthogonal | elbow | bezier | arc
+  roughness: clean         // + bowing / jitter / pinCorners / singleStroke, as on nodes
   animate: dash-march      // see §5
 }
 ```
@@ -368,7 +381,8 @@ An **explicit `zoom N` is applied uncapped** (a beat can zoom past the interacti
 |---|---|---|---|
 | Fade | `with fade-in` (alias `fade`) | `fade-in <t>` | opacity 0→1 (~0.4s) |
 | Pop | `with pop` (alias `emphasize`) | `pop <t>` | scale-bounce in (~0.45s) |
-| Draw-on | `with draw-on` (aliases `draw`, `sweep`) | `draw-on <t>` | left-to-right marker sweep (~0.5s) |
+| Draw-on | `with draw-on` (alias `draw`) | `draw-on <t>` | real stroke-by-stroke hand-drawing in a frame-driven host; the interactive player falls back to the sweep wipe |
+| Sweep | `with sweep` | `sweep <t>` | left-to-right marker wipe (~0.5s, clip-path) |
 
 ```edd
 reveal { show all with fade-in }     // whole diagram fades in
@@ -376,6 +390,19 @@ reveal { show [db, cache] with pop } // pop just these two
 reveal { draw-on [gw] }              // effect-verb form
 reveal { show legacy }               // no `with` -> instant (no animation)
 ```
+
+**Bare form.** For a beat that reveals one thing, the braces are optional — a bare
+`reveal <targets> [with <effect>]` is shorthand for a single implicit `show`:
+
+```edd
+reveal all                           // == reveal { show all }
+reveal [db, cache] with pop          // == reveal { show [db, cache] with pop }
+reveal hide legacy                   // an explicit verb still works bare
+```
+
+The block form is the one to reach for when a beat does more than one thing, and it is what
+every example in these docs uses. (Before 0.15.0 the bare form silently compiled to nothing,
+and a bare reveal followed by a `key: value` beat item could hang the compiler.)
 
 A plain `show`/`hide` with no effect is instant. Effects honor `prefers-reduced-motion`. Beat annotations are cleared at the start of each beat (unless in the always-on `annotate` block).
 
@@ -415,7 +442,7 @@ overrides {
 Declare a chart or diagram template with data instead of drawing it:
 
 ```edd
-meta { style: chalkboard }          // optional: one of the built-in styles (default is classic B&W)
+meta { style: chalkboard }          // optional: one of the 11 built-in styles (default is classic B&W)
 
 viz funnel sales "Sales Funnel" {
   input: "Potential customers"        // template option

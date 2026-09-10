@@ -1,0 +1,25 @@
+{
+  "name": "edododraw-remotion-example",
+  "version": "0.15.0",
+  "private": true,
+  "description": "Minimal Remotion project that drives an EDodoDraw diagram frame by frame.",
+  "license": "MIT",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render EdodoDiagram out/diagram.mp4",
+    "still": "remotion still EdodoDiagram out/frame.png --frame=200",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.522",
+    "edododraw": "^0.15.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.522"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "typescript": "^5.7.2"
+  }
+}
