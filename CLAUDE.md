@@ -30,7 +30,7 @@ Guidance for AI agents working in this repo.
 
 ## Documentation Pointers
 
-**Single source of truth:** the guides in `docs/*.md`, published at https://vivmagarwal.github.io/edododraw/ (the site renders these files verbatim via `src/site/docs.ts`). Update `docs/*.md` in the same change as the code. A release is a pushed `v<version>` tag: `.github/workflows/release.yml` publishes that commit to npm (trusted publishing) and redeploys the site — see DEVELOPMENT_STANDARDS § Releasing. `scripts/deploy-pages.sh` redeploys the site by hand between releases. README and this file only *point* here.
+**Single source of truth:** the guides in `docs/*.md`, published at https://vivmagarwal.github.io/edododraw/ (the site renders these files verbatim via `src/site/docs.ts`). Update `docs/*.md` in the same change as the code. A release is `npm run release` (`scripts/release.sh`, local, no CI): verify → tag → push → npm publish → registry check → deploy the site — see DEVELOPMENT_STANDARDS § Releasing. `scripts/deploy-pages.sh` redeploys the site by hand between releases. README and this file only *point* here.
 
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system overview, pipeline, module table, key decisions.

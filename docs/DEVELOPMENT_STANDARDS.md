@@ -89,30 +89,37 @@ Two stages (mandatory for anything user-facing):
 
 ## Releasing
 
-**A release is a git tag.** Pushing `v<version>` runs `.github/workflows/release.yml`, which
-typechecks, tests and publishes that exact commit to npm, then redeploys the docs site from it.
-So npm, the tag and https://vivmagarwal.github.io/edododraw/ always show the same code.
+**A release is one local command, and it keeps npm, GitHub and the docs site on the same
+commit.** No CI is involved.
 
 ```sh
 npm version 0.17.0 --no-git-tag-version   # bump package.json + lock
-# update CHANGELOG.md and the docs/*.md the change touches, in the same commit
+# add a "## 0.17.0" section to CHANGELOG.md and update the docs/*.md the change touches
 git commit -am "0.17.0 — <summary>"
-git tag v0.17.0
-git push origin main v0.17.0              # → CI publishes + deploys
+npm run release                            # verify → tag → push → publish → check → deploy docs
 ```
 
-- **npm auth.** The workflow publishes with the `NPM_TOKEN` repository secret, a granular
-  publish token (update it with `gh secret set NPM_TOKEN` whenever the token is rotated). If the
-  package's *Trusted Publisher* setting is configured (npmjs.com → edododraw → Settings: GitHub
-  Actions, `vivmagarwal` / `edododraw` / `release.yml`), npm uses that OIDC exchange first and
-  the secret is never touched, so the secret can then be deleted. Setting that up needs an
-  authenticator-app or security-key 2FA session. Either way, every CI-published version carries
-  a provenance attestation linking it to its commit.
-- **The workflow is idempotent.** If the version is already on npm it skips the publish (and the
-  site deploy), so re-running a release is safe.
-- **`prepublishOnly` guards manual publishes too** (`scripts/check-release.mjs`). Outside CI,
-  `npm publish` refuses unless the working tree is clean, HEAD is on `origin/main`, and the tag
-  `v<version>` points at HEAD and is pushed. In CI it requires the run to be for that tag.
-  `EDD_RELEASE_UNCHECKED=1` bypasses it, for emergencies only.
-- **The docs site** can still be redeployed by hand between releases with
-  `scripts/deploy-pages.sh`.
+`scripts/release.sh` runs, in order:
+
+1. Checks that the tree is clean, you're on `main`, and `CHANGELOG.md` has a `## <version>`
+   section.
+2. Runs `npm run typecheck` and `npm test`.
+3. Tags `v<version>` (annotated) at HEAD, then pushes `main` and the tag to GitHub.
+4. Runs `npm publish`, whose `prepublishOnly` builds the package and runs `check-dist`.
+5. Reads the registry and checks that the version's `gitHead` is HEAD.
+6. Deploys the docs site (`scripts/deploy-pages.sh`).
+
+Every step checks whether it has already happened, so after a failure (a wrong OTP, a network
+blip) just run it again and it resumes.
+
+- **npm auth.** By default it uses `NPM_ACCESS_TOKEN` from `.env`, a granular token with
+  "bypass 2FA", through a temporary config file that it deletes afterwards. npm is phasing those
+  tokens out for publishing. When it refuses one, run `npm login` once, then
+  `npm run release -- --otp <6-digit code>` to publish with your session and a 2FA code.
+- **`prepublishOnly` guards any other publish** (`scripts/check-release.mjs`). A bare
+  `npm publish` refuses unless the tree is clean, HEAD is on `origin/main`, and the tag
+  `v<version>` points at HEAD and is pushed. `EDD_RELEASE_UNCHECKED=1` bypasses it, for
+  emergencies only.
+- **Every published version has a tag**, created at its npm `gitHead`, so
+  `git checkout v0.12.1` gives you exactly what npm serves for 0.12.1.
+- **The docs site** can be redeployed by hand between releases with `scripts/deploy-pages.sh`.
