@@ -73,7 +73,7 @@ export function renderSceneToSVGString(renderer: SvgRenderer, scene: Scene, opts
   if (opts.embedFont !== false) {
     const css = embeddedFontCss();
     if (css) {
-      const style = document.createElementNS(SVG_NS, "style");
+      const style = clone.ownerDocument.createElementNS(SVG_NS, "style");
       style.textContent = css;
       clone.insertBefore(style, clone.firstChild);
     }
@@ -82,7 +82,10 @@ export function renderSceneToSVGString(renderer: SvgRenderer, scene: Scene, opts
   // XMLSerializer emits xmlns from the element's namespace by itself; setting
   // the attribute too would DUPLICATE it (invalid XML — strict parsers reject
   // the file). Only patch it in if a serializer somehow left it out.
-  let out = new XMLSerializer().serializeToString(clone);
+  // The clone's own window supplies the serializer, so a server-side export
+  // from a jsdom document works without a global XMLSerializer.
+  const Serializer: typeof XMLSerializer = (clone.ownerDocument.defaultView as (Window & typeof globalThis) | null)?.XMLSerializer ?? XMLSerializer;
+  let out = new Serializer().serializeToString(clone);
   if (!/^<svg[^>]*\sxmlns=/.test(out)) out = out.replace(/^<svg/, `<svg xmlns="${SVG_NS}"`);
   return '<?xml version="1.0" encoding="UTF-8"?>\n' + out;
 }

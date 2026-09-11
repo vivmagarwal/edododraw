@@ -9,6 +9,70 @@ All notable changes to **edododraw**. Versions follow [semver](https://semver.or
 
 ---
 
+## 0.16.0
+
+**Three templates redrawn, plus engine work that had been sitting in a downstream copy.** An
+app that vendors the engine had fixed these in its own tree, and none of it had come back to the
+library. It has now, along with a reveal fix and a line-weight knob for video hosts. Additive
+throughout: no DSL change, no registry name removed, and every other template renders
+byte-for-byte as in 0.15.0.
+
+### ⚠️ VISUAL CHANGE — `balance`, `head-thoughts` and `root-causes` are redrawn
+
+Only these three templates change; the other 84 draw the same bytes as 0.15.0.
+
+- **`balance`** is a real balance. Before, the arms were two free curves that ran through the
+  item labels, and the pans floated under nothing. Now a post stands on a stepped plinth, with a
+  straight beam pivoting on top that turns with `tilt`. Each pan hangs plumb from its beam end on
+  two strings. The items sit on an opaque card inside the pan, and the side's name is on a pill
+  beneath. Both pans share one size, fitted to the wider card, and up to 5 items per side fit.
+- **`head-thoughts`** is one smooth profile, drawn through points on its outline and filled
+  with a faint wash so it reads as a head rather than a wire. It has a proper brow, nose, lips and
+  chin, and a neck cut flat. Thoughts are spread in rows over the cranium, clear of the face, at
+  any count from 1 to 6. New option: **`facing: left|right`** (default `right`).
+- **`root-causes`** has a leafy three-lobe crown, a waisted trunk that flares at the ground, and
+  **one tapered root per cause (1–7)**, each with rootlets and its label straight under the root
+  tip. Roots are opaque and layered, so where they cross they overlap like real roots instead of
+  darkening. Filler roots keep the root ball full with 1 or 2 causes.
+
+New shared helpers in `viz/generators/util.ts`, which the new silhouettes are drawn with:
+`smoothPath` (anchors → one cubic path; `"corner"` anchors keep a crease; `mirrorX`),
+`smoothShape`, `taperedOutline` and `cubicPoints`.
+
+### Added
+
+- **`viz … { at: (x, y) }`** pins a block's top-left instead of stacking it below the scene, so a
+  template can stand beside a character or a hand-placed node. A later unpinned block stacks below
+  whichever is lower. A malformed value warns `W-VIZ-AT` and falls back to stacking.
+- **`setNodeAttrs(source, id, attrs)`** in the source-patch API is the general form of
+  `styleNode`. It upserts any attribute into a node's `{ … }` block, creating the block if needed.
+  Numbers and booleans are written verbatim, bare words stay words, and anything else is quoted.
+  It's the deterministic write path for an inspector panel.
+- **`strokeScale` / `setStrokeScale(k)` / `getStrokeScale()`** on `SvgRenderer` multiply every drawn
+  stroke width: outlines, edges, arrowheads, hachure, icons, group frames and annotation marks.
+  Under `nonScalingStroke`, a preset's 1.8px line is 1.8 screen px, which is thin on a 1080p
+  frame, so a video host can set weight from its own theme. It is idempotent (never compounds),
+  `1` restores the authored widths exactly, and it repaints only when the value changes.
+- **`registerMermaidParser(fn)`** lets a host supply the Mermaid parser instead of relying on
+  the lazy `import()` of the optional peer. Useful for bundlers that can't follow the dynamic
+  import, hosts that load mermaid themselves, and test doubles. A registered parser always wins.
+
+### Fixed
+
+- **Draw-on reveals under a zoom with `nonScalingStroke`.** `setRevealProgress` sized each
+  stroke's dash by `getTotalLength()`, which is in user units, but a non-scaling stroke dashes in
+  screen pixels. With a camera above 1× the dash pattern repeated mid-reveal (dash, gap, dash) and
+  a circle closed only 1/zoom of the way round. The sweep now scales those elements' length by the
+  CTM. The finished frame (`p >= 1`) was already correct.
+- **Server-side rendering never touches the global `document`.** Node shapes, edges, arrowheads,
+  built-in plugin shapes, the annotation layer and `renderSceneToSVGString` now create every
+  element from the container's own document, and serialize with that document's
+  `XMLSerializer`. A jsdom render in a Node or Next.js server works without setting
+  `document`/`window` globals, which matters because React SSR decides client vs server by
+  checking for a global `document`.
+
+---
+
 ## 0.15.0
 
 **The video release.** A diagram can now be driven frame by frame — deterministically, with no

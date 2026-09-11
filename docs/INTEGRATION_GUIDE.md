@@ -341,7 +341,7 @@ make the same edits a user would by dragging on the canvas:
 
 ```ts
 import {
-  writeOverrides, renameNode, styleNode, addNode, addEdge, deleteElements,
+  writeOverrides, renameNode, styleNode, setNodeAttrs, addNode, addEdge, deleteElements,
   type OverrideEntry,
 } from "edododraw";
 
@@ -349,12 +349,19 @@ import {
 writeOverrides(src, [{ id: "db", x: 120, y: 40, w: 160, h: 80 }]); // upsert the overrides {} block (move/resize)
 renameNode(src, "db", "Primary DB");
 styleNode(src, "db", { fill: "green", stroke: "black", shape: "cylinder" });
+setNodeAttrs(src, "brad", { pose: "waving", height: 260, flip: true, label: "Brad, 2nd try" });
 addNode(src, { id: "cache", shape: "rect", label: "Cache" });
 addEdge(src, { from: "api", to: "cache", glyph: "-->", label: "reads" });
 deleteElements(src, ["cache"]);
 
 // type OverrideEntry = { id: string; x: number; y: number; w?: number; h?: number }
 ```
+
+`setNodeAttrs` is the general form of `styleNode`, and the write path for an
+inspector panel: it upserts **any** attribute into the node's `{ … }` block, or
+creates the block when there is none. Numbers and booleans are written
+verbatim, a bare word stays a word, and anything else is quoted. To "remove"
+something, set it to its own `none`/default value, so the source stays explicit.
 
 The full engine is re-exported from `edododraw` for building your own rendering
 pipeline instead of using the `EdodoDraw` facade:
@@ -445,6 +452,7 @@ const renderer = new SvgRenderer(host, {
   annotations: false,     // something else owns the annotations layer
   nonScalingStroke: true, // a 2px line stays 2px at 4x instead of becoming 8px
   roughnessScale: 1,      // see setRoughnessScale() below
+  strokeScale: 1,         // line weight multiplier — see setStrokeScale() below
 });
 ```
 
@@ -579,6 +587,13 @@ new SvgRenderer(host, { nonScalingStroke: true });          // stroke WIDTH stay
 renderer.setRoughnessScale(1 / zoom);                       // stroke JITTER stays constant
 ```
 
+**Line weight for the frame.** Under `nonScalingStroke` a preset's 1.8px line is 1.8 *screen*
+px, which reads thin on a 1920×1080 frame. `renderer.setStrokeScale(k)` (or the `strokeScale`
+option) multiplies every drawn stroke width by `k`: node outlines, edges, arrowheads, hachure,
+icons, group frames and annotation marks. So a video host sets weight from its own theme
+without restyling the diagram. Like `setRoughnessScale` it repaints when the value changes and is
+a no-op for a repeat value; it never compounds, and `1` restores the authored widths exactly.
+
 `setRoughnessScale` **re-renders** (8–30 ms) whenever the value changes, so quantise it —
 `k = 1 / Math.max(1, 2 ** Math.floor(Math.log2(zoom)))` — and it regenerates a handful of times
 per composition instead of once per frame. Repeating a value is a no-op, and seeds are untouched,
@@ -658,7 +673,10 @@ scene {
   pure `compileEdd` path stays synchronous and ignores Mermaid runtime.
 
 Helpers `convertMermaid`, `extractMermaidBlocks`, `injectMermaid`,
-`isMermaidAvailable` and `MERMAID_INSTALL_HINT` are also exported from `edododraw` if you want to drive the import yourself. See
+`isMermaidAvailable` and `MERMAID_INSTALL_HINT` are also exported from `edododraw` if you want to drive the import yourself.
+If your bundler can't follow the dynamic `import()`, or you load mermaid your own way, hand the
+parser over instead: `registerMermaidParser(parseMermaidToExcalidraw)`. A registered parser
+always wins over the lazy import. See
 [IMPORT_AND_EXPORT_GUIDE.md](IMPORT_AND_EXPORT_GUIDE.md).
 
 ---
@@ -672,9 +690,14 @@ Helpers `convertMermaid`, `extractMermaidBlocks`, `injectMermaid`,
   (which is exactly what `EdodoDrawView` does), never during render or on the server.
 - **`compileEdd` is DOM-free.** Use it for server-side validation, computing a scene
   ahead of time, or CI checks — no browser or jsdom required.
-- **Headless SVG rendering works under jsdom.** `SvgRenderer` needs a DOM but not a
-  *browser*: give it a jsdom document (set the `document`/`window` globals, mount into
-  a div, render, serialize `renderer.svg.outerHTML`) and you can bake SVGs in Node/CI.
+- **Headless SVG rendering works under jsdom — no globals needed.** `SvgRenderer` needs a
+  DOM but not a *browser*, and since 0.16 the whole render path — nodes, edges, plugin
+  shapes, arrowheads, annotations — plus `renderSceneToSVGString` builds every element from
+  **the container's own document**, never the global `document`. Create a jsdom (or any)
+  document, mount into a div in it, render, then serialize. No `document`/`window` globals
+  have to be set, which matters in a Next.js/React server process, where a global
+  `document` flips React into client mode. (PNG export still needs a browser: it
+  rasterizes through `Image` and a canvas.)
   This repo's visual-QA harness (`scripts/qa/render-viz.mts`) is a working reference —
   it renders all 87 viz templates headlessly this way. Pair with `{ static: true }`.
 - **Fonts are self-contained.** The hand-drawn font (Excalifont/Virgil) is embedded

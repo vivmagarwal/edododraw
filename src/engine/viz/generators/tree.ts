@@ -8,7 +8,7 @@ import { registerViz } from "../registry.js";
 import { itemsOf, optStr, type VizItem, type VizSpec } from "../types.js";
 import type { VizContext } from "../context.js";
 import type { NodeStyle } from "../../scene/types.js";
-import { polar, rad, radialAlign , scallopedBlob } from "./util.js";
+import { cubicPoints, polar, radialAlign, scallopedBlob, smoothShape, taperedOutline } from "./util.js";
 
 // ---- shared helpers ----------------------------------------------------------
 
@@ -59,45 +59,6 @@ function dot(ctx: VizContext, cx: number, cy: number, d: number): void {
 function scoped(ctx: VizContext, itemId: string | undefined, fn: () => void): void {
   if (itemId) ctx.item(itemId, fn);
   else fn();
-}
-
-/**
- * A tapering root sliver: a closed outline that starts `halfW` wide at `base`,
- * bows sideways (`bow` = -1|0|1), and narrows to a point `len` away at `ang°`.
- * Returns the boundary points + the tip. Reads like a real tree root.
- */
-function taperRoot(base: [number, number], angDeg: number, len: number, halfW: number, bow: number): { outline: Array<[number, number]>; tip: [number, number] } {
-  const a = rad(angDeg);
-  const dx = Math.cos(a);
-  const dy = Math.sin(a);
-  const px = -dy;
-  const py = dx;
-  const tip: [number, number] = [base[0] + dx * len, base[1] + dy * len];
-  const ctrl: [number, number] = [base[0] + dx * len * 0.55 + px * bow * len * 0.17, base[1] + dy * len * 0.55 + py * bow * len * 0.17];
-  const segs = 14;
-  const spine: Array<[number, number]> = [];
-  for (let i = 0; i <= segs; i++) {
-    const t = i / segs;
-    const u = 1 - t;
-    spine.push([u * u * base[0] + 2 * u * t * ctrl[0] + t * t * tip[0], u * u * base[1] + 2 * u * t * ctrl[1] + t * t * tip[1]]);
-  }
-  const left: Array<[number, number]> = [];
-  const right: Array<[number, number]> = [];
-  for (let i = 0; i <= segs; i++) {
-    const t = i / segs;
-    const p = spine[i];
-    const prev = spine[Math.max(0, i - 1)];
-    const next = spine[Math.min(segs, i + 1)];
-    let tx = next[0] - prev[0];
-    let ty = next[1] - prev[1];
-    const l = Math.hypot(tx, ty) || 1;
-    tx /= l;
-    ty /= l;
-    const w = halfW * (1 - t) * (1 - t * 0.15); // taper to a point
-    left.push([p[0] - ty * w, p[1] + tx * w]);
-    right.push([p[0] + ty * w, p[1] - tx * w]);
-  }
-  return { outline: [...left, ...right.reverse()], tip };
 }
 
 /** Measured wrapped text for a small labelled box (mindmap nodes). */
@@ -475,126 +436,106 @@ registerViz({
   sweetSpot: { min: 2, max: 7 },
   generate(spec: VizSpec, ctx: VizContext) {
     const causes = itemsOf(spec, "item", "cause");
-    const n = Math.max(causes.length, 1);
+    const n = causes.length;
     const problemEntry = spec.items.find((i) => i.kind === "problem" || i.kind === "center");
     const problem = problemEntry?.label ?? spec.title;
     if (problem && problem === spec.title) ctx.titleHandled = true;
 
-    // canopy: ONE scalloped cloud silhouette (no interior lines) with the
-    // problem stated inside it — the crown literally carries the problem
-    const rx = 178;
-    const ry = 110;
-    const canopyCy = -96;
-    // background-filled + z-raised so the trunk tip tucks cleanly underneath
-    ctx.path(scallopedBlob(rx, ry, 11), rx * 2, ry * 2, -rx, canopyCy - ry, rx * 2, ry * 2, { ...outline(ctx, ctx.ink, 2.2), fill: ctx.preset.background, fillStyle: "solid" }, { id: ctx.uid("canopy"), z: 1 });
+    // crown: three paper-filled scalloped lobes layered into one leafy
+    // silhouette (the front lobe hides the seams) with the problem inside it
+    const canopyCy = -110;
+    const lobe = (cx: number, cy: number, rx: number, ry: number, bumps: number, z: number) =>
+      ctx.path(scallopedBlob(rx, ry, bumps), rx * 2, ry * 2, cx - rx, cy - ry, rx * 2, ry * 2, { ...outline(ctx, ctx.ink, 2.2), fill: ctx.preset.background, fillStyle: "solid" }, { z });
+    lobe(-98, canopyCy + 30, 100, 68, 9, 5);
+    lobe(98, canopyCy + 30, 100, 68, 9, 5);
+    lobe(0, canopyCy - 8, 150, 104, 11, 6);
     if (problem) {
       scoped(ctx, problemEntry?.id, () => {
-        ctx.label(ctx.wrap(problem, 240, 20, "heading", 3), 0, canopyCy, { size: 20, color: ctx.ink, weight: 700, font: "heading", z: 3, maxW: 240 });
+        ctx.label(ctx.wrap(problem, 230, 20, "heading", 3), 0, canopyCy - 6, { size: 20, color: ctx.ink, weight: 700, font: "heading", z: 7, maxW: 230 });
       });
     }
 
-    // tapering trunk flaring into buttress roots at the ground line
-    const groundY = 214;
-    const trunk: Array<[number, number]> = [
-      [-15, -8],
-      [-21, 70],
-      [-28, 142],
-      [-42, groundY - 6],
-      [-56, groundY],
-      [-20, groundY + 5],
-      [0, groundY + 12],
-      [20, groundY + 5],
-      [56, groundY],
-      [42, groundY - 6],
-      [28, 142],
-      [21, 70],
-      [15, -8],
-    ];
-    ctx.poly(trunk, outline(ctx, ctx.ink, 2), { id: ctx.uid("trunk") });
+    // trunk: gently waisted, flaring into a root crown at the ground; paper-
+    // filled above the roots so they emerge from under its base, not across it
+    const groundY = 210;
+    smoothShape(
+      ctx,
+      [
+        [-18, canopyCy + 40, "corner"],
+        [-21, 40],
+        [-25, 120],
+        [-36, groundY - 42],
+        [-64, groundY - 6],
+        [-78, groundY + 6, "corner"],
+        [0, groundY + 12],
+        [78, groundY + 6, "corner"],
+        [64, groundY - 6],
+        [36, groundY - 42],
+        [25, 120],
+        [21, 40],
+        [18, canopyCy + 40, "corner"],
+      ],
+      { ...outline(ctx, ctx.ink, 2), fill: ctx.preset.background, fillStyle: "solid" },
+      { id: ctx.uid("trunk"), z: 4 },
+    );
 
-    // ground surface: dashed line either side of the trunk — everything below
-    // it is "underground", where the causes live
-    const gy = groundY + 9;
-    ctx.line([[-262, gy], [-70, gy]], { color: ctx.mutedInk, width: 1.6, dash: true });
-    ctx.line([[70, gy], [262, gy]], { color: ctx.mutedInk, width: 1.6, dash: true });
+    // the ground: dashed either side of the trunk — below it is underground,
+    // where the causes live
+    const pitch = n <= 3 ? 210 : 165;
+    const spread = pitch * Math.max(n, 1);
+    const gy = groundY + 8;
+    ctx.line([[-spread / 2 - 30, gy], [-92, gy]], { color: ctx.mutedInk, width: 1.6, dash: true });
+    ctx.line([[92, gy], [spread / 2 + 30, gy]], { color: ctx.mutedInk, width: 1.6, dash: true });
 
-    // tapering root tendrils spreading down + outward — each sprouts from its
-    // own spot along the buttress flare (not one point), so they fan cleanly.
-    // (angles: 90° = straight down, <90 = down-right, >90 = down-left)
-    const rootSpecs = [
-      { ang: 146, len: 168, hw: 12, bow: 1 },
-      { ang: 124, len: 140, hw: 10, bow: 1 },
-      { ang: 106, len: 116, hw: 9, bow: -1 },
-      { ang: 90, len: 152, hw: 10, bow: 0 },
-      { ang: 74, len: 116, hw: 9, bow: 1 },
-      { ang: 56, len: 140, hw: 10, bow: -1 },
-      { ang: 34, len: 168, hw: 12, bow: -1 },
-    ];
-    const roots = rootSpecs.map((r) => taperRoot([(90 - r.ang) * 0.72, groundY + 5], r.ang, r.len, r.hw, r.bow));
-
-    // assign each cause its own root — pairs at root level left/right, an odd
-    // last one straight down — so the root can be drawn in the cause's color
-    // (inside the cause's item scope: root + label choreograph as one unit)
-    const leftTipIdx = [0, 1, 2];
-    const rightTipIdx = [6, 5, 4];
-    const causeRoot: number[] = [];
-    const causeRow: number[] = [];
-    let leftJ = 0;
-    let rightJ = 0;
-    causes.forEach((item, i) => {
-      const bottom = i === causes.length - 1 && causes.length % 2 === 1 && causes.length >= 3;
-      if (bottom) {
-        causeRoot[i] = 3;
-        causeRow[i] = 0;
-        return;
+    // roots: one tapered root per cause, fanning from under the trunk to its
+    // own column and ending pointing straight down at the cause's label — so
+    // one, three or seven causes all read as one root system, a label per
+    // root. Each root is opaque (paper under its tint) and layered, so where
+    // roots cross they overlap like real roots instead of darkening; a
+    // rootlet branches off each one to the outside, tucked under the root.
+    const spineTo = (t: number, tipX: number, tipY: number): Array<[number, number]> =>
+      cubicPoints([t * 30, groundY - 8], [t * 40, groundY + 60], [tipX, tipY - 80], [tipX, tipY], 20);
+    const rootlet = (spine: Array<[number, number]>, k: number, turn: number, len: number): Array<[number, number]> => {
+      const [px, py] = spine[k];
+      const [qx, qy] = spine[k + 1];
+      const l = Math.hypot(qx - px, qy - py) || 1;
+      let ux = ((qx - px) * Math.cos(turn) - (qy - py) * Math.sin(turn)) / l;
+      let uy = ((qx - px) * Math.sin(turn) + (qy - py) * Math.cos(turn)) / l;
+      // roots grow down: a rootlet never heads upward, however sideways its root runs
+      if (uy < 0.3) {
+        uy = 0.3;
+        ux = Math.sign(ux || 1) * Math.sqrt(1 - uy * uy);
       }
-      const side = i % 2 === 0 ? -1 : 1;
-      const j = side < 0 ? leftJ++ : rightJ++;
-      causeRoot[i] = side < 0 ? leftTipIdx[Math.min(j, 2)] : rightTipIdx[Math.min(j, 2)];
-      causeRow[i] = j;
-    });
-    // unclaimed roots stay as neutral ink filler so the root ball reads full
-    roots.forEach((r, idx) => {
-      if (!causeRoot.includes(idx)) ctx.poly(r.outline, outline(ctx, ctx.ink, 1.6));
-    });
-
-    // side labels sit at their root tip's height, then relax apart (measured
-    // blocks) so stacked same-side causes never overlap at any count
-    const labelY = causes.map((item, i) => (causeRoot[i] === 3 ? 0 : roots[causeRoot[i]].tip[1]));
-    const blockH = causes.map((item) => ctx.measureLabelBlock(item.label, item.detail, { maxW: 220 }).h);
-    for (const side of [-1, 1]) {
-      const col = causes.map((_, i) => i).filter((i) => causeRoot[i] !== 3 && (i % 2 === 0 ? -1 : 1) === side).sort((a, b) => labelY[a] - labelY[b]);
-      for (let k = 1; k < col.length; k++) {
-        const above = col[k - 1];
-        const need = labelY[above] + blockH[above] / 2 + blockH[col[k]] / 2 + 16;
-        if (labelY[col[k]] < need) labelY[col[k]] = need;
-      }
+      // it grows out along the turned tangent and then droops
+      return cubicPoints([px, py], [px + ux * len * 0.4, py + uy * len * 0.4], [px + ux * len * 0.8, py + uy * len * 0.8 + len * 0.15], [px + ux * len, py + uy * len + len * 0.45], 8);
+    };
+    const drawRoot = (t: number, tipX: number, tipY: number, tint: string | null, tintStyle: NodeStyle["fillStyle"], hw: number, z: number) => {
+      const spine = spineTo(t, tipX, tipY);
+      const outer = t < 0 ? 1 : t > 0 ? -1 : 1;
+      const opaque = (pts: Array<[number, number]>, base: number) => {
+        ctx.poly(pts, { ...outline(ctx, ctx.ink, 1.7), fill: ctx.preset.background, fillStyle: "solid" }, { z: base });
+        if (tint) ctx.poly(pts, { stroke: "transparent", fill: tint, fillStyle: tintStyle, strokeWidth: 0, roughness: 0 }, { z: base + 1 });
+      };
+      opaque(taperedOutline(rootlet(spine, 7, outer * 0.7, 40), hw * 0.4, 0.8), z);
+      opaque(taperedOutline(rootlet(spine, 12, -outer * 0.65, 28), hw * 0.32, 0.8), z);
+      opaque(taperedOutline(spine, hw, 1.2), z + 2);
+    };
+    // with fewer than three causes, neutral filler roots keep the root ball full
+    if (n <= 1) {
+      drawRoot(-0.8, -150, groundY + 112, null, "none", 7, 0);
+      drawRoot(0.8, 150, groundY + 112, null, "none", 7, 0);
+    } else if (n === 2) {
+      drawRoot(0, 0, groundY + 132, null, "none", 7, 0);
     }
-
     causes.forEach((item, i) =>
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n, color: item.color });
-        const root = roots[causeRoot[i]];
-        const tip = root.tip;
-        ctx.poly(root.outline, outline(ctx, role.color, 1.8));
-        const leader = { color: role.color, width: 1.5 };
-        if (causeRoot[i] === 3) {
-          // odd last cause: straight down from the center root, label beneath
-          ctx.line([tip, [tip[0], tip[1] + 22]], leader);
-          ctx.labelBlock(item.label, item.detail, tip[0], tip[1] + 30, { color: role.color, align: "center", maxW: 280, vAnchor: "top" });
-          return;
-        }
-        const side = i % 2 === 0 ? -1 : 1;
-        const y = labelY[i];
-        const bx = side * 226;
-        ctx.labelBlock(item.label, item.detail, bx, y, { color: role.color, align: side < 0 ? "right" : "left", maxW: 220 });
-        const sx = bx + side * -8;
-        if (Math.abs(y - tip[1]) < 2) {
-          ctx.line([[sx, y], tip], leader);
-        } else {
-          const mx = (sx + tip[0]) / 2;
-          ctx.line([[sx, y], [mx, y], [mx, tip[1]], tip], leader);
-        }
+        const tipX = -spread / 2 + pitch * (i + 0.5);
+        const t = n > 1 ? tipX / (spread / 2) : 0;
+        const tipY = groundY + 132 + 36 * (1 - Math.abs(t));
+        // outer roots are drawn first so the inner ones lie on top of them
+        drawRoot(t, tipX, tipY, role.fill, role.fillStyle, 9, 0);
+        ctx.labelBlock(item.label, item.detail, tipX, tipY + 18, { color: role.color, align: "center", maxW: pitch - 24, vAnchor: "top" });
       }),
     );
   },

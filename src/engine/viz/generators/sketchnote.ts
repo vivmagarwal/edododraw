@@ -8,7 +8,8 @@ import { registerViz } from "../registry.js";
 import { itemsOf, optStr, type VizSpec } from "../types.js";
 import type { VizContext } from "../context.js";
 import { listCharacterPoses, characterOptsFrom } from "../characters.js";
-import { lerp, scallopedBlob } from "./util.js";
+import { lerp, scallopedBlob, smoothPath, type Anchor } from "./util.js";
+import { mix } from "../../style/color.js";
 
 /** Deterministic jitter (stable re-renders — no Math.random). */
 const jit = (i: number, amp: number): number => Math.sin(i * 7.3) * amp;
@@ -208,54 +209,92 @@ registerViz({
 
 // ---- head-thoughts --------------------------------------------------------------
 
+/**
+ * The profile silhouette (face to the RIGHT), authored as points ON its
+ * outline in a 300×360 box and smoothed into one path (util.smoothPath): a
+ * full rounded cranium, a gentle forehead, the brow, a proper nose, lips and
+ * chin, then the jaw sweeping back into a neck cut flat. The `corner`
+ * anchors keep the creases under the nose, at the mouth and at the cut.
+ */
+const HEAD_VW = 300;
+const HEAD_VH = 360;
+const HEAD_ANCHORS: Anchor[] = [
+  [140, 4],
+  [210, 16],
+  [258, 62],
+  [272, 118],
+  [268, 150],
+  [262, 162],
+  [270, 178],
+  [286, 198],
+  [298, 214],
+  [290, 225],
+  [278, 228, "corner"],
+  [272, 236],
+  [272, 246],
+  [281, 257],
+  [272, 266, "corner"],
+  [279, 279],
+  [268, 292],
+  [278, 312],
+  [262, 332],
+  [226, 344],
+  [205, 348],
+  [203, 360, "corner"],
+  [96, 360, "corner"],
+  [100, 320],
+  [60, 285],
+  [24, 232],
+  [10, 165],
+  [18, 100],
+  [44, 48],
+  [90, 12],
+];
+
 registerViz({
   name: "head-thoughts",
   category: "Brainstorming",
   summary: "A profile-head container — what's going on in someone's mind.",
   entryKinds: ["item", "thought"],
-  options: [{ name: "who", type: "string", description: "caption under the head" }],
+  options: [
+    { name: "who", type: "string", description: "caption under the head" },
+    { name: "facing", type: "left|right", description: "which way the profile looks (default right)" },
+  ],
   sweetSpot: { min: 2, max: 5 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "thought").slice(0, 6);
     const n = Math.max(items.length, 1);
-    // side-profile head (facing right), designed in a 300×360 box: big smooth
-    // cranium, then a clearly-drawn brow → nose → lips → chin → jaw → neck
-    const HEAD_D =
-      "M130 10 C 200 8 252 40 258 96 C 260 118 256 132 250 142 C 246 148 243 152 245 157 " +
-      "C 262 168 269 180 263 190 C 256 197 249 196 246 200 C 253 206 253 214 246 220 " +
-      "C 251 226 249 234 242 238 C 252 248 250 262 236 270 C 220 288 192 300 168 304 " +
-      "L 163 340 L 84 340 C 90 310 92 298 88 284 C 58 258 42 220 44 168 C 46 88 76 12 130 10 Z";
+    const facing = optStr(spec.options, "facing") === "left" ? "left" : "right";
     const W = 330;
     const H = 396;
-    ctx.path(HEAD_D, 300, 360, 0, 0, W, H, { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 2.6, roughness: ctx.preset.roughness }, { id: ctx.uid("head") });
+    const sx = W / HEAD_VW;
+    const sy = H / HEAD_VH;
+    // one silhouette with a faint wash, so it reads as a solid head rather than a wire
+    const wash = mix(ctx.preset.background, ctx.mutedInk, 0.12);
+    ctx.path(smoothPath(HEAD_ANCHORS, facing === "left" ? { mirrorX: HEAD_VW } : {}), HEAD_VW, HEAD_VH, 0, 0, W, H, { stroke: ctx.ink, fill: wash, fillStyle: "solid", strokeWidth: 2.6, roughness: ctx.preset.roughness }, { id: ctx.uid("head") });
 
-    // thoughts stacked inside the cranium
-    const slots: Array<[number, number]> = [
-      [142, 84],
-      [148, 150],
-      [144, 214],
-      [142, 268],
-      [150, 116],
-      [148, 184],
-    ];
-    const order = n <= 4 ? [0, 1, 2, 3] : [4, 5, 2, 3, 0, 1];
+    // thoughts as rows spread evenly over the cranium's roomy band, behind
+    // the face — so no row ever touches the nose or the lips
+    const pitch = n <= 2 ? 80 : Math.min(60, 180 / (n - 1));
+    const firstY = 190 - (pitch * (n - 1)) / 2;
+    const rowLeft = (facing === "left" ? 56 : 76) * sx;
+    const textW = (facing === "left" ? 140 : 150) * sx;
     items.forEach((item, i) =>
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n, color: item.color });
-        const [sx, sy] = slots[n <= 4 ? order[i] : order[i % order.length]];
-        const px = (sx / 300) * W;
-        const py = (sy / 360) * H;
+        const y = (firstY + i * pitch) * sy;
+        const text = { size: 14, color: role.color, weight: ctx.preset.fonts.headingWeight, font: "heading", align: "left" as const };
         if (item.icon) {
-          ctx.icon(item.icon, px - 62, py, 24, role.color);
-          ctx.label(ctx.wrap(item.label, 118, 14, "heading", 2), px - 44, py, { size: 14, color: role.color, weight: ctx.preset.fonts.headingWeight, font: "heading", align: "left" });
+          ctx.icon(item.icon, rowLeft + 13, y, 26, role.color);
+          ctx.label(ctx.wrap(item.label, textW, 14, "heading", 2), rowLeft + 36, y, text);
         } else {
-          ctx.shape("circle", px - 66, py - 4, 8, 8, { stroke: role.color, fill: role.color, fillStyle: "solid", strokeWidth: 1, roughness: 0.5 });
-          ctx.label(ctx.wrap(item.label, 128, 14, "heading", 2), px - 50, py, { size: 14, color: role.color, weight: ctx.preset.fonts.headingWeight, font: "heading", align: "left" });
+          ctx.shape("circle", rowLeft + 4, y - 4, 8, 8, { stroke: role.color, fill: role.color, fillStyle: "solid", strokeWidth: 1, roughness: 0.5 });
+          ctx.label(ctx.wrap(item.label, textW + 14, 14, "heading", 2), rowLeft + 22, y, text);
         }
       }),
     );
     const who = optStr(spec.options, "who");
-    if (who) ctx.label(who, W * 0.42, H + 26, { size: 17, color: ctx.mutedInk, weight: 700, font: "heading" });
+    if (who) ctx.label(who, 150 * sx, H + 26, { size: 17, color: ctx.mutedInk, weight: 700, font: "heading" });
   },
 });
 

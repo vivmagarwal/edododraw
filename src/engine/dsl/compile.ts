@@ -492,8 +492,14 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
       if (spec.options.animate) animatedSpecs.push(spec);
       const result = runViz(spec, vizPreset, mode, diags);
       if (!result) continue;
-      const dx = 40 - result.bounds.x;
-      const dy = cursorY - result.bounds.y;
+      // `at: (x, y)` pins the block's top-left (a composite canvas places a
+      // template beside other content); otherwise blocks stack below it.
+      const pin = vizPinAt(spec.options.at);
+      if (spec.options.at !== undefined && !pin) {
+        diags.warn("W-VIZ-AT", `viz '${spec.id}': \`at\` must be a pair of numbers like (0, 400) — the block was stacked instead`, vizDecls[i].span);
+      }
+      const dx = (pin ? pin[0] : 40) - result.bounds.x;
+      const dy = (pin ? pin[1] : cursorY) - result.bounds.y;
       for (const n of result.nodes) {
         n.x += dx;
         n.y += dy;
@@ -506,7 +512,8 @@ export function compileProgram(program: Program, opts: CompileOptions = {}): Com
         scene.edges.push(e);
       }
       for (const a of result.annotations) scene.annotations.push(a);
-      cursorY += result.bounds.h + 100;
+      // a pinned block never pushes later ones up — they stack below whichever is lower
+      cursorY = pin ? Math.max(cursorY, pin[1] + result.bounds.h + 100) : cursorY + result.bounds.h + 100;
     }
   }
 
@@ -1259,4 +1266,11 @@ function normalizeCamOp(op: string): CameraDirective["op"] {
     default:
       return "focus";
   }
+}
+
+/** A viz block's `at: (x, y)` option as a pair of finite numbers, else null. */
+function vizPinAt(value: unknown): [number, number] | null {
+  if (!Array.isArray(value) || value.length !== 2) return null;
+  const [x, y] = value;
+  return typeof x === "number" && typeof y === "number" && Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null;
 }

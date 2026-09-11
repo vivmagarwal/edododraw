@@ -17,7 +17,7 @@ import { ensurePluginStyles } from "../plugins/registry.js";
 import { AnnotationLayer } from "../annotate/layer.js";
 import { renderEdge } from "./edges.js";
 import { renderCharacterNode, renderIconNode } from "./figures.js";
-import { applyNonScalingStroke, labelBelow, renderShapeBody, sceneRoughOptions, type RoughRenderTuning } from "./shapes.js";
+import { applyStrokeTuning, labelBelow, renderShapeBody, sceneRoughOptions, type RoughRenderTuning } from "./shapes.js";
 import { ensureEngineStyles, FONT_FAMILY } from "./theme.css.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -73,6 +73,10 @@ export interface SvgRendererOptions {
    * Initial roughness scale — see `setRoughnessScale()`. Default 1.
    */
   roughnessScale?: number;
+  /**
+   * Initial stroke-width multiplier — see `setStrokeScale()`. Default 1.
+   */
+  strokeScale?: number;
 }
 
 export class SvgRenderer {
@@ -95,6 +99,7 @@ export class SvgRenderer {
   private viewport = { w: 800, h: 600 };
   private scene: Scene | null = null;
   private roughnessScale = 1;
+  private strokeScale = 1;
 
   constructor(container: HTMLElement, options: SvgRendererOptions = {}) {
     this.container = container;
@@ -102,11 +107,12 @@ export class SvgRenderer {
     this.paintsAnnotations = options.annotations ?? true;
     this.nonScalingStroke = options.nonScalingStroke ?? false;
     this.roughnessScale = clampScale(options.roughnessScale ?? 1);
+    this.strokeScale = clampScale(options.strokeScale ?? 1);
   }
 
   /** The render-time rough knobs, as every draw call wants them. */
   private roughTune(): RoughRenderTuning {
-    return { roughnessScale: this.roughnessScale, nonScalingStroke: this.nonScalingStroke };
+    return { roughnessScale: this.roughnessScale, nonScalingStroke: this.nonScalingStroke, strokeScale: this.strokeScale };
   }
 
   /** Current roughness scale — see `setRoughnessScale()`. */
@@ -142,10 +148,30 @@ export class SvgRenderer {
   /**
    * Apply this renderer's stroke policy to a subtree someone else painted into
    * one of its layers (the annotation layer does exactly that). No-op unless
-   * `nonScalingStroke` is on.
+   * `nonScalingStroke` is on or the stroke scale is not 1.
    */
   applyStrokePolicy(root: Element): void {
-    if (this.nonScalingStroke) applyNonScalingStroke(root);
+    applyStrokeTuning(root, this.roughTune());
+  }
+
+  /** Current stroke-width multiplier — see `setStrokeScale()`. */
+  getStrokeScale(): number {
+    return this.strokeScale;
+  }
+
+  /**
+   * Multiply every drawn stroke width by `k` and repaint — node outlines,
+   * edges, arrowheads, hachure, icons, group frames, annotation marks. Lets a
+   * video host set line weight from its own theme (under `nonScalingStroke`,
+   * a preset's 1.8px is 1.8 SCREEN px, thin on a 1920x1080 frame) without
+   * restyling the diagram. Geometry and seeds are untouched; calling it with
+   * the value it already has is a no-op.
+   */
+  setStrokeScale(k: number): void {
+    const next = clampScale(k);
+    if (next === this.strokeScale) return;
+    this.strokeScale = next;
+    if (this.scene) this.render(this.scene);
   }
 
   mount(): void {
@@ -678,7 +704,7 @@ export class SvgRenderer {
       { ...sceneRoughOptions(scene, 0.8, this.roughnessScale), stroke, strokeWidth: 1.2, seed: 42, strokeLineDash: [6, 6], fill: group.style.fill ?? undefined, fillStyle: "solid" },
     );
     g.appendChild(rectEl);
-    if (this.nonScalingStroke) applyNonScalingStroke(rectEl);
+    applyStrokeTuning(rectEl, this.roughTune());
     if (group.label) {
       g.appendChild(this.textBlock(group.label, minX - pad + 4, minY - pad - 2, 15, stroke, "hand", "left"));
     }
@@ -699,19 +725,32 @@ function cssEscape(s: string): string {
   return s.replace(/["\\]/g, "\\$&");
 }
 
-/** Path length of a drawable, with a safe fallback where getTotalLength is
- *  unavailable (jsdom) or throws (detached/degenerate geometry). */
+/** Path length of a drawable IN THE UNITS ITS DASHES ARE LAID OUT IN, with a
+ *  safe fallback where getTotalLength is unavailable (jsdom) or throws
+ *  (detached/degenerate geometry). getTotalLength() is in user units, but a
+ *  `vector-effect: non-scaling-stroke` element dashes in viewport pixels —
+ *  so under a zoomed camera (z > 1) a user-unit dash repeats mid-reveal
+ *  (dash, gap, dash) and a circle closes only 1/z of the way. Scale by the
+ *  CTM's area factor for those elements. */
 function strokeLength(el: SVGElement): number {
   const geo = el as Partial<SVGGeometryElement>;
   if (typeof geo.getTotalLength === "function") {
     try {
       const len = geo.getTotalLength();
-      if (Number.isFinite(len) && len > 0) return len;
+      if (Number.isFinite(len) && len > 0) return len * nonScalingFactor(el);
     } catch {
       /* fall through */
     }
   }
   return 120;
+}
+
+function nonScalingFactor(el: SVGElement): number {
+  if (el.getAttribute("vector-effect") !== "non-scaling-stroke") return 1;
+  const m = typeof (el as Partial<SVGGraphicsElement>).getCTM === "function" ? (el as SVGGraphicsElement).getCTM() : null;
+  if (!m) return 1;
+  const k = Math.sqrt(Math.abs(m.a * m.d - m.b * m.c));
+  return Number.isFinite(k) && k > 0 ? k : 1;
 }
 
 function restoreStroke(el: SVGElement): void {

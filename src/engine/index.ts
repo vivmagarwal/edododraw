@@ -41,7 +41,7 @@ export type { StepState, ResolveCameraOptions } from "./timeline/stepState.js";
 export { applyLayout } from "./layout/index.js";
 export { compileEdd } from "./dsl/index.js";
 export type { CompileEddResult } from "./dsl/index.js";
-export { writeOverrides, renameNode, styleNode, addNode, addEdge, deleteElements } from "./dsl/patch.js";
+export { writeOverrides, renameNode, styleNode, setNodeAttrs, addNode, addEdge, deleteElements } from "./dsl/patch.js";
 export type { OverrideEntry } from "./dsl/patch.js";
 export { DiagnosticBag, formatDiagnostic } from "./dsl/diagnostics.js";
 export type { Diagnostic } from "./dsl/diagnostics.js";

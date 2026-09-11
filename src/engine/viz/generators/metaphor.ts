@@ -9,7 +9,7 @@ import { itemsOf, optNum, optStr, type VizItem, type VizSpec } from "../types.js
 import type { VizContext } from "../context.js";
 import type { RoleStyle } from "../../style/presets.js";
 import { measureBlock } from "../text.js";
-import { lerp } from "./util.js";
+import { lerp, rad } from "./util.js";
 
 /** Stroke that stays visible when a preset outlines shapes in the canvas color. */
 function roleStroke(ctx: VizContext, role: RoleStyle): string {
@@ -43,6 +43,17 @@ function quad(p0: [number, number], c: [number, number], p1: [number, number], s
 
 // ---- balance ----------------------------------------------------------------
 
+/** A hanger/pivot ring: paper-filled so the beam does not show through it. */
+function ring(ctx: VizContext, cx: number, cy: number, r: number, z: number): void {
+  ctx.shape("circle", cx - r, cy - r, r * 2, r * 2, { stroke: ctx.ink, fill: ctx.preset.background, fillStyle: "solid", strokeWidth: 2, roughness: ctx.preset.roughness }, { z });
+}
+
+/** An opaque tinted panel: paper under the role's (often translucent) fill, so nothing behind shows through. */
+function panel(ctx: VizContext, shape: "round-rectangle" | "pill", x: number, y: number, w: number, h: number, role: RoleStyle, z: number, roundness?: number): void {
+  ctx.shape(shape, x, y, w, h, { stroke: roleStroke(ctx, role), fill: ctx.preset.background, fillStyle: "solid", strokeWidth: 2, roughness: ctx.preset.roughness, roundness }, { z });
+  if (role.fill) ctx.shape(shape, x, y, w, h, { stroke: "transparent", fill: role.fill, fillStyle: role.fillStyle, strokeWidth: 0, roughness: 0, roundness }, { z: z + 1 });
+}
+
 registerViz({
   name: "balance",
   aliases: ["scales"],
@@ -57,64 +68,96 @@ registerViz({
       sides.push({ kind: "side", id: `side${sides.length + 1}`, label: "", values: [], strings: [], opts: {}, children: [] });
     }
     const tilt = optStr(spec.options, "tilt") ?? "level";
-    const cx = 260;
-    const beamY = 190;
-    const armSpan = 180;
-    const plinthY = beamY + 86;
-    // hatched plinth + triangle pedestal + fulcrum knob
-    ctx.shape("rectangle", cx - 64, plinthY, 128, 16, { stroke: ctx.ink, fill: ctx.mutedInk, fillStyle: "hachure", strokeWidth: 2, roughness: ctx.preset.roughness });
+    // a post on a stepped plinth, a beam pivoting on top, and from each beam
+    // end a pan hanging plumb on two strings; the items ride in a card
+    // sitting in the pan, the side's name on a pill beneath it
+    const L = 205;
+    const a = rad(tilt === "left" ? 7 : tilt === "right" ? -7 : 0);
+    const rowH = 32;
+    const rowSize = 17;
+    // cards are measured first so the strings are long enough for the taller one
+    const cards = sides.map((side) => {
+      const rows = side.children.slice(0, 5).map((row) => ({ row, w: (row.icon ? 34 : 18) + ctx.measure(row.label, rowSize) }));
+      return { rows, w: Math.max(140, ...rows.map((r) => r.w)) + 40, h: rows.length ? rows.length * rowH + 22 : 0 };
+    });
+    // one pan size for both sides: a little wider than the wider card
+    const rimHalf = Math.max(...cards.map((c) => c.w)) / 2 + 10;
+    const panDepth = Math.round(rimHalf * 0.34);
+    const hang = Math.max(120, ...cards.map((c) => c.h + 46));
+    const endX = (dir: number) => dir * L * Math.cos(a);
+    const endY = (dir: number) => -dir * L * Math.sin(a);
+    const plinthY = Math.max(endY(-1), endY(1)) + hang + panDepth + 14;
+
+    // post + stepped plinth, the pivot on top
+    const neutral = ctx.role(0, { neutral: true });
     ctx.poly(
       [
-        [cx - 42, plinthY],
-        [cx + 42, plinthY],
-        [cx, beamY + 6],
+        [-7, 4],
+        [7, 4],
+        [16, plinthY + 2],
+        [-16, plinthY + 2],
       ],
-      ctx.role(0, { neutral: true }),
+      neutral,
+      { z: 1 },
     );
-    dot(ctx, cx, beamY, 24, ctx.ink, 2);
+    ctx.shape("round-rectangle", -34, plinthY, 68, 12, neutral, { z: 1, style: { roundness: 5 } });
+    ctx.shape("round-rectangle", -64, plinthY + 12, 128, 14, neutral, { z: 1, style: { roundness: 6 } });
+    ctx.line([[-100, plinthY + 34], [100, plinthY + 34]], { color: ctx.mutedInk, width: 1.6 });
+    // the beam: a slim solid bar through the pivot, turned by the tilt
+    const nx = Math.sin(a);
+    const ny = Math.cos(a);
+    const half = 5;
+    ctx.poly(
+      [
+        [endX(-1) - nx * half, endY(-1) - ny * half],
+        [endX(1) - nx * half, endY(1) - ny * half],
+        [endX(1) + nx * half, endY(1) + ny * half],
+        [endX(-1) + nx * half, endY(-1) + ny * half],
+      ],
+      { stroke: ctx.ink, fill: ctx.ink, fillStyle: "solid", strokeWidth: 1.5, roughness: ctx.preset.roughness },
+      { z: 2 },
+    );
+    ring(ctx, 0, 0, 12, 3);
+    dot(ctx, 0, 0, 9, ctx.ink, 4);
+
     sides.forEach((side, s) =>
       ctx.item(side.id, () => {
-      const dir = s === 0 ? -1 : 1;
-      const dy = tilt === "level" ? 0 : (tilt === "left") === (s === 0) ? 16 : -16;
-      const role = ctx.role(s, { n: 2, color: side.color });
-      const px = cx + dir * armSpan;
-      const panY = beamY + 42 + dy;
-      // yoke arm curving out + down from the fulcrum to above the pan
-      ctx.line(quad([cx, beamY - 8], [cx + dir * armSpan * 0.55, beamY - 46 + dy * 0.5], [px, panY - 14]), { color: ctx.ink, width: 2.4 });
-      // shallow dish pan (opens upward)
-      const dish: Array<[number, number]> = [];
-      for (let t = 0; t <= 12; t++) {
-        const u = t / 12;
-        dish.push([px - 44 + 88 * u, panY + Math.sin(Math.PI * u) * 16]);
-      }
-      ctx.line(dish, { color: roleStroke(ctx, role), width: 2.6, id: ctx.uid(side.id) });
-      ctx.line(
-        [
-          [px, panY - 14],
-          [px - 44, panY],
-        ],
-        { color: ctx.mutedInk, width: 1.4 },
-      );
-      ctx.line(
-        [
-          [px, panY - 14],
-          [px + 44, panY],
-        ],
-        { color: ctx.mutedInk, width: 1.4 },
-      );
-      // item rows stacked above the pan
-      side.children.forEach((row, j) => {
-        const ry = panY - 34 - (side.children.length - 1 - j) * 40;
-        const tw = ctx.measure(row.label, 18);
-        const hasIcon = !!row.icon;
-        const total = (hasIcon ? 36 : 18) + tw;
-        const left = px - total / 2;
-        if (hasIcon) ctx.icon(row.icon, left + 14, ry, 28, role.color);
-        else dot(ctx, left + 5, ry, 10, role.color);
-        ctx.label(row.label, left + (hasIcon ? 36 : 18), ry, { size: 18, color: ctx.ink, align: "left" });
-      });
-      // pan caption (side label) below the pan
-      if (side.label) ctx.labelBlock(side.label, side.detail, px, panY + 34, { color: role.color, align: "center", maxW: 190, vAnchor: "top" });
+        const dir = s === 0 ? -1 : 1;
+        const role = ctx.role(s, { n: 2, color: side.color });
+        const ex = endX(dir);
+        const ey = endY(dir);
+        const rimY = ey + hang;
+        // hanger ring + two strings down to the rim ends
+        ring(ctx, ex, ey, 7, 3);
+        ctx.line([[ex, ey + 7], [ex - rimHalf, rimY]], { color: ctx.ink, width: 1.6 });
+        ctx.line([[ex, ey + 7], [ex + rimHalf, rimY]], { color: ctx.ink, width: 1.6 });
+        // the pan: a shallow bowl in the side's colour
+        ctx.path(`M0,0 L${rimHalf * 2},0 Q${rimHalf},${panDepth * 2} 0,0 Z`, rimHalf * 2, panDepth, ex - rimHalf, rimY, rimHalf * 2, panDepth, { stroke: ctx.ink, fill: role.fill, fillStyle: role.fillStyle, strokeWidth: 2.4, roughness: ctx.preset.roughness }, { id: ctx.uid(side.id), z: 2 });
+        // the item card riding in the pan, opaque in front of the strings
+        const card = cards[s];
+        if (card.rows.length) {
+          const x0 = ex - card.w / 2;
+          const y0 = rimY - 6 - card.h;
+          panel(ctx, "round-rectangle", x0, y0, card.w, card.h, role, 4, 12);
+          card.rows.forEach(({ row }, j) => {
+            const ry = y0 + 11 + rowH * j + rowH / 2;
+            const left = x0 + 20;
+            if (row.icon) ctx.icon(row.icon, left + 12, ry, 24, ctx.ink, 6);
+            else dot(ctx, left + 5, ry, 9, ctx.ink, 6);
+            ctx.label(row.label, left + (row.icon ? 34 : 18), ry, { size: rowSize, color: ctx.ink, align: "left", z: 6 });
+          });
+        }
+        // the side's name on a pill under the pan, its detail beneath
+        if (side.label) {
+          const wrapped = ctx.wrap(side.label, 200, 17, "heading", 2);
+          const lines = wrapped.split("\n");
+          const pw = Math.max(96, ...lines.map((l) => ctx.measure(l, 17, "heading"))) + 34;
+          const ph = 12 + lines.length * 21;
+          const py = rimY + panDepth + 20 + ph / 2;
+          panel(ctx, "pill", ex - pw / 2, py - ph / 2, pw, ph, role, 4);
+          ctx.label(wrapped, ex, py, { size: 17, color: ctx.ink, weight: 700, font: "heading", z: 6 });
+          if (side.detail) ctx.label(ctx.wrap(side.detail, 220, 14, "body", 3), ex, py + ph / 2 + 8, { size: 14, color: ctx.mutedInk, vAnchor: "top", role: "detail" });
+        }
       }),
     );
   },

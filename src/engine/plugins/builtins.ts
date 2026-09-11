@@ -8,6 +8,7 @@
  */
 
 import { nodeRoughOptions } from "../render/shapes.js";
+import { docOf } from "../render/dom.js";
 import { registerShape } from "./registry.js";
 
 let registered = false;
@@ -18,7 +19,7 @@ export function registerBuiltinShapes(): void {
 
   // A crisp 5-point star.
   registerShape("star", (rc, rect, style) => {
-    const g = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+    const g = docOf(rc).createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
     const cx = rect.x + rect.w / 2;
     const cy = rect.y + rect.h / 2;
     const outer = Math.min(rect.w, rect.h) / 2;
@@ -39,7 +40,7 @@ export function registerBuiltinShapes(): void {
 
   // Speech bubble: rounded body + a tail. data.dir: "left" (default) | "right".
   registerShape("speech-bubble", (rc, rect, style, data) => {
-    const g = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+    const g = docOf(rc).createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
     const { x, y, w, h } = rect;
     const bodyH = h * 0.78;
     const r = Math.min(14, bodyH * 0.3);
@@ -60,7 +61,7 @@ export function registerBuiltinShapes(): void {
 
   // Starburst / explosion: spiky border for impact statements.
   registerShape("starburst", (rc, rect, style, data) => {
-    const g = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+    const g = docOf(rc).createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
     const cx = rect.x + rect.w / 2;
     const cy = rect.y + rect.h / 2;
     const spikes = Math.max(8, Math.min(24, Number((data as { spikes?: number } | undefined)?.spikes ?? 12)));
@@ -76,7 +77,7 @@ export function registerBuiltinShapes(): void {
 
   // Ribbon banner: central strip + V-cut tails + fold triangles under each end.
   registerShape("ribbon", (rc, rect, style) => {
-    const g = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+    const g = docOf(rc).createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
     const { x, y, w, h } = rect;
     const tail = Math.min(w * 0.14, h * 1.2);
     const dip = h * 0.18; // tails sit slightly lower than the strip
@@ -94,7 +95,7 @@ export function registerBuiltinShapes(): void {
 
   // Paper with a folded corner (documents, lists, "see the memo").
   registerShape("paper-fold", (rc, rect, style) => {
-    const g = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+    const g = docOf(rc).createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
     const { x, y, w, h } = rect;
     const f = Math.min(w, h) * 0.22;
     g.appendChild(

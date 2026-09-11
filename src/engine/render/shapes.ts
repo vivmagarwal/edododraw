@@ -9,6 +9,7 @@ import type rough from "roughjs";
 import type { Options } from "roughjs/bin/core";
 import type { NodeStyle, RoughTuning, Scene, ShapeKind } from "../scene/types.js";
 import { getShapePlugin } from "../plugins/registry.js";
+import { docOf } from "./dom.js";
 
 type RoughSVG = ReturnType<(typeof rough)["svg"]>;
 
@@ -32,6 +33,12 @@ export interface RoughRenderTuning {
   roughnessScale?: number;
   /** Stamp `vector-effect="non-scaling-stroke"` on every generated drawable. */
   nonScalingStroke?: boolean;
+  /**
+   * Multiplier on every drawn stroke width — node outlines, edges, arrowheads,
+   * hachure, icons, group frames, annotation marks. Default 1. A video host
+   * sets line weight from its own theme without restyling the diagram.
+   */
+  strokeScale?: number;
 }
 
 /** Elements rough.js emits that carry a stroke we may want to pin to screen px. */
@@ -45,6 +52,31 @@ const STROKED = "path,line,polyline,polygon,circle,ellipse,rect";
 export function applyNonScalingStroke(root: Element): void {
   if ((root as Element).matches?.(STROKED)) root.setAttribute("vector-effect", "non-scaling-stroke");
   root.querySelectorAll(STROKED).forEach((el) => el.setAttribute("vector-effect", "non-scaling-stroke"));
+}
+
+/**
+ * Multiply the `stroke-width` of every drawable under `root` (inclusive) by
+ * `k`. Idempotent: the authored width is kept in `data-edd-sw`, so applying
+ * it again (a repaint of a subtree, a second policy pass) never compounds.
+ */
+export function scaleStrokeWidths(root: Element, k: number): void {
+  const scale = (el: Element) => {
+    const orig = el.getAttribute("data-edd-sw") ?? el.getAttribute("stroke-width");
+    if (orig === null) return;
+    const w = Number.parseFloat(orig);
+    if (!Number.isFinite(w)) return;
+    el.setAttribute("data-edd-sw", orig);
+    el.setAttribute("stroke-width", String(Math.round(w * k * 1000) / 1000));
+  };
+  if ((root as Element).matches?.(STROKED)) scale(root);
+  root.querySelectorAll(STROKED).forEach(scale);
+}
+
+/** The render-time stroke policy for a freshly drawn subtree: non-scaling + width scale. */
+export function applyStrokeTuning(root: Element, tune: RoughRenderTuning): void {
+  if (tune.nonScalingStroke) applyNonScalingStroke(root);
+  const k = tune.strokeScale ?? 1;
+  if (k !== 1) scaleStrokeWidths(root, k);
 }
 
 /** Fold a style's rough tuning + the render-time scale into rough.js Options. */
@@ -329,7 +361,7 @@ export function renderShapeBody(
   data?: Record<string, unknown>,
   tune: RoughRenderTuning = {},
 ): SVGGElement {
-  const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+  const g = docOf(rc).createElementNS(SVG_NS, "g") as SVGGElement;
   const { x, y, w, h } = rect;
   const filledOpts = nodeRoughOptions(style, true, tune);
   const strokeOpts = nodeRoughOptions(style, false, tune);
@@ -507,7 +539,7 @@ export function renderShapeBody(
         const vw = sd.vw ?? w;
         const vh = sd.vh ?? h;
         const el = rc.path(sd.d, filledOpts);
-        const inner = document.createElementNS(SVG_NS, "g") as SVGGElement;
+        const inner = docOf(rc).createElementNS(SVG_NS, "g") as SVGGElement;
         inner.setAttribute("transform", `translate(${x} ${y}) scale(${w / vw} ${h / vh})`);
         inner.appendChild(el);
         add(inner as SVGGElement);
@@ -549,7 +581,7 @@ export function renderShapeBody(
       const plugin = getShapePlugin(shape);
       if (plugin) {
         const pg = plugin(rc, rect, style, data);
-        if (tune.nonScalingStroke) applyNonScalingStroke(pg);
+        applyStrokeTuning(pg, tune);
         return pg;
       }
       // Unknown shape -> fall back to a rounded rectangle so nothing
@@ -559,7 +591,7 @@ export function renderShapeBody(
     }
   }
 
-  if (tune.nonScalingStroke) applyNonScalingStroke(g);
+  applyStrokeTuning(g, tune);
   return g;
 }
 

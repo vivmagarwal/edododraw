@@ -179,6 +179,27 @@ export function styleNode(source: string, id: string, style: { fill?: string; st
   return ensureNodeDecl(source, program, id, undefined, undefined, updates);
 }
 
+/**
+ * Set arbitrary attributes on a node's declaration — an inspector's
+ * deterministic write path (a character's `pose`, `hair`, `height`, any
+ * node's `fill`): each key is upserted into the node's `{ … }` block, or a
+ * block is created when there is none. "Remove" is expressed by setting the
+ * attribute's own `none`/default value, so the source stays explicit.
+ * Values: numbers and booleans verbatim; a string that is a bare word stays a
+ * word, anything else is quoted.
+ */
+export function setNodeAttrs(source: string, id: string, attrs: Record<string, string | number | boolean>): string {
+  const { program } = parse(source);
+  const decl = findNodeDecl(program, id);
+  const updates: AttrUpdate[] = Object.entries(attrs).map(([key, value]) => ({
+    key,
+    value: typeof value === "number" || typeof value === "boolean" ? String(value) : /^[A-Za-z][\w:.-]*$/.test(value) ? value : `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`,
+  }));
+  if (!updates.length) return source;
+  if (decl) return upsertAttrs(source, decl, updates);
+  return ensureNodeDecl(source, program, id, undefined, undefined, updates);
+}
+
 /** Insert a new node declaration into the (first) scene block. */
 export function addNode(source: string, node: { id: string; shape: string; label: string }): string {
   const { program } = parse(source);

@@ -26,6 +26,17 @@ export const MERMAID_INSTALL_HINT =
 // contain a `mermaid` block pay for it.
 type ParseFn = (def: string, config?: unknown) => Promise<{ elements: SkeletonElement[] }>;
 let _parse: ParseFn | null = null;
+
+/**
+ * Supply the Mermaid parser yourself instead of letting EDodoDraw import the
+ * optional peer on first use — for a bundler that can't follow the dynamic
+ * import, a host that loads mermaid its own way, or a test double. Pass
+ * `parseMermaidToExcalidraw` from @excalidraw/mermaid-to-excalidraw (or
+ * anything with its signature). A registered parser always wins.
+ */
+export function registerMermaidParser(parse: (def: string, config?: unknown) => Promise<{ elements: unknown[] }>): void {
+  _parse = parse as ParseFn;
+}
 async function loadParser(): Promise<ParseFn> {
   if (!_parse) {
     let mod: { parseMermaidToExcalidraw?: unknown };

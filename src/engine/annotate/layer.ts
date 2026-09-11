@@ -50,6 +50,11 @@ export class AnnotationLayer {
   /** The scene currently being drawn — supplies the diagram-wide rough tuning. */
   private scene: Scene | null = null;
 
+  /** The renderer svg's own document — never the global one (server-side renders). */
+  private get doc(): Document {
+    return this.renderer.svg.ownerDocument;
+  }
+
   constructor(renderer: SvgRenderer, layer: "annotations" | "live" = "annotations") {
     this.renderer = renderer;
     this.rc = rough.svg(renderer.svg);
@@ -120,7 +125,7 @@ export class AnnotationLayer {
   }
 
   private draw(scene: Scene, an: Annotation): SVGGElement | null {
-    const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    const g = this.doc.createElementNS(SVG_NS, "g") as SVGGElement;
     g.setAttribute("data-annotation", an.id);
     g.setAttribute("class", "edd-annotation");
     const box = this.targetBBox(scene, an);
@@ -192,7 +197,7 @@ export class AnnotationLayer {
   private drawHighlight(g: SVGGElement, box: BBox, an: Annotation): void {
     const color = resolveMarker(an.color);
     const pad = 6;
-    const r = document.createElementNS(SVG_NS, "rect");
+    const r = this.doc.createElementNS(SVG_NS, "rect");
     r.setAttribute("x", String(box.minX - pad));
     r.setAttribute("y", String(box.minY - pad));
     r.setAttribute("width", String(box.maxX - box.minX + pad * 2));
@@ -320,15 +325,15 @@ export class AnnotationLayer {
     const pad = numOr(an.options.pad, 18);
     const b = expandBBox(box, pad);
     const maskId = `edd-spot-${an.id.replace(/[^a-z0-9]/gi, "")}`;
-    const mask = document.createElementNS(SVG_NS, "mask");
+    const mask = this.doc.createElementNS(SVG_NS, "mask");
     mask.setAttribute("id", maskId);
-    const full = document.createElementNS(SVG_NS, "rect");
+    const full = this.doc.createElementNS(SVG_NS, "rect");
     full.setAttribute("x", String(-BIG));
     full.setAttribute("y", String(-BIG));
     full.setAttribute("width", String(BIG * 2));
     full.setAttribute("height", String(BIG * 2));
     full.setAttribute("fill", "white");
-    const hole = document.createElementNS(SVG_NS, "rect");
+    const hole = this.doc.createElementNS(SVG_NS, "rect");
     hole.setAttribute("x", String(b.minX));
     hole.setAttribute("y", String(b.minY));
     hole.setAttribute("width", String(b.maxX - b.minX));
@@ -338,7 +343,7 @@ export class AnnotationLayer {
     mask.appendChild(full);
     mask.appendChild(hole);
     g.appendChild(mask);
-    const shade = document.createElementNS(SVG_NS, "rect");
+    const shade = this.doc.createElementNS(SVG_NS, "rect");
     shade.setAttribute("x", String(-BIG));
     shade.setAttribute("y", String(-BIG));
     shade.setAttribute("width", String(BIG * 2));
@@ -412,7 +417,7 @@ export class AnnotationLayer {
   }
 
   private label(g: SVGGElement, text: string, at: Point, color: string, anchor: "start" | "middle" | "end", size = 17): void {
-    const t = document.createElementNS(SVG_NS, "text");
+    const t = this.doc.createElementNS(SVG_NS, "text");
     const lines = text.split("\n");
     t.setAttribute("text-anchor", anchor);
     t.setAttribute("font-family", '"Excalifont", "Virgil", cursive');
@@ -421,7 +426,7 @@ export class AnnotationLayer {
     t.setAttribute("dominant-baseline", "middle");
     const startY = at.y - ((lines.length - 1) * size * 1.2) / 2;
     lines.forEach((line, i) => {
-      const ts = document.createElementNS(SVG_NS, "tspan");
+      const ts = this.doc.createElementNS(SVG_NS, "tspan");
       ts.setAttribute("x", String(at.x));
       ts.setAttribute("y", String(startY + i * size * 1.2));
       ts.textContent = line;

@@ -20,7 +20,8 @@ import { getArrowAnimation } from "../plugins/registry.js";
 import { resolveAnchor, nodeRect } from "../scene/anchors.js";
 import { getNode } from "../scene/query.js";
 import type { EdgeStyle, Scene, SceneEdge } from "../scene/types.js";
-import { applyNonScalingStroke, DEFAULT_MAX_RANDOMNESS_OFFSET, type RoughRenderTuning } from "./shapes.js";
+import { applyStrokeTuning, DEFAULT_MAX_RANDOMNESS_OFFSET, type RoughRenderTuning } from "./shapes.js";
+import { docOf } from "./dom.js";
 
 type RoughSVG = ReturnType<(typeof rough)["svg"]>;
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -295,7 +296,7 @@ function drawArrowhead(
       const p1 = back(size, spread);
       const p2 = back2(size, spread);
       const mid = back(size, 0);
-      const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+      const g = docOf(rc).createElementNS(SVG_NS, "g") as SVGGElement;
       g.appendChild(rc.line(tip.x, tip.y, p1.x, p1.y, opts));
       g.appendChild(rc.line(tip.x, tip.y, p2.x, p2.y, opts));
       g.appendChild(rc.line(tip.x, tip.y, mid.x, mid.y, opts));
@@ -317,10 +318,10 @@ function angleOf(from: Point, to: Point): number {
  * animation. Returns null when animation is "none". The overlay sits above the
  * hand-drawn base so the motion reads as energy travelling along the line.
  */
-function animationOverlay(edge: SceneEdge, centerline: string, len: number): SVGPathElement | null {
+function animationOverlay(doc: Document, edge: SceneEdge, centerline: string, len: number): SVGPathElement | null {
   const kind = edge.style.animation;
   if (!kind || kind === "none") return null;
-  const p = document.createElementNS(SVG_NS, "path") as SVGPathElement;
+  const p = doc.createElementNS(SVG_NS, "path") as SVGPathElement;
   p.setAttribute("d", centerline);
   p.setAttribute("fill", "none");
   p.setAttribute("class", `edd-anim edd-anim-${kind}`);
@@ -415,7 +416,7 @@ export function pathLength(points: Point[]): number {
  * base stroke and arrowheads already depict the edge fully).
  */
 export function renderEdge(rc: RoughSVG, scene: Scene, edge: SceneEdge, opts: { static?: boolean } & RoughRenderTuning = {}): RenderedEdge {
-  const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+  const g = docOf(rc).createElementNS(SVG_NS, "g") as SVGGElement;
   g.setAttribute("data-edge", edge.id);
   g.setAttribute("class", "edd-edge");
   g.style.opacity = String(edge.style.opacity / 100);
@@ -448,9 +449,9 @@ export function renderEdge(rc: RoughSVG, scene: Scene, edge: SceneEdge, opts: { 
 
   // 3. animated overlay (flow/march/draw-on/comet/gradient/pulse/electric) —
   // never emitted in static mode (screenshots would catch it mid-flight)
-  const overlay = opts.static ? null : animationOverlay(edge, centerline, len);
+  const overlay = opts.static ? null : animationOverlay(docOf(rc), edge, centerline, len);
   if (overlay) g.appendChild(overlay);
 
-  if (opts.nonScalingStroke) applyNonScalingStroke(g);
+  applyStrokeTuning(g, opts);
   return { group: g, points, centerline, length: len };
 }

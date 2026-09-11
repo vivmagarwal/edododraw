@@ -523,6 +523,20 @@ Two things to respect. **It repaints**, so call it before `applyVisibility` /
 And **floor, don't round**: rounding puts the boundary at 1.41×, which a camera that idles near
 that zoom will cross back and forth, repainting every frame.
 
+**4. Set the line weight for the frame with `strokeScale`.** Under `nonScalingStroke` a 1.8px
+preset line is 1.8 *screen* px, which is thin on a 1920×1080 frame. `strokeScale` multiplies every
+drawn stroke width (outlines, edges, arrowheads, hachure, icons, frames, annotation marks):
+
+```ts
+new SvgRenderer(host, {static: true, nonScalingStroke: true, strokeScale: 1.6});
+// or per theme, later: renderer.setStrokeScale(1.6) — repaints, so call it with the camera writes
+```
+
+A draw-on reveal stays correct on this combination. Before 0.16, `setRevealProgress` measured a
+stroke in user units, but a non-scaling stroke dashes in screen pixels, so under a zoom above 1×
+a mid-reveal dash repeated (dash, gap, dash) and a circle closed only 1/zoom of the way. The
+sweep now measures in screen units for those elements.
+
 ### From the source instead
 
 Every rough knob is a DSL attribute on nodes and edges, and a `defaults { node { … } }` block
@@ -620,7 +634,7 @@ All from the package root: `import {…} from 'edododraw'`.
 | `compileEdd(source, opts?)` | pure, sync | `.edd` → `{scene, diagnostics, report}`. Safe in `useMemo`, safe in Node. |
 | `SvgRenderer` | DOM | `mount()` / `setViewport({w, h})` / `render(scene)` once; `applyCamera`, `applyVisibility`, `setRevealProgressAll`, `setRoughnessScale` per frame. |
 | `renderer.setViewport({w, h})` | DOM | State the camera viewport. **Use this, not `measure()`** — Remotion's container is 0x0 at layout-effect time. |
-| `SvgRendererOptions` | type | `{static, annotations, nonScalingStroke, roughnessScale}`. |
+| `SvgRendererOptions` | type | `{static, annotations, nonScalingStroke, roughnessScale, strokeScale}`. |
 | `AnnotationLayer` | DOM | `render(scene, annotations, false)` — replaces the layer wholesale. |
 | `whenFontsReady(doc?)` | async | Resolves when the embedded hand-drawn face is decoded. Never rejects. |
 | `EXCALIFONT_FAMILY` | const | `"Excalifont"` — the family name to pass to `document.fonts`. |
@@ -714,6 +728,8 @@ pass an explicit `seed` so the mark is identical on every worker.
 | A frame takes >1 s | `render(scene)` in the frame path | move it into the mount effect |
 | Diagram sits in the top-left corner; `fit-all` does not fit; a `focus` beat shows blank paper | `renderer.measure()` read the 0x0 container Remotion mounts during layout and pinned the viewport at 1x1 | `renderer.setViewport({w, h})` from `useVideoConfig()` instead of `measure()` (§2) |
 | Strokes look scratchy on the punch-in | roughness scales with zoom | `hand-clean` + `nonScalingStroke` + `setRoughnessScale` (§6) |
+| Lines read too thin on a 1080p frame | `nonScalingStroke` pins widths to screen px | `strokeScale: 1.5`–`2` (§6) |
+| Draw-on dash breaks into pieces mid-reveal under a zoom | pre-0.16 `setRevealProgress` measured non-scaling strokes in user units | upgrade to 0.16 |
 | Correct while scrubbing forward, wrong after a seek | `setRoughnessScale` repainted *after* the visibility/reveal writes and discarded them | camera + roughness scale first, DOM state second (§2) |
 | `mermaid: … is not installed` | the optional peer dependency is absent | `npm i @excalidraw/mermaid-to-excalidraw`, or pre-convert to `.edd` |
 | Compiler hangs / heap OOM on an old version | `reveal a with pop` followed by `narrate:` before 0.15.0 | upgrade, or use `reveal { show a with pop }` |

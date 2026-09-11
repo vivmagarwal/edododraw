@@ -17,5 +17,5 @@ export type { EdodoDrawOptions, RenderResult, EdodoEvent } from "./EdodoDraw.js"
 export * from "../engine/index.js";
 
 // Optional Mermaid import helpers (mermaid itself is lazy-loaded on first use).
-export { convertMermaid, extractMermaidBlocks, injectMermaid, isMermaidAvailable, MERMAID_INSTALL_HINT } from "../engine/import/mermaid.js";
+export { convertMermaid, extractMermaidBlocks, injectMermaid, isMermaidAvailable, registerMermaidParser, MERMAID_INSTALL_HINT } from "../engine/import/mermaid.js";
 export type { MermaidFragment } from "../engine/import/mermaid.js";

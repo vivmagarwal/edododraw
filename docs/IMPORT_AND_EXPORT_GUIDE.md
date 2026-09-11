@@ -30,6 +30,8 @@ timeline walkthrough {
 
 Supported: flowcharts (and other mermaid graph types the converter emits as elements). The synchronous DSL compiler stays DOM-free; only the app awaits conversion.
 
+The converter is an optional peer, loaded by dynamic `import()` on first use. If your bundler can't follow that import, or your host already loads mermaid, register the parser yourself with `registerMermaidParser(parseMermaidToExcalidraw)`. A registered parser always wins, and `convertMermaid` uses it from then on. It also makes a convenient test double.
+
 ## Export
 
 Top toolbar, in the **export:** group (left side, by the examples picker): **SVG · PNG · JSON · Copy**. SVG/PNG/JSON are implemented in `src/engine/export.ts` (`downloadSVG`/`downloadPNG`/`downloadJSON`); **Copy** writes the `.edd` source to the clipboard directly in the app (`src/app/App.tsx`). (The top-right holds the theme toggle and the Show code / Focus-mode button.)

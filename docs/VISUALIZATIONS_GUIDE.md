@@ -58,6 +58,23 @@ Play it with `edd.play()`, scrub it with `next()/prev()`, or drive it frame-accu
 
 Multiple `viz` blocks in one document stack vertically; a `viz` block after a `scene` graph is placed below it.
 
+**`at: (x, y)` — pin a block (block option, every template).** Places the block's top-left at that point instead of stacking it, so a template can stand *beside* other content, such as a character or a hand-placed node:
+
+```edd
+scene {
+  layout manual
+  character rep "The rep" { pose: presenting, at: (0, 40), pin: true }
+}
+
+viz funnel sales "Pipeline" {
+  at: (260, 0)
+  item "Leads" 1200
+  item "Won" 36
+}
+```
+
+A later unpinned block still stacks below whichever is lower: the stacking cursor or the pinned block. A malformed value (`at: 400`) warns `W-VIZ-AT`, and the block stacks as usual.
+
 ### Reaching a template by name
 
 Each template has a canonical `<type>` (the catalog below) **plus a generous set of natural-language aliases**, so you can write the intent however you'd phrase it — an unknown type produces a diagnostic listing every canonical name. A few examples:
@@ -129,7 +146,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `pros-and-cons` (`pros-cons`) | `pro "…"` / `con "…"` lines | `proColor:`, `conColor:` |
 | `table` | `header "Feature" ["Free", "Pro"]` + `row "SSO" ["—", "Yes"]` | — |
 | `versus` (`vs`) | `left "A"`, `right "B"`, `criterion "Cost" { icon, left: "…", right: "…" }` | — |
-| `balance` (`scales`) | two `side "Name" { item "…" { icon } … }` blocks | `tilt: left\|right\|level` |
+| `balance` (`scales`) | two `side "Name" { item "…" { icon } … }` blocks — a post-and-beam balance, each pan hanging plumb on two strings with its items on a card, the side's name on a pill beneath | `tilt: left\|right\|level` |
 | `relationship` (`hub-spoke`, `orbit`) | `center "Hub" { icon }` + `item` satellites | — |
 | `podium` | up to 3 `item`s in rank order (2-1-3 arrangement) | — |
 | `decision` | question = title (or `question:`) + `item "Option" "why" { icon }` | — |
@@ -165,7 +182,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `personas` (`team`, `cast`) | `item "The Builder" "detail" { pose: confident, emotion: happy, shirt: tie, hair: short, accessory: glasses, fx: idea, prop: wrench }` characters | — |
 | `quote` (`big-quote`) | title = the quote; `by:` attribution; a character presents it | `by:`, `pose:`, `emotion:`, `shirt:`, `hair:`, `accessory:`, `fx:`, `prop:` |
 | `clouds` (`idea-clouds`) | `item "Theme" "detail" { icon }` scattered thought-cloud islands | — |
-| `head-thoughts` (`in-their-head`) | `item "Will it save time?" { icon }` thoughts inside a profile head | `who:` caption |
+| `head-thoughts` (`in-their-head`) | `item "Will it save time?" { icon }` thoughts inside one smooth, lightly washed profile head | `who:` caption, `facing: left\|right` |
 | `list` | `item "Value" "detail" { icon }` — vertical ≤5 items, horizontal 6+ | `orientation:` |
 | `diverge` | question = title + `item` options radiating on block arrows | — |
 | `converge` / `lens` | `item` inputs + `output "Result" { icon }` | — |
@@ -178,7 +195,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `problem-solution` | `problem`, `solution`, `outcome` entries + `support "…"` captions | — |
 | `transformation` (`before-after`) | `before "Label" "desc"` + `after "Label" "desc"` (suspension-bridge scene) | — |
 | `challenges` (`hurdles`) / `bridge` | `from`/`to` states + `item` steps spanning the gap | `action:` caption |
-| `root-causes` (`root-cause`) | problem = title + `item "Cause" "description"` on the roots | — |
+| `root-causes` (`root-cause`) | problem = title + `item "Cause" "description"` — a leafy crown, a flaring trunk and one tapered root per cause, each label under its root tip | — |
 | `domino` (`chain-reaction`) | `item "Config typo" "detail"` tiles toppling into the outcome | — |
 | `fishbone` (`ishikawa`) | title = the effect + `bone "People" { item "cause" … }` categories | — |
 | `impact` | `cause "Driver"` + `item "Effect" "description"` bubbles | — |
@@ -229,7 +246,7 @@ EDodoDraw is a **text→visualization generator**: it renders whatever you give 
 | `pros-and-cons` | 1–6 per side | two panels |
 | `table` | 1–8 rows × 2–6 columns | first column = row label; wide with many columns |
 | `versus` | **exactly 2 sides** × 1–6 criteria | — |
-| `balance` | **exactly 2 sides** × 1–4 items each | — |
+| `balance` | **exactly 2 sides** × 1–5 items each | the card (and pan) sizes to the wider side |
 | `relationship` | 3–10 satellites | + one `center` |
 | `podium` | 1–3 ranks | fixed 2-1-3 podium; extra ranks ignored |
 | `decision` | 2–6 options | rows self-space for long descriptions |
@@ -251,7 +268,7 @@ EDodoDraw is a **text→visualization generator**: it renders whatever you give 
 | `problem-solution` | fixed + 0–3 supports | problem / solution / outcome |
 | `transformation` | **exactly** before + after | — |
 | `challenges` / `bridge` | 2–5 steps | + `from` / `to` states |
-| `root-causes` | 2–5 causes | tree: crown + roots |
+| `root-causes` | 1–7 causes | one root + label per cause; filler roots keep the root ball full at 1–2 |
 | `impact` | 2–5 effects | + one `cause` |
 | `vision` | **exactly** current + vision | — |
 | `performance` | 1–4 metrics | donut cards |
@@ -285,7 +302,7 @@ EDodoDraw is a **text→visualization generator**: it renders whatever you give 
 | `quote` | exactly 1 quote | `pose: none` hides the figure |
 | `clouds` | 3–7 clouds | staggered rows sized by the largest cloud |
 | `fishbone` | 2–6 bones × ≤4 causes | bones alternate above/below the spine |
-| `head-thoughts` | 2–5 thoughts | fixed slots inside the cranium |
+| `head-thoughts` | 1–6 thoughts | rows spread over the cranium, clear of the face |
 | `hex-cluster` | 3–6 cells | + one core; details sit below their cell |
 
 **Text length.** Labels are single-line-ish (they wrap, but keep them a few words). Descriptions (`detail:` / trailing string) wrap to a column and the layout expands to fit — but on the compact-side-label templates (`funnel`, `pyramid`, `bullseye`, `spectrum`, `decision`) a stage/level reads best with a **name + one short sentence**; multi-sentence prose is supported but makes those layouts tall. Narrative templates (`sequence`, `journey`, `dialogue`, `iceberg`, `problem-solution`, `transformation`, `root-causes`) comfortably hold 1–2 sentences per item.
