@@ -23,7 +23,7 @@
  */
 
 import type { EdgeStyle, FillStyle, FontKind, NodeStyle, RoughTuning, SceneRough, Theme } from "../scene/types.js";
-import { contrastInk, darken, lighten, luma, mix, withAlpha } from "./color.js";
+import { contrastInk, contrastRatio, darken, lighten, luma, mix, withAlpha } from "./color.js";
 
 export interface PresetFonts {
   /** CSS stack (or a FontKind name like "hand") for body/labels. */
@@ -210,10 +210,19 @@ export function roleStyle(preset: StylePreset, i: number, opts: RoleOptions = {}
   };
 }
 
-/** Nudge a color toward `ink` until it contrasts with `bg` enough for text. */
+/**
+ * Nudge a color toward `ink` until it holds 4.5:1 against `bg` — WCAG AA for
+ * text, which is what this color letters (every item's heading).
+ *
+ * The earlier test was a BT.601 luma difference of 80, which is not a contrast
+ * measure: hand-clean's amber (#b8862c) passed it at 2.97:1 on its own paper,
+ * under the 3:1 floor even for large type. Steps are small so a color that is
+ * nearly there is only nudged, not dragged most of the way to the ink.
+ */
 function readableOn(color: string, bg: string, ink: string): string {
+  if (contrastRatio(ink, bg) < 4.5) return color; // the ink itself cannot get there
   let c = color;
-  for (let i = 0; i < 5 && Math.abs(luma(c) - luma(bg)) < 80; i++) c = mix(c, ink, 0.35);
+  for (let i = 0; i < 20 && contrastRatio(c, bg) < 4.5; i++) c = mix(c, ink, 0.08);
   return c;
 }
 

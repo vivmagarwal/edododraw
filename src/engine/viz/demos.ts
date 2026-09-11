@@ -41,10 +41,11 @@ export const VIZ_DEMOS: VizDemo[] = [
   // ---- Process ---------------------------------------------------------------
   d("flowchart", "Process", "Flowchart", "Sequential steps with arrows; set `direction: right` for a horizontal chain.", `
 viz flowchart "Content Publishing" {
-  item "Draft" { icon: doc }
-  item "Review" { icon: search }
-  item "Approve" { icon: check }
-  item "Publish" { icon: rocket }
+  direction: right
+  item "Draft" "Outline, then a first pass" { icon: doc }
+  item "Review" "Editor and one peer" { icon: search }
+  item "Approve" "Sign-off in the tracker" { icon: check }
+  item "Publish" "Ships with the newsletter" { icon: rocket }
 }`),
   d("sequence", "Process", "Sequence", "Numbered step panels flowing in reading order (boustrophedon).", `
 viz sequence "Customer Onboarding" {
@@ -187,7 +188,7 @@ viz gauge "System Health" {
 }`),
   d("pie", "Data", "Pie chart", "Slices with percentage callouts; alias `donut` for a hole.", `
 viz pie "Market Share" {
-  item "Alpha" 45 { icon: star }
+  item "Alpha" 45
   item "Beta" 30
   item "Gamma" 15
   item "Others" 10
@@ -202,7 +203,7 @@ viz drop-off "Signup Funnel Loss" {
 viz dumbbell-vertical "Year over Year" {
   item "Speed Score" "+15%" { icon: rocket, detail: "Increased from 70 to 85." }
   item "Retention" "+8%" { icon: heart, detail: "Now at 92% after onboarding fixes." }
-  item "Cost per Lead" "-22%" { icon: dollar, detail: "Down from $18 to $14." }
+  item "Cost per Lead" "−22%" { icon: dollar, detail: "Down from $18 to $14." }
 }`),
   d("dumbbell-horizontal", "Data", "Dumbbell — horizontal", "Progress tracks with a hanging value tag.", `
 viz dumbbell-horizontal "Goal Progress" {
@@ -397,11 +398,11 @@ viz pricing-tiers "Plans" {
 }`),
 
   d("decision-tree", "Comparison", "Decision tree", "Questions branching through labeled edges to outcomes.", `
-viz decision-tree {
+viz decision-tree "Should we build it?" {
   item "Build or buy?" {
     item "Core to product?" { when: "build" } {
       item "Build in-house" { when: "yes", icon: wrench }
-      item "Open source + contribute" { when: "no", icon: globe }
+      item "Adopt open source" { when: "no", icon: globe }
     }
     item "Buy a vendor" { when: "buy", icon: dollar }
   }
@@ -438,11 +439,11 @@ viz pestel "Market Environment" {
 }`),
   d("porters", "Business Frameworks", "Porter's Five Forces", "Competitive forces around a market.", `
 viz porters "Industry Forces" {
-  item "Rivalry" "Many similar competitors"
-  item "New entrants" "Low barriers to entry"
-  item "Supplier power" "Few key suppliers"
-  item "Buyer power" "Easy to switch"
-  item "Substitutes" "DIY alternatives exist"
+  item "Rivalry" "Many similar competitors" { icon: users }
+  item "New entrants" "Low barriers to entry" { icon: rocket }
+  item "Supplier power" "Few key suppliers" { icon: key }
+  item "Buyer power" "Easy to switch" { icon: dollar }
+  item "Substitutes" "DIY alternatives exist" { icon: wrench }
 }`),
   d("pyramid", "Business Frameworks", "Pyramid", "Stacked hierarchy levels.", `
 viz pyramid "Brand Pyramid" {
@@ -469,7 +470,7 @@ viz funnel "Sales Funnel" {
 }`),
 
   d("hex-cluster", "Business Frameworks", "Hex cluster", "A honeycomb — one core hexagon ringed by themed cells.", `
-viz hex-cluster "Team Health" {
+viz hex-cluster "What makes a healthy team" {
   center "Team Health" { icon: heart }
   item "Clarity" { icon: target }
   item "Trust" { icon: handshake }
@@ -672,10 +673,10 @@ viz vision "Where We're Headed" {
 }`),
   d("impact", "Visual Metaphors", "Impact", "One cause radiating to effects.", `
 viz impact "Faster Releases" {
-  cause "Weekly ship cadence"
-  item "Happier customers" "Fixes land in days, not months"
-  item "Tighter feedback" "Real usage guides the roadmap"
-  item "Team momentum" "Small wins compound"
+  cause "Weekly ship cadence" { icon: rocket }
+  item "Happier customers" "Fixes land in days, not months" { icon: heart }
+  item "Tighter feedback" "Real usage guides the roadmap" { icon: chat }
+  item "Team momentum" "Small wins compound" { icon: trend-up }
 }`),
   d("performance", "Visual Metaphors", "Performance", "Side-by-side donut gauges.", `
 viz performance "Quarterly KPIs" {
@@ -702,8 +703,8 @@ viz trend "Maturity Curve" {
 }`),
   d("race", "Visual Metaphors", "Race", "Contestants approaching the finish line.", `
 viz race "Market Race" {
-  item "Us"
-  item "Competitor X"
+  item "Us" "38% share, up 6 pts" 78
+  item "Competitor X" "31% share, flat" 61
 }`),
   d("dialogue", "Visual Metaphors", "Dialogue", "A conversation in speech bubbles.", `
 viz dialogue "Discovery Call" {
@@ -770,8 +771,8 @@ viz magnet "Why Devs Stay" {
 viz fishbone "Why Releases Slip" {
   bone "People" { item "Training gaps"; item "Turnover" }
   bone "Process" { item "No code review"; item "Manual QA" }
-  bone "Tools" { item "Flaky CI" }
-  bone "Environment" { item "Noisy office" }
+  bone "Tools" { item "Flaky CI"; item "Slow builds" }
+  bone "Environment" { item "Noisy office"; item "Constant interrupts" }
 }`),
   d("domino", "Cause and Effect", "Domino", "A chain reaction toppling left to right into the outcome.", `
 viz domino "How the Outage Spread" {

@@ -98,7 +98,10 @@ export class VizContext {
 
   /** The `data` payload for an element emitted under the current item scope. */
   private tagged(data: Record<string, unknown> | undefined, role: string): Record<string, unknown> | undefined {
-    if (!this.currentItem) return data;
+    // The role is tagged everywhere, not only inside an item: the block title,
+    // an axis, a caption are elements a host needs to find too (a video host
+    // draws the title FIRST, and it was indistinguishable from any other text).
+    if (!this.currentItem) return { ...data, vizRole: role };
     return { ...data, vizItem: `${this.vizId}.${this.currentItem}`, vizRole: role };
   }
 
@@ -258,9 +261,11 @@ export class VizContext {
     const entry = iconEntry(name);
     if (!entry) return null;
     // The path shape scales its group by size/viewBox, which multiplies the
-    // stroke too — so specify the stroke in DESIGN units such that the on-screen
-    // width lands at ~2px (slightly heavier for very large icons).
-    const visual = Math.min(3, Math.max(1.8, size / 18));
+    // stroke too — so specify the stroke in DESIGN units such that the drawn
+    // width lands on `visual` world units. A glyph's line should read like the
+    // diagram's own line (a preset draws at ~1.8) and grow only gently with the
+    // glyph, or a small icon clogs into a blob and a large one turns spindly.
+    const visual = Math.min(2.6, 1.6 + size / 100);
     const strokeWidth = visual * (entry.viewBox / size);
     return this.shape(
       "path",

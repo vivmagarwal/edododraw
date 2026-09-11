@@ -9,6 +9,80 @@ All notable changes to **edododraw**. Versions follow [semver](https://semver.or
 
 ---
 
+## 0.16.1
+
+**A polish pass driven by looking at 87 rendered cards.** Every template was rendered at 1920x1080
+through the Remotion library's gallery host and reviewed frame by frame; this release is the part of
+what came back that belongs in the engine rather than in one template. The reviewer's summary of the
+old output was "outlines not perfect, lines look broken, and they could be a bit thicker".
+
+### ⚠️ VISUAL CHANGE — circles, line ends, icon line weight, label colours, and four templates
+
+- **A pinned ellipse now closes on itself.** rough.js starts an ellipse near 12 o'clock and trails
+  its end past the start and inward (to 0.98r, then 0.9r) — the overlapping pen of a sketch. Under
+  `preserveVertices`, the tuning the smooth presets declare precisely so outlines meet, that trail
+  read as a notch at the top of every circle, and a camera fit magnified it with everything else.
+  Pinned ellipses are now drawn as a closed spline with a periodic wobble, handed to rough.js at
+  roughness 0 so fill, stroke and dash still come from the same options. `classic-rough` is
+  untouched: its ellipses still carry the trail, byte for byte.
+- **Icon strokes no longer invert with size.** A path shape is scaled into place, so `ctx.icon`
+  authors its stroke in design units and lets the transform bring it back — but `nonScalingStroke`
+  cancels that transform, so the compensation became the whole effect: a 24-unit glyph drawn at 18
+  came out at 3.6px and the same glyph drawn at 65 came out at 1.7px. The renderer now undoes the
+  design-unit division when it stamps non-scaling strokes, and a glyph's weight grows gently with
+  its size (`1.6 + size/100`, capped at 2.6) instead of inversely.
+- **A role's label colour holds 4.5:1 on the canvas.** `readableOn` tested a BT.601 luma difference
+  of 80, which is not a contrast measure: hand-clean's amber (#b8862c) passed it at 2.97:1 on its own
+  paper — under the 3:1 floor even for large type. It now nudges toward the ink in small steps until
+  the WCAG ratio reaches 4.5, so pale palettes darken only as far as they must.
+- **Every stroke ends round.** rough.js draws a shape as separate subpaths (each side of a box,
+  each curve of an outline), and the default butt cap left a square end on every one of them:
+  corners looked bitten and an elbow lost ~1.5px where its two lines met. Every stroked element now
+  gets `stroke-linecap` / `stroke-linejoin: round`, in every style, `classic-rough` included (its
+  geometry is unchanged; only the ends are rounded).
+- **A full-circle sector is a disc, not a sector.** A sector that sweeps 360° closed itself with a
+  radial edge from centre to rim, which read as a clock hand laid across every ring of a bullseye.
+- **Four glyphs redrawn** because they did not survive the ~27px a template actually draws them at:
+  `gear` was a circle with straight rays (a sun) and is now a cog with teeth; `users` was two
+  same-size circles side by side (goggles) and is now a person with a smaller one behind; `key` was a
+  ring with a horizontal bar (it read as "On") and is now a diagonal key; `handshake` was an
+  unreadable tangle of forearms and is now two interlocking rings — the partnership it always meant.
+  New aliases: `partnership`, `alliance`.
+- **`swot` tiles its four panels 2×2.** A single column of four panels is tall and narrow, so a
+  camera fit shrank it below reading size; the 2×2 grid is close to a frame's own shape and roughly
+  doubles the type. New option **`layout: grid|stack`**; `stack` keeps the old single column.
+- **`quadrant` is a plot, not four floating captions.** Each quadrant sits on a soft region panel
+  in a wide (≈2:1) plot area, with the axis captions at full size at the ends of the axes. The
+  earlier square matrix fitted height-bound and shrank every glyph.
+- **`funnel` carries its numbers.** Each stage's value is printed large inside its band and the
+  stage name alone sits on the side. The slopes are straight (every band edge takes its width from
+  its own y, so the gap between bands no longer steps the outline in). The title now centres on
+  the funnel's axis rather than on the whole block, which the side labels pulled to the right.
+- **`key-ideas` draws a lightbulb.** It was a plain circle over two floating lines, which read as a
+  balloon or an M in a bubble. The globe is now an exact arc pinched into a neck by two G1-continuous
+  S-curves, over a threaded base with a contact tip.
+
+### Added
+
+- `FitOptions.padX` / `padY` on `cameraForBBox` — padding per axis, defaulting to `padding`. A 16:9
+  frame is far wider than most diagrams are, so a host that pads both axes equally spends its scarce
+  height on margin: a square diagram in a 1728x704 band fits at 0.99x with 96 all round, and at 1.14x
+  with 96 across and 44 down. 15% more type, for margin nobody sees.
+- `contrastRatio()` and `relativeLuminance()` in the colour helpers — WCAG 2, exported.
+- `swot` option `layout: grid|stack`.
+- `vizRole` is now tagged on EVERY element a viz template emits, not only those inside an item
+  scope. The block title was indistinguishable from any other text, so a frame-driven host could not
+  draw it first (it is emitted last, and drew last).
+
+### Demos
+
+Several catalog demos were rewritten so their cards show the template at its best. `flowchart` runs
+horizontally with a description per step. `porters`, `impact` and `hex-cluster` gained icons.
+`race` gained values. `fishbone` has two causes on every bone, and `decision-tree` has a title.
+These are sample sources only, not engine behaviour.
+
+---
+
 ## 0.16.0
 
 **Three templates redrawn, plus engine work that had been sitting in a downstream copy.** An

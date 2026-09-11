@@ -151,7 +151,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `podium` | up to 3 `item`s in rank order (2-1-3 arrangement) | — |
 | `decision` | question = title (or `question:`) + `item "Option" "why" { icon }` | — |
 | `spectrum` | `item` / `zone` — first/last get arrow ends | — |
-| `quadrant` (`2x2`, `matrix`) | 4 `item`s in order TL, TR, BL, BR (+ children bullets) | `xLabels: [neg, pos]`, `yLabels: [neg, pos]` |
+| `quadrant` (`2x2`, `matrix`) | 4 `item`s in order TL, TR, BL, BR (+ children bullets), each on a soft region panel inside a wide plot | `xLabels: [neg, pos]`, `yLabels: [neg, pos]` |
 | `venn` | `set "Name" "desc" { icon }` (2–7 sets) + `overlap all "Label"` / `overlap [a, b] "Label"` | — |
 | `pricing-tiers` (`pricing`, `plans`) | `tier "Pro" 29 { highlight: true; item "SSO" }` — price + feature list cards | `period:`, `currency:`, `showValues:` |
 | `decision-tree` (`yes-no`) | nested `item`s branching left→right; `{ when: "yes" }` labels the edge | — |
@@ -160,12 +160,12 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 
 | type | data | options |
 |---|---|---|
-| `swot` | 4 `item "Strengths" { item "…" … }` panels with bullet children | — |
+| `swot` | 4 `item "Strengths" { item "…" … }` panels with bullet children, tiled 2×2 | `layout: grid\|stack` (`stack` = one column, the pre-0.16.1 look) |
 | `pestel` | `item "Political" "summary" { item "…" }` cards (4–6) | — |
 | `porters` (`forces`) | `item "Rivalry" "description"` forces on a ring | — |
 | `pyramid` | `item` levels, top → bottom | — |
 | `bullseye` (`target`) | `item` rings, **outermost first** | — |
-| `funnel` | `item "Stage" [value]` | `input:`, `output:` captions |
+| `funnel` | `item "Stage" [value]` — the value is printed large inside its band, the stage name on the side | `input:`, `output:` captions |
 | `flywheel` (`growth-loop`) | `item "More sellers" { icon: users }` ring segments + optional `center` entry | `center:` wheel label |
 | `hex-cluster` (`honeycomb`) | `center "Core"` + `item "Cell" { icon }` hexagons on a ring | `center:` |
 | `value-chain` (`chevron-process`) | `item "Build" { icon: wrench }` chevrons + `support "…"` bars above | — |
@@ -343,7 +343,9 @@ can be addressed with the single key `<blockId>.<itemId>`:
 - **Scene IR**: members carry `data.vizItem: "sales.won"` and a semantic
   `data.vizRole` (`"shape" | "label" | "detail" | "icon" | "value" | "line" |
   "edge" | "title"`). Query them with `vizItemMembers(scene, "sales.won")` /
-  `listVizItems(scene)`.
+  `listVizItems(scene)`. Since 0.16.1, elements that belong to **no** item (the
+  block title, axes, captions) carry `data.vizRole` too, just without a
+  `vizItem`. So a host can find `[data-viz-role="title"]` and draw it first.
 - **DOM**: each member `<g>` gets `data-viz-item="sales.won"` and
   `data-viz-role="…"` attributes — select
   `[data-viz-item="sales.won"]` to choreograph the item from host code.

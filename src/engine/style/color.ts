@@ -66,6 +66,24 @@ export function luma(c: string): number {
   return 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b;
 }
 
+/** WCAG 2 relative luminance, 0..1. Unparseable colors count as white. */
+export function relativeLuminance(c: string): number {
+  const rgb = parseHex(c);
+  if (!rgb) return 1;
+  const lin = (v: number) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(rgb.r) + 0.7152 * lin(rgb.g) + 0.0722 * lin(rgb.b);
+}
+
+/** WCAG 2 contrast ratio between two colors, 1..21. */
+export function contrastRatio(a: string, b: string): number {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
 /** Pick a readable ink for text sitting on `bg`. */
 export function contrastInk(bg: string | null | undefined, dark = "#1e1e1e", light = "#ffffff"): string {
   if (!bg) return dark;

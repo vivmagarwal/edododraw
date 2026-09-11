@@ -36,7 +36,7 @@ The behaviors an author or embedder can rely on (all from `controller.ts` / `fit
 | Fit clamp | `fitAll`/`focusBBox` cap at **2.5×**; `focus`'s *computed* framing caps at **4×**. |
 | Explicit `zoom` | **Bypasses all clamps** — a passed `zoom` (DSL `camera … zoom N`, or `focus(..,{zoom})`) is applied as-is, so a beat can exceed the interactive limits. |
 | Auto-duration | When `over`/`durationMs` is omitted: `clamp(420 + dist·0.12 + |ln(zoomTo/zoomFrom)|·320, 420, 1300)` ms. |
-| Padding defaults | `fitAll` 80px, `focus`/`focusBBox` 90px, bare `cameraForBBox` 64px. |
+| Padding defaults | `fitAll` 80px, `focus`/`focusBBox` 90px, bare `cameraForBBox` 64px. `cameraForBBox` also takes `padX` / `padY` (each defaults to `padding`): a 16:9 frame is wider than most diagrams, so padding the height less buys bigger type — a square diagram in a 1728×704 band fits at 0.99× with 96 all round and at 1.14× with 96 across and 44 down. |
 | Default easing | Compiled DSL beats default to **`ease-in-out`** (via `mapEasing`); a raw programmatic `animateTo` with no `easing` defaults to **`spring`**. |
 
 ## Interaction (built into the canvas)

@@ -11,6 +11,15 @@ import type { CameraTransform } from "../render/svgRenderer.js";
 export interface FitOptions {
   /** Screen-space padding around the target, in px. */
   padding?: number;
+  /**
+   * Padding on one axis only, in px — defaults to `padding`. A 16:9 frame is
+   * much wider than most diagrams are, so a host that pads both axes equally
+   * spends its scarce height on margin and shrinks the type: a square diagram
+   * in a 1728x704 band fits at 0.99x with 96 all round, and at 1.14x with 96
+   * across and 44 down, which is 15% more type for margin nobody sees.
+   */
+  padX?: number;
+  padY?: number;
   minZoom?: number;
   maxZoom?: number;
 }
@@ -24,8 +33,8 @@ export function cameraForBBox(bbox: BBox, viewport: Size, opts: FitOptions = {})
   const w = Math.max(1, bbox.maxX - bbox.minX);
   const h = Math.max(1, bbox.maxY - bbox.minY);
   const c = bboxCenter(bbox);
-  const availW = Math.max(1, viewport.w - padding * 2);
-  const availH = Math.max(1, viewport.h - padding * 2);
+  const availW = Math.max(1, viewport.w - (opts.padX ?? padding) * 2);
+  const availH = Math.max(1, viewport.h - (opts.padY ?? padding) * 2);
   let zoom = Math.min(availW / w, availH / h);
   if (!Number.isFinite(zoom) || zoom <= 0) zoom = 1;
   zoom = Math.max(minZoom, Math.min(maxZoom, zoom));

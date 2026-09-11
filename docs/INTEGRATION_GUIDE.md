@@ -625,6 +625,10 @@ data entry is tagged with its item — in the Scene IR (`node.data.vizItem =
 <g data-node="loads.rectangle_5" data-viz-item="loads.intrinsic" data-viz-role="shape">…</g>
 ```
 
+Elements outside any item (the block title, axes, captions) carry
+`data-viz-role` too, with no `data-viz-item`. So `[data-viz-role="title"]` finds the
+title, which a frame-driven host usually wants to draw first.
+
 ```ts
 import { vizItemMembers, listVizItems } from "edododraw";
 vizItemMembers(scene, "loads.intrinsic");  // -> all member element ids

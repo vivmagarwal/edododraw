@@ -71,20 +71,30 @@ const lineCount = (wrapped: string): number => wrapped.split("\n").length;
 registerViz({
   name: "swot",
   category: "Business Frameworks",
-  summary: "Stacked S/W/O/T panels with a big display letter, title and bullets.",
+  summary: "S/W/O/T panels (2×2 by default) with a big display letter, title and bullets.",
   entryKinds: ["item", "section"],
+  options: [{ name: "layout", type: "grid|stack", description: "grid (default) tiles the panels 2×2; stack keeps one column" }],
   sweetSpot: { min: 4, max: 4 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "section");
     const n = Math.max(items.length, 1);
-    const W = 560;
+    // A single column of four panels is ~1:1.6 tall-and-narrow, which the
+    // gallery fit then shrinks below reading size; 2×2 lands near the frame's
+    // own 2.4:1 and buys ~2× the type. `layout: stack` keeps the old column.
+    const stacked = (optStr(spec.options, "layout") ?? "grid") === "stack";
+    const cols = stacked ? 1 : 2;
+    const W = stacked ? 560 : 440;
+    const gap = 18;
     const pad = 22;
-    const contentX = 190;
+    const contentX = stacked ? 190 : 150;
     const contentW = W - contentX - pad;
-    const pitch = 46;
+    const pitch = stacked ? 46 : 40;
+    const bulletSize = stacked ? 15 : 17;
+    const letterSize = stacked ? 110 : 88;
+    const letterX = stacked ? 95 : 75;
 
     // Uniform panel height fitting the busiest panel.
-    let panelH = 160;
+    let panelH = stacked ? 160 : 150;
     for (const item of items) {
       let need = 76; // padding + title row
       if (item.detail) need += lineCount(ctx.wrap(item.detail, contentW, 15)) * 19 + 10;
@@ -95,16 +105,17 @@ registerViz({
     items.forEach((item, i) =>
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n, color: item.color });
-        const y = i * (panelH + 18);
-        ctx.shape("rectangle", 0, y, W, panelH, role, { id: ctx.uid(item.id), style: { roundness: role.roundness ?? 8 } });
+        const x = (i % cols) * (W + gap);
+        const y = Math.floor(i / cols) * (panelH + gap);
+        ctx.shape("rectangle", x, y, W, panelH, role, { id: ctx.uid(item.id), style: { roundness: role.roundness ?? 8 } });
         const accent = onPanel(role);
         const body = inPanel(ctx, role);
         // big display letter in the left third
         const letter = (item.label.trim()[0] ?? "?").toUpperCase();
-        ctx.label(letter, 95, y + panelH / 2, { size: 110, color: accent, weight: 700, font: "heading" });
-        if (item.icon) ctx.icon(item.icon, 95, y + panelH - 34, 30, accent);
+        ctx.label(letter, x + letterX, y + panelH / 2, { size: letterSize, color: accent, weight: 700, font: "heading" });
+        if (item.icon) ctx.icon(item.icon, x + letterX, y + panelH - 30, 28, accent);
         let cy = y + pad + 12;
-        ctx.label(ctx.wrap(item.label, contentW, 20, "heading", 2), contentX, cy, {
+        ctx.label(ctx.wrap(item.label, contentW, 20, "heading", 2), x + contentX, cy, {
           size: 20,
           color: accent,
           align: "left",
@@ -115,10 +126,10 @@ registerViz({
         cy += 36;
         if (item.detail) {
           const text = ctx.wrap(item.detail, contentW, 15);
-          ctx.label(text, contentX, cy, { size: 15, color: body, align: "left", vAnchor: "top" });
+          ctx.label(text, x + contentX, cy, { size: 15, color: body, align: "left", vAnchor: "top" });
           cy += lineCount(text) * 19 + 10;
         }
-        bulletList(ctx, item.children, contentX, cy, { dotColor: accent, textColor: body, maxW: contentW - 24, pitch });
+        bulletList(ctx, item.children, x + contentX, cy, { dotColor: accent, textColor: body, maxW: contentW - 22, pitch, size: bulletSize });
       }),
     );
   },
@@ -190,76 +201,111 @@ registerViz({
   sweetSpot: { min: 4, max: 4 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "quadrant").slice(0, 4);
-    const W = 720;
-    const H = 600;
-    const cx = W / 2;
-    const cy = H / 2;
+    // Plot area sized to the frame's own ~2.2:1 band (a squarer matrix fits
+    // height-bound and shrinks every glyph); the caption margins are part of
+    // the design box, so the fit stays width-bound.
+    const marginX = 104;
+    const marginY = 30;
+    const plotW = 792;
+    const plotH = 380;
+    const x0 = marginX;
+    const y0 = marginY;
+    const x1 = x0 + plotW;
+    const y1 = y0 + plotH;
+    const cx = x0 + plotW / 2;
+    const cy = y0 + plotH / 2;
+    const g = 12; // gutter between a panel and the axis it touches
+    const qw = plotW / 2 - g;
+    const qh = plotH / 2 - g;
     const edge = ctx.preset.edge;
+    const capSize = 18;
 
-    // double-headed arrow axes crossing at the center
+    // soft region panels — a 2×2 is a claim about four AREAS, so draw them
+    const corners: Array<[number, number]> = [
+      [x0, y0],
+      [cx + g, y0],
+      [x0, cy + g],
+      [cx + g, cy + g],
+    ];
+    items.forEach((item, i) => {
+      const role = ctx.role(i, { n: 4, color: item.color });
+      const [px, py] = corners[i];
+      ctx.item(item.id, () =>
+        ctx.shape(
+          "rectangle",
+          px,
+          py,
+          qw,
+          qh,
+          { stroke: role.color, fill: role.softFill, fillStyle: "solid", strokeWidth: 1.4, roughness: ctx.preset.roughness },
+          { style: { roundness: role.roundness ?? 10 }, z: -1 },
+        ),
+      );
+    });
+
+    // double-headed arrow axes crossing at the center, drawn over the panels
     ctx.line(
       [
-        [0, cy],
-        [W, cy],
+        [x0 - 16, cy],
+        [x1 + 16, cy],
       ],
-      { color: edge, width: 1.8 },
+      { color: edge, width: 1.8, z: 1 },
     );
-    ctx.arrowhead(cx, cy, W, cy, edge, 1.8);
-    ctx.arrowhead(cx, cy, 0, cy, edge, 1.8);
+    ctx.arrowhead(cx, cy, x1 + 16, cy, edge, 1.8, 1);
+    ctx.arrowhead(cx, cy, x0 - 16, cy, edge, 1.8, 1);
     ctx.line(
       [
-        [cx, 0],
-        [cx, H],
+        [cx, y0 - 16],
+        [cx, y1 + 16],
       ],
-      { color: edge, width: 1.8 },
+      { color: edge, width: 1.8, z: 1 },
     );
-    ctx.arrowhead(cx, cy, cx, 0, edge, 1.8);
-    ctx.arrowhead(cx, cy, cx, H, edge, 1.8);
+    ctx.arrowhead(cx, cy, cx, y0 - 16, edge, 1.8, 1);
+    ctx.arrowhead(cx, cy, cx, y1 + 16, edge, 1.8, 1);
 
-    // axis end captions: lists are [negative, positive]
+    // axis end captions, at the arrow tips and clear of the plot: [negative, positive]
     const xl = optList(spec.options, "xLabels");
     if (xl) {
-      ctx.label(xl[0] ?? "", 8, cy + 16, { size: 12, color: ctx.mutedInk, align: "left" });
-      ctx.label(xl[1] ?? "", W - 8, cy + 16, { size: 12, color: ctx.mutedInk, align: "right" });
+      ctx.label(xl[0] ?? "", x0 - 26, cy, { size: capSize, color: ctx.mutedInk, align: "right" });
+      ctx.label(xl[1] ?? "", x1 + 26, cy, { size: capSize, color: ctx.mutedInk, align: "left" });
     }
     const yl = optList(spec.options, "yLabels");
     if (yl) {
-      ctx.label(yl[1] ?? "", cx + 12, 10, { size: 12, color: ctx.mutedInk, align: "left" });
-      ctx.label(yl[0] ?? "", cx + 12, H - 10, { size: 12, color: ctx.mutedInk, align: "left" });
+      ctx.label(yl[1] ?? "", cx, y0 - 26, { size: capSize, color: ctx.mutedInk, vAnchor: "middle" });
+      ctx.label(yl[0] ?? "", cx, y1 + 26, { size: capSize, color: ctx.mutedInk, vAnchor: "middle" });
     }
 
-    // quadrant centers in TL, TR, BL, BR order
-    const centers: Array<[number, number]> = [
-      [W * 0.25, H * 0.25],
-      [W * 0.75, H * 0.25],
-      [W * 0.25, H * 0.75],
-      [W * 0.75, H * 0.75],
-    ];
+    // one content block centred in each region panel
     items.forEach((item, i) =>
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n: 4, color: item.color });
-        const [qx, qy] = centers[i];
-        const maxW = W / 2 - 80;
+        const [px, py] = corners[i];
+        const qcx = px + qw / 2;
+        const qcy = py + qh / 2;
+        const maxW = qw - 48;
         const bullets = item.children.slice(0, 3);
-        const detailText = !bullets.length && item.detail ? ctx.wrap(item.detail, maxW, 15) : undefined;
-        const blockH = (item.icon ? 58 : 0) + 30 + (bullets.length ? bullets.length * 38 : detailText ? lineCount(detailText) * 19 + 8 : 0);
-        let y = qy - blockH / 2;
+        const detailText = !bullets.length && item.detail ? ctx.wrap(item.detail, maxW, 18) : undefined;
+        const nameText = ctx.wrap(item.label, maxW, 24, "heading", 2);
+        const nameH = lineCount(nameText) * 30;
+        const blockH = (item.icon ? 58 : 0) + nameH + (bullets.length ? bullets.length * 40 : detailText ? lineCount(detailText) * 23 + 8 : 0);
+        let y = qcy - blockH / 2;
         if (item.icon) {
-          ctx.icon(item.icon, qx, y + 23, 44, role.color);
+          ctx.icon(item.icon, qcx, y + 23, 44, role.color);
           y += 58;
         }
-        ctx.label(ctx.wrap(item.label, maxW, 20, "heading", 2), qx, y + 12, {
-          size: 20,
+        ctx.label(nameText, qcx, y, {
+          size: 24,
           color: role.color,
           font: "heading",
           weight: ctx.preset.fonts.headingWeight,
+          vAnchor: "top",
           id: ctx.uid(item.id),
         });
-        y += 34;
+        y += nameH + 4;
         if (bullets.length) {
-          bulletList(ctx, bullets, qx - maxW / 2, y, { dotD: 8, dotColor: role.color, textColor: ctx.ink, maxW: maxW - 24, pitch: 38 });
+          bulletList(ctx, bullets, qcx - maxW / 2, y, { dotD: 8, dotColor: role.color, textColor: ctx.ink, maxW: maxW - 24, pitch: 40, size: 17 });
         } else if (detailText) {
-          ctx.label(detailText, qx, y, { size: 15, color: ctx.mutedInk, vAnchor: "top" });
+          ctx.label(detailText, qcx, y, { size: 18, color: ctx.mutedInk, vAnchor: "top" });
         }
       }),
     );

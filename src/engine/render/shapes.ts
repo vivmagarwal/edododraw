@@ -72,8 +72,27 @@ export function scaleStrokeWidths(root: Element, k: number): void {
   root.querySelectorAll(STROKED).forEach(scale);
 }
 
-/** The render-time stroke policy for a freshly drawn subtree: non-scaling + width scale. */
+/**
+ * Round every stroke's ends and corners.
+ *
+ * rough.js draws a shape as a run of SEPARATE subpaths — each side of a box,
+ * each curve of an outline — so a default butt cap leaves a square end at every
+ * one of them: corners look bitten, an elbow loses ~1.5px where its two lines
+ * meet on their centrelines, and a step's corner chips. A hand-drawn line ends
+ * round anyway.
+ */
+function applyRoundEnds(root: Element): void {
+  const round = (el: Element) => {
+    el.setAttribute("stroke-linecap", "round");
+    el.setAttribute("stroke-linejoin", "round");
+  };
+  if ((root as Element).matches?.(STROKED)) round(root);
+  root.querySelectorAll(STROKED).forEach(round);
+}
+
+/** The render-time stroke policy for a freshly drawn subtree: round ends, non-scaling + width scale. */
 export function applyStrokeTuning(root: Element, tune: RoughRenderTuning): void {
+  applyRoundEnds(root);
   if (tune.nonScalingStroke) applyNonScalingStroke(root);
   const k = tune.strokeScale ?? 1;
   if (k !== 1) scaleStrokeWidths(root, k);
@@ -149,6 +168,94 @@ export function nodeRoughOptions(style: NodeStyle, filled: boolean, tune: RoughR
   if (style.strokeStyle === "dashed") opts.strokeLineDash = [8, 8];
   else if (style.strokeStyle === "dotted") opts.strokeLineDash = [1.6, 6];
   return opts;
+}
+
+// --- the seamless ellipse ----------------------------------------------------
+
+/** A small seeded PRNG (mulberry32) — the same seed always draws the same outline. */
+function seededRandom(seed: number): () => number {
+  let a = seed >>> 0 || 1;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * The outline of a hand-drawn ellipse that closes on itself, as one path.
+ *
+ * The wobble is the kind rough.js gives an ellipse — the radius a little off
+ * overall, a small seeded offset at every sample — but applied as a PERIODIC
+ * perturbation and threaded through a closed Catmull-Rom spline, so there is no
+ * start and no end to disagree. Sample count follows rough.js's own scaling
+ * with circumference, so a big circle is no smoother or bumpier than a small one.
+ */
+export function seamlessEllipsePath(cx: number, cy: number, w: number, h: number, opts: Options): string {
+  const rough = Math.max(0, opts.roughness ?? 1);
+  const rand = seededRandom(opts.seed ?? 1);
+  const u = () => rand() * 2 - 1;
+  let rx = Math.abs(w / 2);
+  let ry = Math.abs(h / 2);
+  // rough.js offsets each radius by up to (1 - curveFitting) = 5% x roughness.
+  // Half of that: the smooth presets want a hand, not a lopsided egg.
+  rx += rx * 0.025 * rough * u();
+  ry += ry * 0.025 * rough * u();
+  const psq = Math.sqrt(Math.PI * 2 * Math.sqrt((rx * rx + ry * ry) / 2));
+  const n = Math.max(12, Math.ceil((9 / Math.sqrt(200)) * psq));
+  const phase = rand() * Math.PI * 2;
+  // rough.js moves every sample by up to +-1 x roughness on each axis; here the
+  // same budget goes along the radius, where it reads as a hand rather than grit.
+  const pts: Array<[number, number]> = [];
+  for (let i = 0; i < n; i++) {
+    const a = phase + (i / n) * Math.PI * 2;
+    const k = rough * u();
+    pts.push([cx + (rx + k) * Math.cos(a), cy + (ry + k) * Math.sin(a)]);
+  }
+  const f = (v: number) => Math.round(v * 100) / 100;
+  const p = (i: number) => pts[(i + n) % n];
+  let d = `M${f(pts[0][0])} ${f(pts[0][1])}`;
+  for (let i = 0; i < n; i++) {
+    const [p0, p1, p2, p3] = [p(i - 1), p(i), p(i + 1), p(i + 2)];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C${f(c1[0])} ${f(c1[1])} ${f(c2[0])} ${f(c2[1])} ${f(p2[0])} ${f(p2[1])}`;
+  }
+  return `${d} Z`;
+}
+
+/**
+ * An ellipse for the pinned tuning: no seam.
+ *
+ * rough.js starts an ellipse near 12 o'clock and deliberately trails its end
+ * past the start and inward — to 0.98r, then 0.9r (`_computeEllipsePoints`) —
+ * the overlapping pen of a sketch. `classic-rough` keeps that. But the smooth
+ * presets declare `preserveVertices` precisely so outlines meet cleanly, and
+ * there the trail reads as a notch at the top of every circle, which a camera
+ * punch-in (or a video host's fit) magnifies with everything else.
+ *
+ * The exact outline goes to rough.js at roughness 0, so fill, fill style, stroke
+ * width and dash still come from the same options; then the stroke is handed the
+ * one continuous path, because rough.js re-emits every curve as its own `M … C`
+ * subpath — whose ends are caps rather than joins, and restart a dash pattern.
+ */
+function seamlessEllipse(rc: RoughSVG, cx: number, cy: number, w: number, h: number, opts: Options): SVGGElement {
+  const d = seamlessEllipsePath(cx, cy, w, h, opts);
+  const g = rc.path(d, { ...opts, roughness: 0, bowing: 0, disableMultiStroke: true, preserveVertices: true });
+  const hasStroke = opts.stroke !== undefined && opts.stroke !== "none";
+  if (hasStroke) {
+    const drawn = g.querySelectorAll("path");
+    // rough.js appends the stroke set LAST (generator.path: fill first, then stroke).
+    const stroke = drawn[drawn.length - 1];
+    if (stroke) stroke.setAttribute("d", d);
+  }
+  return g;
+}
+
+/** The ellipse this style asks for: seamless when its corners are pinned, rough.js's own otherwise. */
+function tunedEllipse(rc: RoughSVG, cx: number, cy: number, w: number, h: number, opts: Options): SVGGElement {
+  return opts.preserveVertices ? seamlessEllipse(rc, cx, cy, w, h, opts) : rc.ellipse(cx, cy, w, h, opts);
 }
 
 // --- composite path builders -------------------------------------------------
@@ -273,10 +380,24 @@ function sectorPath(x: number, y: number, w: number, h: number, start: number, e
   const ry = h / 2;
   const irx = rx * inner;
   const iry = ry * inner;
+  const full = end - start >= 359.999;
   const sweep = Math.min(359.999, Math.max(0.001, end - start));
   const large = sweep > 180 ? 1 : 0;
   const [ox1, oy1] = polarPoint(cx, cy, rx, ry, start);
   const [ox2, oy2] = polarPoint(cx, cy, rx, ry, start + sweep);
+  // A sector that goes all the way round is a disc (or a ring): closing it the
+  // sector way leaves a radial edge from the centre to the rim — which reads as
+  // a clock hand laid across a bullseye, in every ring, at whatever angle the
+  // sweep happens to start.
+  if (full) {
+    const [mx, my] = polarPoint(cx, cy, rx, ry, start + 180);
+    const disc = [`M${ox1},${oy1}`, `A${rx},${ry} 0 1 1 ${mx},${my}`, `A${rx},${ry} 0 1 1 ${ox1},${oy1}`, "Z"].join(" ");
+    if (inner <= 0.001) return disc;
+    const [nx, ny] = polarPoint(cx, cy, irx, iry, start + 180);
+    const [hx, hy] = polarPoint(cx, cy, irx, iry, start);
+    // the hole runs the other way round, so an even-odd/nonzero fill punches it out
+    return `${disc} M${hx},${hy} A${irx},${iry} 0 1 0 ${nx},${ny} A${irx},${iry} 0 1 0 ${hx},${hy} Z`;
+  }
   if (inner <= 0.001) {
     return [`M${cx},${cy}`, `L${ox1},${oy1}`, `A${rx},${ry} 0 ${large} 1 ${ox2},${oy2}`, "Z"].join(" ");
   }
@@ -387,12 +508,12 @@ export function renderShapeBody(
       break;
     }
     case "ellipse": {
-      add(rc.ellipse(x + w / 2, y + h / 2, w, h, filledOpts));
+      add(tunedEllipse(rc, x + w / 2, y + h / 2, w, h, filledOpts));
       break;
     }
     case "circle": {
       const d = Math.min(w, h);
-      add(rc.ellipse(x + w / 2, y + h / 2, d, d, filledOpts));
+      add(tunedEllipse(rc, x + w / 2, y + h / 2, d, d, filledOpts));
       break;
     }
     case "diamond": {
@@ -485,7 +606,7 @@ export function renderShapeBody(
       ].join(" ");
       add(rc.path(body, filledOpts));
       // top rim ellipse (stroke only)
-      add(rc.ellipse(x + w / 2, bodyTop, w, ry * 2, strokeOpts));
+      add(tunedEllipse(rc, x + w / 2, bodyTop, w, ry * 2, strokeOpts));
       break;
     }
     case "cloud": {
@@ -509,7 +630,7 @@ export function renderShapeBody(
       const shoulderY = headY + headR + 4;
       const hipY = y + h * 0.66;
       const footY = y + h;
-      add(rc.ellipse(cx, headY, headR * 2, headR * 2, strokeOpts));
+      add(tunedEllipse(rc, cx, headY, headR * 2, headR * 2, strokeOpts));
       add(rc.line(cx, shoulderY, cx, hipY, strokeOpts)); // spine
       add(rc.line(x + w * 0.2, shoulderY + 8, x + w * 0.8, shoulderY + 8, strokeOpts)); // arms
       add(rc.line(cx, hipY, x + w * 0.28, footY, strokeOpts)); // left leg
@@ -538,7 +659,18 @@ export function renderShapeBody(
       if (sd.d) {
         const vw = sd.vw ?? w;
         const vh = sd.vh ?? h;
-        const el = rc.path(sd.d, filledOpts);
+        // A path shape is drawn in its own design box and scaled into place, so
+        // its stroke width is authored in DESIGN units — an icon divides by the
+        // scale so the transform brings it back. `nonScalingStroke` cancels that
+        // transform, which inverts the whole intent: a 24-unit glyph drawn at 18
+        // came out THICKER (3.6px) than the same glyph drawn at 65 (1.7px). Undo
+        // the design-unit division here, so the authored width is what shows.
+        const k = Math.sqrt(Math.abs((w / vw) * (h / vh)));
+        const scaled =
+          tune.nonScalingStroke && k > 0 && filledOpts.strokeWidth !== undefined
+            ? { ...filledOpts, strokeWidth: filledOpts.strokeWidth * k }
+            : filledOpts;
+        const el = rc.path(sd.d, scaled);
         const inner = docOf(rc).createElementNS(SVG_NS, "g") as SVGGElement;
         inner.setAttribute("transform", `translate(${x} ${y}) scale(${w / vw} ${h / vh})`);
         inner.appendChild(el);

@@ -71,7 +71,7 @@ describe("viz head-thoughts", () => {
     for (const n of [1, 2, 4, 6]) {
       const nodes = nodesOf(src(undefined, n));
       const head = nodes.find((n) => n.id.endsWith(".head"))!;
-      const rows = nodes.filter((n) => role(n) === "label");
+      const rows = nodes.filter((n) => role(n) === "label" && item(n) !== undefined);
       expect(rows.length, `${n} thoughts`).toBe(n);
       for (const r of rows) expect(inside(r, head), `${n} thoughts: ${r.label}`).toBe(true);
       // the face is the right 20% of the box — rows stop before it
@@ -86,7 +86,7 @@ describe("viz head-thoughts", () => {
     const hl = left.find((n) => n.id.endsWith(".head"))!;
     expect([hl.x, hl.y, hl.w, hl.h]).toEqual([hr.x, hr.y, hr.w, hr.h]);
     expect((hl.data as { d: string }).d).not.toBe((hr.data as { d: string }).d);
-    for (const r of left.filter((n) => role(n) === "label")) {
+    for (const r of left.filter((n) => role(n) === "label" && item(n) !== undefined)) {
       expect(inside(r, hl), r.label).toBe(true);
       expect(r.x, r.label).toBeGreaterThan(hl.x + hl.w * 0.15);
     }
