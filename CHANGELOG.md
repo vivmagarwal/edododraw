@@ -11,6 +11,18 @@ All notable changes to **edododraw**. Versions follow [semver](https://semver.or
 
 ## 0.16.2
 
+### Fixed (browser sweep)
+
+- **prism** — one tinted glass triangle instead of a triangle plus a
+  parallelogram "top side": with the beam drawn straight through, the three
+  outlines crossed as a cat's cradle. The beam now enters the left face, runs
+  lighter inside the glass, and the fan leaves the right face.
+- **iceberg** — the underwater mass widens once and tapers to a keel. It used
+  to zigzag in and out below the waterline and read as a spiky star.
+- **milestone-path** — the hillside's skyline IS the trail, dropped a hair.
+  The old ridge was drawn independently and crossed the path, so the fill read
+  as a stray grey wedge behind the climb.
+
 **179 template fixes from the same frame-by-frame review.** 0.16.1 carried the engine half of the
 87-card review; this is the per-template half. Every fix answers a defect a reviewer found at
 1920x1080 and a second pass confirmed by cropping the frame and reading the generator. Tests, the

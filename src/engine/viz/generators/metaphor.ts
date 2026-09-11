@@ -1236,25 +1236,31 @@ function iceColor(ctx: VizContext): string {
   return best;
 }
 
-/** One berg outline, tip then mass, in local units (waterline at y = 0). */
+/**
+ * One berg outline, tip then mass, in local units (waterline at y = 0).
+ *
+ * The tip is jagged — that is what reads as ice. The MASS is not: it widens
+ * once, holds, and tapers to a keel, so the whole underwater body is one solid
+ * volume. An earlier version zigzagged in and out below the water as well, and
+ * at a glance the berg read as a spiky star rather than the 90% nobody sees.
+ */
 const BERG: Pt[] = (
   [
-    [322, 0],
-    [372, -58],
-    [404, -34],
-    [446, -120],
-    [482, -52],
-    [516, -80],
-    [562, 0],
-    [602, 96],
-    [548, 162],
-    [578, 232],
-    [500, 296],
-    [448, 350],
-    [396, 292],
-    [330, 220],
-    [352, 140],
-    [300, 78],
+    [318, 0],
+    [356, -54],
+    [388, -30],
+    [430, -118],
+    [468, -44],
+    [500, -72],
+    [536, 0],
+    [596, 78],
+    [612, 168],
+    [560, 252],
+    [486, 322],
+    [420, 344],
+    [356, 268],
+    [300, 176],
+    [286, 84],
   ] as Pt[]
 ).map(([x, y]) => [Math.round((x - 442) * 1.3), Math.round(y < 0 ? y * 1.05 : y * 0.78)]);
 

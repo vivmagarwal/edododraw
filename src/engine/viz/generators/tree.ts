@@ -8,7 +8,7 @@ import { registerViz } from "../registry.js";
 import { itemsOf, optStr, type VizItem, type VizSpec } from "../types.js";
 import type { VizContext } from "../context.js";
 import type { NodeStyle } from "../../scene/types.js";
-import { mix, parseHex } from "../../style/color.js";
+import { mix, parseHex, withAlpha } from "../../style/color.js";
 import { cubicPoints, polar, radialAlign, scallopedBlob, smoothPath, taperedOutline, type Anchor } from "./util.js";
 
 // ---- shared helpers ----------------------------------------------------------
@@ -984,26 +984,31 @@ registerViz({
     const inputEntry = spec.items.find((i) => i.kind === "input" || i.kind === "in");
     const inputLabel = inputEntry?.label ?? optStr(spec.options, "input") ?? "Input";
 
-    // prism: front triangle + parallelogram top side, neutral
-    const triX = 230;
-    const triY = 20;
-    const triW = 200;
-    const triH = 190;
+    // The prism: ONE glass triangle, tinted so it reads as a solid rather than
+    // a wireframe. It used to carry a parallelogram "top side" for depth, and
+    // with the beam drawn straight through, the two outlines and the ray
+    // crossed as a cat's cradle of lines with no shape to them.
+    const triX = 250;
+    const triY = 24;
+    const triW = 210;
+    const triH = 196;
+    const apexX = triX + triW / 2;
     const cy = triY + triH * 0.62;
-    ctx.shape("triangle", triX, triY, triW, triH, outline(ctx, ctx.mutedInk), { id: ctx.uid("prism") });
-    ctx.poly(
-      [
-        [triX + triW / 2, triY],
-        [triX + triW / 2 + 64, triY - 22],
-        [triX + triW + 64, triY + triH - 22],
-        [triX + triW, triY + triH],
-      ],
-      outline(ctx, ctx.mutedInk),
+    ctx.shape(
+      "triangle",
+      triX,
+      triY,
+      triW,
+      triH,
+      { stroke: ctx.mutedInk, fill: withAlpha(ctx.mutedInk, 0.07), fillStyle: "solid", strokeWidth: ctx.preset.strokeWidth, roughness: ctx.preset.roughness },
+      { id: ctx.uid("prism") },
     );
-    // the beam leaves through ONE point on the far face, at its own height —
-    // on the solid's outward boundary, so no ray re-enters the prism
-    const s = (cy - (triY - 22)) / triH;
-    const exitX = triX + triW / 2 + 64 + s * (triW / 2);
+    // Beam in through the LEFT face, one refracted run inside the glass, out
+    // through the RIGHT face: both points sit on the triangle's own edges at
+    // the beam's height, so nothing crosses an outline it should not.
+    const down = (cy - triY) / triH; // 0 at the apex, 1 at the base
+    const entryX = apexX - (triW / 2) * down;
+    const exitX = apexX + (triW / 2) * down;
 
     // input node + beam in, straight through the glass to the exit point
     const inRole = inputEntry?.color ? ctx.role(0, { color: inputEntry.color }) : undefined;
@@ -1015,9 +1020,17 @@ registerViz({
       ctx.line(
         [
           [74, cy],
-          [exitX, cy],
+          [entryX, cy],
         ],
         { color: ctx.preset.edge, width: 2 },
+      );
+      // inside the glass, lighter: the beam is being carried, not drawn on
+      ctx.line(
+        [
+          [entryX, cy],
+          [exitX, cy],
+        ],
+        { color: withAlpha(ctx.preset.edge, 0.45), width: 1.6 },
       );
     });
 

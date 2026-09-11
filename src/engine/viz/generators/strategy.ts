@@ -272,18 +272,19 @@ registerViz({
     const [sx, sy] = pts[pts.length - 1];
     const [hx, hy] = pts[0];
 
-    // the summit the flag stands on: a pale fill-only silhouette behind the
-    // trail, its ridge above the whole climb
+    // the hillside the trail climbs: a pale fill-only silhouette whose SKYLINE
+    // is the trail itself, dropped a hair so the dashes sit on the ridge. An
+    // independently drawn ridge crossed the path — it ran above the climb in
+    // the middle and below it at the trailhead, so the trail left the hill and
+    // the fill read as a stray wedge.
+    const baseY = 384;
     smoothShape(
       ctx,
       [
-        [hx - 40, 384, "corner"],
-        [250, 280],
-        [520, 196],
-        [sx - 30, sy + 14],
-        [sx, sy - 6, "corner"],
-        [sx + 50, sy + 40],
-        [sx + 150, 384, "corner"],
+        [way[0][0] - 72, baseY, "corner"],
+        ...way.map(([x, y]): Anchor => [x, y + 12]),
+        [sx + 44, sy + 62],
+        [sx + 96, baseY, "corner"],
       ],
       { stroke: "transparent", fill: withAlpha(ctx.mutedInk, 0.08), fillStyle: "solid", strokeWidth: 0, roughness: ctx.preset.roughness },
       { z: -2 },
