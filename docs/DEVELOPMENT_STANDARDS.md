@@ -101,11 +101,13 @@ git tag v0.17.0
 git push origin main v0.17.0              # → CI publishes + deploys
 ```
 
-- **npm auth is trusted publishing (OIDC).** No npm token is stored in the repo or in GitHub:
-  npm checks the workflow's identity against the package's *Trusted Publisher* setting
-  (npmjs.com → edododraw → Settings: GitHub Actions, `vivmagarwal` / `edododraw` /
-  `release.yml`) and issues a one-run credential. Every CI-published version carries a
-  provenance attestation linking it to its commit.
+- **npm auth.** The workflow publishes with the `NPM_TOKEN` repository secret, a granular
+  publish token (update it with `gh secret set NPM_TOKEN` whenever the token is rotated). If the
+  package's *Trusted Publisher* setting is configured (npmjs.com → edododraw → Settings: GitHub
+  Actions, `vivmagarwal` / `edododraw` / `release.yml`), npm uses that OIDC exchange first and
+  the secret is never touched, so the secret can then be deleted. Setting that up needs an
+  authenticator-app or security-key 2FA session. Either way, every CI-published version carries
+  a provenance attestation linking it to its commit.
 - **The workflow is idempotent.** If the version is already on npm it skips the publish (and the
   site deploy), so re-running a release is safe.
 - **`prepublishOnly` guards manual publishes too** (`scripts/check-release.mjs`). Outside CI,

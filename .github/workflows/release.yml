@@ -2,10 +2,14 @@
 # redeploys the docs site from it — so npm, the git tag and the published docs
 # can never drift apart again.
 #
-# npm auth is TRUSTED PUBLISHING (OIDC): no token is stored anywhere. npm
-# verifies this workflow's identity (repo + this file's name) against the
-# package's Trusted Publisher setting on npmjs.com and issues a short-lived
-# credential for this one run; provenance is attached automatically.
+# npm auth, in the order npm tries it:
+#   1. TRUSTED PUBLISHING (OIDC), once the package's Trusted Publisher setting
+#      on npmjs.com names this repo + this file. npm exchanges the run's OIDC
+#      token for a one-run credential; nothing is stored.
+#   2. Otherwise the NPM_TOKEN repo secret (a granular publish token). npm
+#      falls back to it when the OIDC exchange is not available.
+# Either way the publish carries a provenance attestation linking it to this
+# commit.
 #
 #   npm version 0.17.0 --no-git-tag-version   # bump, update CHANGELOG + docs
 #   git commit -am "0.17.0 — …" && git tag v0.17.0
@@ -48,13 +52,15 @@ jobs:
 
       - name: Publish (skipped when this version is already on npm)
         id: publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # fallback when trusted publishing is not configured
         run: |
           VERSION=$(node -p "require('./package.json').version")
           if npm view "edododraw@${VERSION}" version >/dev/null 2>&1; then
             echo "edododraw@${VERSION} is already on npm — nothing to publish"
             echo "published=false" >> "$GITHUB_OUTPUT"
           else
-            npm publish --access public
+            npm publish --access public --provenance
             echo "published=true" >> "$GITHUB_OUTPUT"
           fi
 
