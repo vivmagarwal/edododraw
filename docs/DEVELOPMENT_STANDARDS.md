@@ -89,37 +89,42 @@ Two stages (mandatory for anything user-facing):
 
 ## Releasing
 
-**A release is one local command, and it keeps npm, GitHub and the docs site on the same
-commit.** No CI is involved.
+**A release is one command in your own Terminal plus one Touch ID, and it keeps npm, GitHub and
+the docs site on the same commit.** No CI is involved.
 
 ```sh
 npm version 0.17.0 --no-git-tag-version   # bump package.json + lock
 # add a "## 0.17.0" section to CHANGELOG.md and update the docs/*.md the change touches
 git commit -am "0.17.0 — <summary>"
-npm run release                            # verify → tag → push → publish → check → deploy docs
+npm run release                            # in Terminal; press Enter + Touch ID when npm asks
 ```
 
 `scripts/release.sh` runs, in order:
 
-1. Checks that the tree is clean, you're on `main`, and `CHANGELOG.md` has a `## <version>`
-   section.
+1. Checks that it's running in a real terminal, you're logged in to npm, the tree is clean, you're
+   on `main`, and `CHANGELOG.md` has a `## <version>` section.
 2. Runs `npm run typecheck` and `npm test`.
 3. Tags `v<version>` (annotated) at HEAD, then pushes `main` and the tag to GitHub.
-4. Runs `npm publish`, whose `prepublishOnly` builds the package and runs `check-dist`.
+4. Runs `npm publish`, whose `prepublishOnly` builds the package and runs `check-dist`. npm prints
+   **"Authenticate your account at: …"**. Press **Enter**, approve with **Touch ID** in the
+   browser, and it carries on.
 5. Reads the registry and checks that the version's `gitHead` is HEAD.
 6. Deploys the docs site (`scripts/deploy-pages.sh`).
 
-Every step checks whether it has already happened, so after a failure (a wrong OTP, a network
-blip) just run it again and it resumes.
+Every step checks whether it has already happened, so after a failure (a declined approval, a
+network blip) just run it again and it resumes.
 
-- **npm auth.** By default it uses `NPM_ACCESS_TOKEN` from `.env`, a granular token with
-  "bypass 2FA", through a temporary config file that it deletes afterwards. npm is phasing those
-  tokens out for publishing. When it refuses one, run `npm login` once, then
-  `npm run release -- --otp <6-digit code>` to publish with your session and a 2FA code.
+- **npm auth is your login plus passkey 2FA.** The account has 2FA for authorization and
+  publishing, with one security key: a passkey in iCloud Keychain, unlocked by Touch ID. Run
+  `npm login` once per machine if `npm whoami` fails. Tokens that bypass 2FA are refused for
+  publishing, so there is no token path. The approval step needs a real terminal, so the script
+  refuses to run without one.
 - **`prepublishOnly` guards any other publish** (`scripts/check-release.mjs`). A bare
   `npm publish` refuses unless the tree is clean, HEAD is on `origin/main`, and the tag
   `v<version>` points at HEAD and is pushed. `EDD_RELEASE_UNCHECKED=1` bypasses it, for
   emergencies only.
-- **Every published version has a tag**, created at its npm `gitHead`, so
-  `git checkout v0.12.1` gives you exactly what npm serves for 0.12.1.
+- **Every published version has a tag**, created at its npm `gitHead` (0.16.1 was published from
+  a clean copy of its tag, so npm recorded no `gitHead`; its tarball checksum matches the tag's
+  build), so `git checkout v0.12.1` gives you exactly what npm serves for 0.12.1.
 - **The docs site** can be redeployed by hand between releases with `scripts/deploy-pages.sh`.
+  Only run it from a clean tree, since it builds the working copy.

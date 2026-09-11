@@ -5,26 +5,25 @@
 # So npm, the git tag and the docs site always carry the same commit.
 #
 # Every step checks whether it is already done, so re-running after a failure
-# (a wrong OTP, a network blip) simply resumes where it stopped.
+# (a declined approval, a network blip) simply resumes where it stopped.
 #
 #   npm version 0.17.0 --no-git-tag-version   # bump; add "## 0.17.0" to CHANGELOG.md + docs
 #   git commit -am "0.17.0 — …"
-#   npm run release                            # uses NPM_ACCESS_TOKEN from .env when present
-#   npm run release -- --otp 123456            # or: your `npm login` session + a 2FA code
+#   npm run release                            # in YOUR Terminal: press Enter + Touch ID once
+#
+# npm auth is your `npm login` session plus the account's passkey 2FA: at the
+# publish step npm prints "Authenticate your account at: …", you press Enter,
+# approve with Touch ID in the browser, and the release carries on. That needs
+# a real terminal, which is why this refuses to run without one. (Tokens that
+# bypass 2FA are refused for publishing now, so there is no token path.)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-OTP=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --otp) OTP="${2:-}"; shift 2 ;;
-    --otp=*) OTP="${1#--otp=}"; shift ;;
-    *) echo "✗ release: unknown argument '$1'" >&2; exit 2 ;;
-  esac
-done
-
 die() { echo "✗ release: $*" >&2; exit 1; }
 step() { echo; echo "→ $*"; }
+
+[ -t 0 ] && [ -t 1 ] || die "run this in your own Terminal — npm's 2FA approval needs one"
+npm whoami >/dev/null 2>&1 || die "not logged in to npm — run: npm login"
 
 VERSION=$(node -p "require('./package.json').version")
 TAG="v$VERSION"
@@ -56,20 +55,8 @@ step "push main + $TAG to GitHub"
 git push origin main "refs/tags/$TAG"
 
 if ! published; then
-  step "npm publish"
-  if [ -n "$OTP" ]; then
-    # your `npm login` session + a one-time code from your authenticator
-    npm publish --access public --otp "$OTP"
-  elif [ -f .env ] && grep -q '^NPM_ACCESS_TOKEN=' .env; then
-    RC=$(mktemp)
-    trap 'rm -f "$RC"' EXIT
-    TOKEN=$(grep '^NPM_ACCESS_TOKEN=' .env | head -1 | cut -d= -f2-)
-    printf '//registry.npmjs.org/:_authToken=%s\n' "$TOKEN" > "$RC"
-    NPM_CONFIG_USERCONFIG="$RC" npm publish --access public ||
-      die "publish with NPM_ACCESS_TOKEN failed — if npm refused the token, run: npm login, then npm run release -- --otp <code>"
-  else
-    npm publish --access public # npm asks for the session / 2FA itself
-  fi
+  step "npm publish — when npm asks, press Enter and approve with Touch ID"
+  npm publish --access public
 fi
 
 step "checking the registry"
@@ -78,8 +65,12 @@ for _ in 1 2 3 4 5 6; do
   [ -n "$GITHEAD" ] && break
   sleep 5
 done
-[ "$GITHEAD" = "$HEAD" ] || die "npm has edododraw@$VERSION from ${GITHEAD:-<nothing>}, expected $HEAD"
-echo "  edododraw@$VERSION = $TAG = ${HEAD:0:7} on npm and GitHub"
+if [ -z "$GITHEAD" ]; then
+  echo "  ! npm recorded no gitHead for $VERSION (published outside this checkout?) — the tag $TAG marks the commit"
+else
+  [ "$GITHEAD" = "$HEAD" ] || die "npm has edododraw@$VERSION from $GITHEAD, expected $HEAD"
+  echo "  edododraw@$VERSION = $TAG = ${HEAD:0:7} on npm and GitHub"
+fi
 
 step "deploy the docs site"
 bash scripts/deploy-pages.sh
