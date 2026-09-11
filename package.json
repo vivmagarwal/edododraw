@@ -72,7 +72,7 @@
     "check:edd": "tsx scripts/qa/parse-probe.mts examples/*.edd examples/remotion/src/*.edd",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build:pkg && node scripts/check-dist.mjs"
+    "prepublishOnly": "node scripts/check-release.mjs && npm run build:pkg && node scripts/check-dist.mjs"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.4",

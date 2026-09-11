@@ -86,3 +86,31 @@ Two stages (mandatory for anything user-facing):
 
 1. **Code-level** — `npm test` (vitest) + `npm run typecheck`.
 2. **End-user** — drive the running app with `playwright-cli` (`scripts/qa/smoke.sh`), screenshot every state, and **read every screenshot**. A route returning the right JSON does not prove the hand-drawn render is correct.
+
+## Releasing
+
+**A release is a git tag.** Pushing `v<version>` runs `.github/workflows/release.yml`, which
+typechecks, tests and publishes that exact commit to npm, then redeploys the docs site from it.
+So npm, the tag and https://vivmagarwal.github.io/edododraw/ always show the same code.
+
+```sh
+npm version 0.17.0 --no-git-tag-version   # bump package.json + lock
+# update CHANGELOG.md and the docs/*.md the change touches, in the same commit
+git commit -am "0.17.0 — <summary>"
+git tag v0.17.0
+git push origin main v0.17.0              # → CI publishes + deploys
+```
+
+- **npm auth is trusted publishing (OIDC).** No npm token is stored in the repo or in GitHub:
+  npm checks the workflow's identity against the package's *Trusted Publisher* setting
+  (npmjs.com → edododraw → Settings: GitHub Actions, `vivmagarwal` / `edododraw` /
+  `release.yml`) and issues a one-run credential. Every CI-published version carries a
+  provenance attestation linking it to its commit.
+- **The workflow is idempotent.** If the version is already on npm it skips the publish (and the
+  site deploy), so re-running a release is safe.
+- **`prepublishOnly` guards manual publishes too** (`scripts/check-release.mjs`). Outside CI,
+  `npm publish` refuses unless the working tree is clean, HEAD is on `origin/main`, and the tag
+  `v<version>` points at HEAD and is pushed. In CI it requires the run to be for that tag.
+  `EDD_RELEASE_UNCHECKED=1` bypasses it, for emergencies only.
+- **The docs site** can still be redeployed by hand between releases with
+  `scripts/deploy-pages.sh`.

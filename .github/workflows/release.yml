@@ -1,0 +1,76 @@
+# Release: pushing a tag `v<version>` publishes that exact commit to npm and
+# redeploys the docs site from it — so npm, the git tag and the published docs
+# can never drift apart again.
+#
+# npm auth is TRUSTED PUBLISHING (OIDC): no token is stored anywhere. npm
+# verifies this workflow's identity (repo + this file's name) against the
+# package's Trusted Publisher setting on npmjs.com and issues a short-lived
+# credential for this one run; provenance is attached automatically.
+#
+#   npm version 0.17.0 --no-git-tag-version   # bump, update CHANGELOG + docs
+#   git commit -am "0.17.0 — …" && git tag v0.17.0
+#   git push origin main v0.17.0              # → this workflow
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # the OIDC token npm trusted publishing exchanges
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # trusted publishing needs npm ≥ 11.5.1
+      - run: npm install -g npm@^11.5.1
+
+      - run: npm ci
+
+      - name: Typecheck + tests
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Publish (skipped when this version is already on npm)
+        id: publish
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "edododraw@${VERSION}" version >/dev/null 2>&1; then
+            echo "edododraw@${VERSION} is already on npm — nothing to publish"
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          else
+            npm publish --access public
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  pages:
+    needs: publish
+    if: needs.publish.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the built site to the gh-pages branch
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Deploy the docs site
+        env:
+          PAGES_REMOTE: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        run: bash scripts/deploy-pages.sh
