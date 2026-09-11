@@ -8,7 +8,8 @@
 import { registerViz } from "../registry.js";
 import { itemsOf, optNum, optStr, type VizItem, type VizSpec } from "../types.js";
 import type { VizContext } from "../context.js";
-import { fmtNum, polar, rad, radialLabel } from "./util.js";
+import { mix } from "../../style/color.js";
+import { fmtNum, polar, rad, radialLabel, smoothShape } from "./util.js";
 
 /** Rotate points around (cx, cy) by deg (screen coords: positive = clockwise). */
 function rot(pts: Array<[number, number]>, cx: number, cy: number, deg: number): Array<[number, number]> {
@@ -121,26 +122,34 @@ registerViz({
     rings.forEach((ring, ri) =>
       ctx.item(ring.id, () => {
         const role = ctx.role(ri, { n: nR, color: ring.color });
-        const R = 128 + ri * 92;
+        // elliptical orbits use the wide band (circles left a square card)
+        const Rx = 200 + ri * 140;
+        const Ry = 124 + ri * 72;
+        const at = (deg: number): [number, number] => [Math.cos(rad(deg)) * Rx, Math.sin(rad(deg)) * Ry];
+        // the orbit's outward normal at a point: labels go ACROSS the orbit, never along it
+        const normal = (deg: number): number => (Math.atan2(Math.sin(rad(deg)) / Ry, Math.cos(rad(deg)) / Rx) * 180) / Math.PI;
         // dashed orbit + ring name sitting on it (upper left, cleared)
         const orbit: Array<[number, number]> = [];
-        for (let a = 0; a <= 72; a++) orbit.push(polar(0, 0, R, (a * 360) / 72));
+        for (let a = 0; a <= 72; a++) orbit.push(at((a * 360) / 72));
         ctx.poly(orbit, { stroke: ctx.mutedInk, fill: null, fillStyle: "none", strokeWidth: 1.2, strokeStyle: "dashed", roughness: ctx.preset.roughness });
 
         // members spaced around the orbit, staggered per ring; the ring name
         // takes the mid-gap slot before the first member so it never hits a chip
         const k = ring.children.length;
-        radialLabel(ctx, 0, 0, R + 2, -90 + ri * 45 - 180 / k, ring.label, undefined, role.color, { gap: 4, size: 14 });
+        const nameDeg = -90 + ri * 45 - 180 / k;
+        const [nx, ny] = at(nameDeg);
+        radialLabel(ctx, nx, ny, 2, normal(nameDeg), ring.label, undefined, role.color, { gap: 4, size: 15 });
         ring.children.forEach((m, mi) => {
           const deg = -90 + ri * 45 + (mi * 360) / k;
-          const [px, py] = polar(0, 0, R, deg);
+          const [px, py] = at(deg);
           ctx.shape("circle", px - 27, py - 27, 54, 54, { stroke: role.color, fill: role.softFill, fillStyle: "solid", strokeWidth: 1.8, roughness: ctx.preset.roughness }, { id: ctx.uid(m.id) });
           if (m.icon) ctx.icon(m.icon, px, py, 24, role.color);
           else ctx.label(m.label.slice(0, 2), px, py, { size: 16, color: role.color, weight: 700, font: "heading" });
-          // outermost ring: name pushed radially outward (free space there);
-          // inner rings: name beneath the chip so it can't hit outer chips
-          if (ri === nR - 1) radialLabel(ctx, px, py, 29, deg, m.label, undefined, ctx.ink, { maxW: 110, gap: 6, size: 13 });
-          else ctx.label(ctx.wrap(m.label, 100, 13, "body", 2), px, py + 40, { size: 13, color: ctx.ink, vAnchor: "top" });
+          // a member's name goes across the orbit, never along it (the dashes
+          // ran through names placed under the chip): outward on the outermost
+          // ring, inward — toward the free space round the core — on inner ones
+          const nd = normal(deg);
+          radialLabel(ctx, px, py, 29, ri === nR - 1 ? nd : nd + 180, m.label, undefined, ctx.ink, { maxW: ri === nR - 1 ? 130 : 104, gap: 6, size: 15 });
         });
       }),
     );
@@ -191,8 +200,19 @@ registerViz({
       const role = ctx.role(li, { n: lanes.length, color: s.color ?? lanes[li].color });
       ctx.item(s.id, () => {
         ctx.shape("round-rectangle", x, cy - boxH / 2, boxW, boxH, role, { id: ctx.uid(s.id) });
-        ctx.label(ctx.wrap(s.label, boxW - 24 - (s.icon ? 20 : 0), 14, "heading", 2), x + boxW / 2 + (s.icon ? 11 : 0), cy, { size: 14, color: role.textColor, weight: ctx.preset.fonts.headingWeight, font: "heading" });
-        if (s.icon) ctx.icon(s.icon, x + 18, cy, 18, role.textColor);
+        // icon + text centred as ONE group (an icon pinned to the box's left
+        // edge with the text centred in the rest read as two separate marks)
+        const textOpts = { size: 14, color: role.textColor, weight: ctx.preset.fonts.headingWeight, font: "heading" };
+        if (s.icon) {
+          const text = ctx.wrap(s.label, boxW - 48, 14, "heading", 2);
+          const textW = Math.max(...text.split("\n").map((l) => ctx.measure(l, 14, "heading")));
+          const iconS = 18;
+          const start = x + boxW / 2 - (iconS + 8 + textW) / 2;
+          ctx.icon(s.icon, start + iconS / 2, cy, iconS, role.textColor);
+          ctx.label(text, start + iconS + 8, cy, { ...textOpts, align: "left" });
+        } else {
+          ctx.label(ctx.wrap(s.label, boxW - 24, 14, "heading", 2), x + boxW / 2, cy, textOpts);
+        }
         if (k < nSteps - 1) {
           const [nx, ny] = posOf(k + 1);
           if (ny === cy) {
@@ -223,7 +243,7 @@ registerViz({
   summary: "KPI rows — actual bar vs a target tick over a qualitative band.",
   entryKinds: ["item", "kpi"],
   options: [
-    { name: "max", type: "number", description: "scale ceiling (default: largest value/target)" },
+    { name: "max", type: "number", description: "one scale ceiling for every row (default: each row scales to its own max(actual, target) × 1.15; a row's own `max:` wins over both)" },
     { name: "showValues", type: "boolean", description: "print actual values (default true)" },
   ],
   sweetSpot: { min: 2, max: 6 },
@@ -233,7 +253,7 @@ registerViz({
     const trackW = 330;
     const rowH = 62;
     const labelW = 22 + Math.max(80, ...rows.map((r) => ctx.measure(r.label, 16)));
-    const max = optNum(spec.options, "max") ?? Math.max(1, ...rows.flatMap((r) => [r.values[0] ?? 0, r.values[1] ?? (typeof r.opts.target === "number" ? r.opts.target : 0)])) * 1.08;
+    const sharedMax = optNum(spec.options, "max");
 
     rows.forEach((row, i) =>
       ctx.item(row.id, () => {
@@ -241,10 +261,16 @@ registerViz({
         const cy = i * rowH + rowH / 2;
         const actual = row.values[0] ?? 0;
         const target = row.values[1] ?? (typeof row.opts.target === "number" ? row.opts.target : undefined);
+        // KPIs come in different units, so each row reads against ITS OWN
+        // target: one shared axis made 6 hires of 10 a sliver beside 99.9% uptime
+        const rowOwn = typeof row.opts.max === "number" && row.opts.max > 0 ? row.opts.max : undefined;
+        const max = rowOwn ?? sharedMax ?? Math.max(1e-9, actual, target ?? 0) * 1.15;
         ctx.label(row.label, labelW - 14, cy, { size: 16, color: ctx.ink, align: "right" });
-        // qualitative band + actual bar + target tick
-        ctx.shape("rectangle", labelW, cy - 13, trackW, 26, { stroke: ctx.mutedInk, fill: role.softFill, fillStyle: "solid", strokeWidth: 1.2, roughness: ctx.preset.roughness, opacity: 60 });
-        ctx.shape("rectangle", labelW, cy - 6, Math.max(6, (trackW * Math.min(actual, max)) / max), 12, { stroke: role.color, fill: role.fill ?? role.color, fillStyle: "solid", strokeWidth: 1, roughness: ctx.preset.roughness }, { id: ctx.uid(row.id) });
+        // qualitative band (a quiet wash, no outline) + the measure as the one
+        // solid bar in the hue + the ink target tick as the only dark mark
+        const band = mix(ctx.preset.background, role.color, 0.16);
+        ctx.shape("rectangle", labelW, cy - 13, trackW, 26, { stroke: "none", fill: band, fillStyle: "solid", strokeWidth: 0, roughness: ctx.preset.roughness }, { style: { roundness: 6 } });
+        ctx.shape("rectangle", labelW, cy - 8, Math.max(8, (trackW * Math.min(actual, max)) / max), 16, { stroke: "none", fill: role.color, fillStyle: "solid", strokeWidth: 0, roughness: ctx.preset.roughness }, { id: ctx.uid(row.id), style: { roundness: 6 } });
         if (target !== undefined) {
           const tx = labelW + (trackW * Math.min(target, max)) / max;
           ctx.line([[tx, cy - 19], [tx, cy + 19]], { color: ctx.ink, width: 2.6 });
@@ -269,41 +295,104 @@ registerViz({
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "cause", "step");
     const n = Math.max(items.length, 1);
-    const tileW = 30;
-    const tileH = 118;
-    const pitch = 96;
     const groundY = 0;
+    // One row of labels, each under its own tile: the pitch is set by the
+    // widest label, and the tile scales WITH the pitch — domino proportions
+    // (1:2) and a gap of 0.3 × its height, which is what lets every tile rest
+    // on the next at a lean that decays to upright along the chain.
+    const pitch = Math.max(176, ...items.map((it) => ctx.measureLabelBlock(it.label, it.detail, { maxW: 200 }).w + 26));
+    const tileH = pitch / 0.8;
+    const tileW = tileH / 2;
+
+    // Lean of each tile, solved from the end: the outcome stands upright and
+    // each earlier tile leans exactly far enough for its top corner to rest on
+    // the next tile's face — touching, never overlapping.
+    const tips: number[] = new Array(n).fill(0);
+    for (let i = n - 2; i >= 0; i--) {
+      const phi = rad(tips[i + 1]);
+      const x = i * pitch;
+      const px2 = x + pitch + tileW; // next tile's pivot
+      const bx = px2 - tileW * Math.cos(phi);
+      const by = groundY - tileW * Math.sin(phi);
+      const dx = Math.sin(phi);
+      const dy = -Math.cos(phi);
+      const side = (deg: number): number => {
+        const cxr = x + tileW + tileH * Math.sin(rad(deg));
+        const cyr = groundY - tileH * Math.cos(rad(deg));
+        return (cxr - bx) * dy - (cyr - by) * dx;
+      };
+      let lo = 0;
+      let hi = 80;
+      if (Math.sign(side(lo)) === Math.sign(side(hi))) {
+        tips[i] = 0;
+        continue;
+      }
+      for (let k = 0; k < 40; k++) {
+        const mid = (lo + hi) / 2;
+        if (Math.sign(side(mid)) === Math.sign(side(lo))) lo = mid;
+        else hi = mid;
+      }
+      tips[i] = lo;
+    }
+    const place = (i: number, pts: Array<[number, number]>) => (tips[i] > 0 ? rot(pts, i * pitch + tileW, groundY, tips[i]) : pts);
 
     // ground
     ctx.line([[-58, groundY], [(n - 1) * pitch + tileW + 58, groundY]], { color: ctx.ink, width: 2.4 });
-    // the push that started it
-    ctx.arrow(-52, -tileH - 26, -6, -tileH + 4, { color: ctx.ink, width: 2.2 });
+    // the push that started it: square to tile 0's back face, at 72% of its height
+    {
+      const a = rad(tips[0]);
+      const nx = -Math.cos(a);
+      const ny = -Math.sin(a);
+      const [fx, fy] = place(0, [[0, groundY - tileH * 0.72]])[0];
+      ctx.arrow(fx + nx * 64, fy + ny * 64, fx + nx * 10, fy + ny * 10, { color: ctx.ink, width: 2.2 });
+    }
 
+    // pip layouts for one half of a face, in units of the pip spacing
+    const PIPS: Array<Array<[number, number]>> = [
+      [[0, 0]],
+      [
+        [-1, -1],
+        [1, 1],
+      ],
+      [
+        [-1, -1],
+        [0, 0],
+        [1, 1],
+      ],
+    ];
     items.forEach((item, i) =>
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n, color: item.color });
         const x = i * pitch;
-        // fallen hardest at the trigger, upright by the end of the chain
-        const tip = Math.max(0, 62 - i * (62 / Math.max(n - 1.4, 1)));
         const corners: Array<[number, number]> = [
           [x, groundY - tileH],
           [x + tileW, groundY - tileH],
           [x + tileW, groundY],
           [x, groundY],
         ];
-        const pts = tip > 0 ? rot(corners, x + tileW, groundY, tip) : corners;
-        ctx.poly(pts, role, { id: ctx.uid(item.id) });
-        // a pip near the tile top so it reads as a domino
-        const [px, py] = tip > 0 ? rot([[x + tileW / 2, groundY - tileH + 22]], x + tileW, groundY, tip)[0] : [x + tileW / 2, groundY - tileH + 22];
-        ctx.shape("circle", px - 4, py - 4, 8, 8, { stroke: role.textColor, fill: role.textColor, fillStyle: "solid", strokeWidth: 1, roughness: 0.5 });
-        // label below the slot, two-row stagger
-        const row = i % 2;
-        ctx.labelBlock(item.label, item.detail, x + tileW / 2 + 8, groundY + 26 + row * 62, { color: role.color, align: "center", maxW: 150, vAnchor: "top" });
-        if (row) ctx.line([[x + tileW / 2 + 8, groundY + 6], [x + tileW / 2 + 8, groundY + 22 + 62]], { color: ctx.preset.edge, width: 1.2, dotted: true });
-        if (item.icon) {
-          const [ix, iy] = tip > 0 ? rot([[x + tileW / 2, groundY - tileH - 24]], x + tileW, groundY, tip)[0] : [x + tileW / 2, groundY - tileH - 24];
-          ctx.icon(item.icon, ix, iy, 24, role.color);
-        }
+        ctx.poly(place(i, corners), role, { id: ctx.uid(item.id) });
+        // a domino FACE: a divider across the middle and pips in each half
+        const divider = place(i, [
+          [x + tileW * 0.14, groundY - tileH / 2],
+          [x + tileW * 0.86, groundY - tileH / 2],
+        ]);
+        ctx.line(divider, { color: role.color, width: 1.6 });
+        const d = tileW * 0.24;
+        const pr = Math.max(4, tileW * 0.065);
+        const half = (cyLocal: number, count: number) => {
+          for (const [ox, oy] of PIPS[(count - 1) % 3]) {
+            const [px, py] = place(i, [[x + tileW / 2 + ox * d, cyLocal + oy * d]])[0];
+            ctx.shape("circle", px - pr, py - pr, pr * 2, pr * 2, { stroke: role.color, fill: role.color, fillStyle: "solid", strokeWidth: 1, roughness: 0.4 });
+          }
+        };
+        const [tcx, tcy] = place(i, [[x + tileW / 2, groundY - (tileH * 3) / 4]])[0];
+        if (item.icon) ctx.icon(item.icon, tcx, tcy, tileW * 0.5, role.color);
+        else half(groundY - (tileH * 3) / 4, (i % 3) + 1);
+        half(groundY - tileH / 4, ((i + 1) % 3) + 1);
+        // one row of labels, each under its own tile's base (the midpoint of
+        // the tipped base, so a leaning tile's label follows it a little)
+        const baseMid = x + tileW - (tileW / 2) * Math.cos(rad(tips[i]));
+        ctx.labelBlock(item.label, item.detail, baseMid, groundY + 22, { color: role.color, align: "center", maxW: pitch - 26, vAnchor: "top" });
       }),
     );
   },
@@ -324,16 +413,18 @@ registerViz({
     const waterY = 226;
     const W = 700;
 
-    // tower on its rock base
+    // tower on its rock base: the base's top runs flat under the tower's foot,
+    // so the two share one edge (an apex there crossed the tower's bottom line)
     ctx.poly(
       [
         [10, waterY],
         [36, waterY - 34],
-        [86, waterY - 44],
+        [62, waterY - 40],
+        [120, waterY - 40],
         [142, waterY - 30],
         [168, waterY],
       ],
-      { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 2.2, roughness: ctx.preset.roughness },
+      { stroke: ctx.ink, fill: ctx.preset.background, fillStyle: "solid", strokeWidth: 2.2, roughness: ctx.preset.roughness },
     );
     const beamRole = ctx.role(0, { n: 1 });
     ctx.poly(
@@ -346,7 +437,12 @@ registerViz({
       { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 2.2, roughness: ctx.preset.roughness },
       { id: ctx.uid("tower") },
     );
-    for (const ty of [waterY - 78, waterY - 116] as number[]) ctx.line([[70 + (waterY - 40 - ty) * -0.085, ty], [112 + (waterY - 40 - ty) * 0.085, ty]], { color: ctx.mutedInk, width: 1.6 });
+    // bands follow the tower's own taper (66→78 on the left, 116→104 on the
+    // right over its 102-unit height), inset so they sit inside the silhouette
+    for (const ty of [waterY - 78, waterY - 116] as number[]) {
+      const k = (waterY - 40 - ty) / 102;
+      ctx.line([[66 + k * 12 + 3, ty], [116 - k * 12 - 3, ty]], { color: ctx.mutedInk, width: 1.6 });
+    }
     // lamp room + roof
     ctx.shape("rectangle", 74, 56, 34, 28, { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 2, roughness: ctx.preset.roughness });
     ctx.poly(
@@ -357,12 +453,16 @@ registerViz({
       ],
       { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 2, roughness: ctx.preset.roughness },
     );
+    // the ship sails past beyond the rocks; the beam lights the rocks and stops
+    // short of it (its far edge used to run through the ship and its label)
+    const sx = W - 66;
+    const beamEnd = sx - 58;
     // the beam: a soft wedge sweeping right over the water
     ctx.poly(
       [
         [110, 62],
-        [W - 40, 128],
-        [W - 40, waterY - 14],
+        [beamEnd, 62 + (beamEnd - 110) * (66 / (W - 150))],
+        [beamEnd, 82 + (beamEnd - 112) * ((waterY - 96) / (W - 152))],
         [112, 82],
       ],
       { stroke: ctx.mutedInk, fill: beamRole.softFill, fillStyle: "solid", strokeWidth: 1.1, roughness: ctx.preset.roughness, opacity: 62 },
@@ -377,24 +477,32 @@ registerViz({
 
     // water line
     const wl: Array<[number, number]> = [];
-    for (let x = 150; x <= W; x += 14) wl.push([x, waterY + Math.sin(x / 26) * 4]);
+    // (it meets the shore at the base's corner instead of crossing it; the
+    // rocks and hull are filled and drawn after it, so it runs BEHIND them)
+    for (let x = 168; x <= W; x += 14) wl.push([x, waterY + Math.sin(x / 26) * 4]);
     ctx.line(wl, { color: ctx.mutedInk, width: 1.8 });
 
-    // rocks (the risks) poking above the water, labels below on leaders
+    // rocks (the risks) poking above the water, labels below on leaders:
+    // filled boulders with a rounded crown (a zig-zag read as a crown or an M)
     items.forEach((item, i) =>
       ctx.item(item.id, () => {
         const role = ctx.role(i + 1, { n: n + 1, color: item.color });
         const rx = 232 + (i * (W - 320)) / Math.max(n - 0.4, 1);
-        const rw = 46 + (i % 2) * 12;
-        ctx.poly(
+        const rw = 60 + (i % 2) * 12;
+        const lift = (i % 2) * 6;
+        // one lopsided boulder, its shoulder off-centre, sitting in the water
+        smoothShape(
+          ctx,
           [
-            [rx, waterY + 4],
-            [rx + rw * 0.22, waterY - 20 - (i % 2) * 8],
-            [rx + rw * 0.55, waterY - 9],
-            [rx + rw * 0.8, waterY - 24],
-            [rx + rw, waterY + 4],
+            [rx, waterY + 6],
+            [rx + rw * 0.1, waterY - 12],
+            [rx + rw * 0.36, waterY - 30 - lift],
+            [rx + rw * 0.66, waterY - 25 - lift],
+            [rx + rw * 0.9, waterY - 9],
+            [rx + rw, waterY + 6],
+            [rx + rw * 0.5, waterY + 10],
           ],
-          { stroke: role.color, fill: null, fillStyle: "none", strokeWidth: 2.2, roughness: ctx.preset.roughness },
+          { stroke: role.color, fill: role.softFill, fillStyle: "solid", strokeWidth: 2.2, roughness: ctx.preset.roughness },
           { id: ctx.uid(item.id) },
         );
         const row = i % 2;
@@ -406,7 +514,6 @@ registerViz({
 
     // ship sailing past, beyond the rocks
     const shipLabel = optStr(spec.options, "ship");
-    const sx = W - 66;
     ctx.poly(
       [
         [sx - 40, waterY - 6],
@@ -414,7 +521,8 @@ registerViz({
         [sx + 26, waterY + 16],
         [sx - 26, waterY + 16],
       ],
-      { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 2.2, roughness: ctx.preset.roughness },
+      // an opaque hull: the waterline must not show through the boat
+      { stroke: ctx.ink, fill: ctx.preset.background, fillStyle: "solid", strokeWidth: 2.2, roughness: ctx.preset.roughness },
     );
     ctx.line([[sx, waterY - 6], [sx, waterY - 58]], { color: ctx.ink, width: 2 });
     ctx.poly(
@@ -474,7 +582,9 @@ registerViz({
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n, color: item.color });
         const spread = (i - (n - 1) / 2) / Math.max((n - 1) / 2, 1); // -1..1
-        const px = legX + 176 + Math.abs(spread) * 66 + (i % 2) * 30;
+        // the magnet-facing edges sit on one clean arc opening toward the
+        // poles (a parity jitter zig-zagged them), close in to the field lines
+        const px = legX + 116 + spread * spread * 56;
         const py = cy + spread * 96;
         const text = ctx.wrap(item.label, 150, 15, "heading", 2);
         const tw = Math.max(...text.split("\n").map((l) => ctx.measure(l, 15, "heading")));
@@ -483,9 +593,10 @@ registerViz({
         ctx.shape("pill", px, py - h / 2, w, h, role, { id: ctx.uid(item.id) });
         if (item.icon) ctx.icon(item.icon, px + 20, py, 18, role.textColor);
         ctx.label(text, px + w / 2 + (item.icon ? 9 : 0), py, { size: 15, color: role.textColor, weight: ctx.preset.fonts.headingWeight, font: "heading" });
-        // motion streaks: being pulled toward the poles
-        ctx.line([[px - 30, py - 6], [px - 8, py - 6]], { color: ctx.mutedInk, width: 1.6 });
-        ctx.line([[px - 24, py + 7], [px - 5, py + 7]], { color: ctx.mutedInk, width: 1.6 });
+        // motion streaks TRAIL the chip (on the side away from the magnet),
+        // angled back along the pull: they say "moving toward the poles"
+        ctx.line([[px + w + 8, py - 6], [px + w + 34, py - 6 + spread * 6]], { color: ctx.mutedInk, width: 1.6 });
+        ctx.line([[px + w + 8, py + 7], [px + w + 30, py + 7 + spread * 6]], { color: ctx.mutedInk, width: 1.6 });
         if (item.detail) ctx.label(ctx.wrap(item.detail, 170, 13, "body", 2), px + w / 2, py + h / 2 + 16, { size: 13, color: ctx.mutedInk, role: "detail", vAnchor: "top" });
       }),
     );

@@ -57,6 +57,14 @@ registerViz({
 
 // ---- quote --------------------------------------------------------------------
 
+/** An opening quote “ as two filled commas: a ball with a tail rising to the
+ *  upper right (a "6"), authored in a 90×74 box. */
+const QUOTE_COMMA = (dx: number): string =>
+  `M${6 + dx} 54 C${4 + dx} 30 ${14 + dx} 12 ${36 + dx} 4 L${39 + dx} 10 C${25 + dx} 17 ${20 + dx} 27 ${22 + dx} 38 A16 16 0 1 1 ${6 + dx} 54 Z`;
+const QUOTE_MARK_D = `${QUOTE_COMMA(0)} ${QUOTE_COMMA(48)}`;
+const QUOTE_MARK_VW = 90;
+const QUOTE_MARK_VH = 74;
+
 registerViz({
   name: "quote",
   category: "Brainstorming",
@@ -81,22 +89,33 @@ registerViz({
     const accent = ctx.role(0, { n: 1 }).color;
 
     const wrapped = ctx.wrap(text, 430, 27, "heading", 5);
-    const lines = wrapped.split("\n").length;
+    const lineArr = wrapped.split("\n");
+    const lines = lineArr.length;
     const qh = lines * 27 * 1.3;
     const qx = 250; // quote block center
-    // giant opening quote mark, slightly above-left of the text
-    ctx.label("“", qx - 240, 6, { size: 86, color: accent, weight: 700, font: "title" });
+    const textW = Math.max(...lineArr.map((l) => ctx.measure(l, 27, "heading")));
+    const textLeft = qx - textW / 2;
+    const textTop = qh / 2 + 14 - (lines * 27 * 1.25) / 2;
+    // The opening quote mark is DRAWN (two filled 6-shaped commas), not typed:
+    // a hand face has no bold, so a synthesised-bold “ smeared into two beans.
+    // It hangs off the first line, the way a printed pull-quote does — and
+    // the text is set flush-left so that edge is exact, not a measured guess.
+    const markW = 38;
+    const markH = 31;
+    ctx.path(QUOTE_MARK_D, QUOTE_MARK_VW, QUOTE_MARK_VH, textLeft - 14 - markW, textTop - 2, markW, markH, { stroke: accent, fill: accent, fillStyle: "solid", strokeWidth: 1, roughness: Math.min(0.6, ctx.preset.roughness) }, { id: ctx.uid("mark") });
     const drawQuote = () => {
-      ctx.label(wrapped, qx, qh / 2 + 14, { size: 27, color: ctx.ink, weight: 700, font: "heading" });
-      // flourish underline
+      ctx.label(wrapped, textLeft, qh / 2 + 14, { size: 27, color: ctx.ink, weight: 700, font: "heading", align: "left" });
+      // flourish underline, as wide as the text it underlines
+      const half = Math.max(80, textW / 2 - 10);
       ctx.line(
         [
-          [qx - 160, qh + 34],
-          [qx + 160, qh + 30],
+          [qx - half, qh + 34],
+          [qx + half, qh + 30],
         ],
         { color: accent, width: 2.6 },
       );
-      if (by) ctx.label(`— ${by}`, qx + 200, qh + 58, { size: 17, color: ctx.mutedInk, align: "right" });
+      // the byline closes on the underline's end
+      if (by) ctx.label(`— ${by}`, qx + half, qh + 58, { size: 17, color: ctx.mutedInk, align: "right" });
     };
     if (quoteEntry) ctx.item(quoteEntry.id, drawQuote);
     else drawQuote();
@@ -168,17 +187,21 @@ registerViz({
     const boneDX = 104;
     const boneDY = 156;
 
-    // spine with a fish tail at the start, arrowing into the head
-    ctx.line([[24, -26], [0, 0], [24, 26]], { color: ctx.ink, width: 2.6 });
-    ctx.arrow(6, 0, spineEnd + 4, 0, { color: ctx.ink, width: 3 });
+    // spine with a fish tail at the start, arrowing into the head. The tail is
+    // a caudal fin fanning AWAY from the head (a chevron here read as a second
+    // arrowhead), its apex ON the spine so tail and spine are one stroke.
+    ctx.poly([[0, 0], [-24, -21], [-16, 0], [-24, 21]], { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 3, roughness: ctx.preset.roughness });
+    ctx.arrow(-1, 0, spineEnd + 4, 0, { color: ctx.ink, width: 3 });
 
-    // head: the effect, in a rounded box at the spine's end
-    const headText = ctx.wrap(effect, 150, 17, "heading", 4);
-    const headW = Math.max(120, ...headText.split("\n").map((l) => ctx.measure(l, 17, "heading"))) + 30;
-    const headH = headText.split("\n").length * 23 + 24;
+    // head: the effect — the subject, so the largest type on the card
+    // (effect 22 > category 18 > cause 16)
+    const headSize = 22;
+    const headText = ctx.wrap(effect, 200, headSize, "heading", 4);
+    const headW = Math.max(140, ...headText.split("\n").map((l) => ctx.measure(l, headSize, "heading"))) + 34;
+    const headH = headText.split("\n").length * Math.round(headSize * 1.35) + 26;
     const drawHead = () => {
       ctx.shape("round-rectangle", spineEnd + 12, -headH / 2, headW, headH, { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: 2.4, roughness: ctx.preset.roughness, roundness: 12 }, { id: ctx.uid("effect") });
-      ctx.label(headText, spineEnd + 12 + headW / 2, 0, { size: 17, color: ctx.ink, weight: 700, font: "heading" });
+      ctx.label(headText, spineEnd + 12 + headW / 2, 0, { size: headSize, color: ctx.ink, weight: 700, font: "heading" });
     };
     if (effectEntry) ctx.item(effectEntry.id, drawHead);
     else drawHead();
@@ -193,14 +216,17 @@ registerViz({
         const end: [number, number] = [ax - boneDX, sign * boneDY];
         ctx.line([[ax, 0], end], { color: role.color, width: 2.4 });
         // category label just beyond the bone's outer end
-        ctx.labelBlock(bone.label, undefined, end[0], end[1] + sign * 12, { color: role.color, align: "center", maxW: 160, vAnchor: up ? "bottom" : "top" });
-        // causes: ticks off the bone, labels trailing toward the tail
-        bone.children.slice(0, 4).forEach((cause, j) => {
-          const t = 0.78 - j * 0.2;
+        ctx.labelBlock(bone.label, undefined, end[0], end[1] + sign * 12, { color: role.color, align: "center", maxW: 160, vAnchor: up ? "bottom" : "top", size: 18 });
+        // causes: ticks off the bone in the bone's own hue (grey ticks read as
+        // annotation, not as the content), labels trailing toward the tail
+        const causes = bone.children.slice(0, 4);
+        const step = Math.min(0.3, 0.6 / Math.max(causes.length - 1, 1));
+        causes.forEach((cause, j) => {
+          const t = 0.8 - j * step;
           const px = lerp(ax, end[0], t);
           const py = lerp(0, end[1], t);
-          ctx.line([[px, py], [px - 40, py]], { color: ctx.mutedInk, width: 1.4 });
-          ctx.label(ctx.wrap(cause.label, 128, 13, "body", 2), px - 46, py, { size: 13, color: ctx.ink, align: "right" });
+          ctx.line([[px, py], [px - 46, py]], { color: role.color, width: 2 });
+          ctx.label(ctx.wrap(cause.label, 150, 16, "body", 2), px - 52, py, { size: 16, color: ctx.ink, align: "right" });
         });
       }),
     );
@@ -269,28 +295,57 @@ registerViz({
     const H = 396;
     const sx = W / HEAD_VW;
     const sy = H / HEAD_VH;
-    // one silhouette with a faint wash, so it reads as a solid head rather than a wire
-    const wash = mix(ctx.preset.background, ctx.mutedInk, 0.12);
+    // one silhouette with a faint wash, so it reads as a solid head rather than
+    // a wire — faint enough that ink text on it keeps its full contrast
+    const wash = mix(ctx.preset.background, ctx.mutedInk, 0.06);
     ctx.path(smoothPath(HEAD_ANCHORS, facing === "left" ? { mirrorX: HEAD_VW } : {}), HEAD_VW, HEAD_VH, 0, 0, W, H, { stroke: ctx.ink, fill: wash, fillStyle: "solid", strokeWidth: 2.6, roughness: ctx.preset.roughness }, { id: ctx.uid("head") });
 
-    // thoughts as rows spread evenly over the cranium's roomy band, behind
-    // the face — so no row ever touches the nose or the lips
-    const pitch = n <= 2 ? 80 : Math.min(60, 180 / (n - 1));
-    const firstY = 190 - (pitch * (n - 1)) / 2;
-    const rowLeft = (facing === "left" ? 56 : 76) * sx;
-    const textW = (facing === "left" ? 140 : 150) * sx;
+    // Thoughts fill the CRANIUM (design y ~48..244, x ~38..244 of the 300×360
+    // box), never the face: rows at nose/lip height read as speech. The type
+    // is the card's content, so it takes the largest size whose measured,
+    // wrapped rows fit that band (20 down to 14), and the hue goes on the icon
+    // while the words stay in ink.
+    const bandTop = 50 * sy;
+    const bandBot = 236 * sy;
+    const gap = 12;
+    const rowLeft = (facing === "left" ? 56 : 38) * sx;
+    const rowRight = (facing === "left" ? 254 : 238) * sx;
+    const iconSize = 28;
+    const textX = rowLeft + iconSize + 10;
+    const textW = rowRight - textX;
+    // balanced wrap: the narrowest width that keeps the line count, so a
+    // two-line thought never ends on a one-word orphan
+    const balanced = (label: string, size: number) => {
+      let best = ctx.wrap(label, textW, size, "heading", 3);
+      const lines = best.split("\n").length;
+      if (lines === 1) return best;
+      for (let w = textW - 6; w > textW * 0.5; w -= 6) {
+        const t = ctx.wrap(label, w, size, "heading", 3);
+        if (t.split("\n").length !== lines) break;
+        best = t;
+      }
+      return best;
+    };
+    const layout = (size: number) => {
+      const texts = items.map((item) => balanced(item.label, size));
+      const hs = texts.map((t) => Math.max(iconSize, t.split("\n").length * size * 1.25));
+      return { size, texts, hs, total: hs.reduce((a, b) => a + b, 0) + gap * (n - 1) };
+    };
+    let fit = layout(20);
+    for (let size = 19; size >= 14 && fit.total > bandBot - bandTop; size--) fit = layout(size);
+    // spare band loosens the rows a little; then centre the stack on the band
+    const rowGap = n > 1 ? Math.max(6, Math.min(20, gap + (bandBot - bandTop - fit.total) / (n - 1) / 2)) : gap;
+    const stackH = fit.total + (rowGap - gap) * (n - 1);
+    let y0 = Math.max(bandTop, (bandTop + bandBot) / 2 - stackH / 2 - 8 * sy);
     items.forEach((item, i) =>
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n, color: item.color });
-        const y = (firstY + i * pitch) * sy;
-        const text = { size: 14, color: role.color, weight: ctx.preset.fonts.headingWeight, font: "heading", align: "left" as const };
-        if (item.icon) {
-          ctx.icon(item.icon, rowLeft + 13, y, 26, role.color);
-          ctx.label(ctx.wrap(item.label, textW, 14, "heading", 2), rowLeft + 36, y, text);
-        } else {
-          ctx.shape("circle", rowLeft + 4, y - 4, 8, 8, { stroke: role.color, fill: role.color, fillStyle: "solid", strokeWidth: 1, roughness: 0.5 });
-          ctx.label(ctx.wrap(item.label, textW + 14, 14, "heading", 2), rowLeft + 22, y, text);
-        }
+        const y = y0 + fit.hs[i] / 2;
+        y0 += fit.hs[i] + rowGap;
+        const text = { size: fit.size, color: ctx.ink, weight: ctx.preset.fonts.headingWeight, font: "heading", align: "left" as const };
+        if (item.icon) ctx.icon(item.icon, rowLeft + iconSize / 2, y, iconSize, role.color);
+        else ctx.shape("circle", rowLeft + iconSize / 2 - 6, y - 6, 12, 12, { stroke: role.color, fill: role.color, fillStyle: "solid", strokeWidth: 1, roughness: 0.5 });
+        ctx.label(fit.texts[i], textX, y, text);
       }),
     );
     const who = optStr(spec.options, "who");
@@ -314,33 +369,78 @@ registerViz({
     const centerLabel = centerEntry?.label ?? optStr(spec.options, "center") ?? spec.title;
     if (!centerEntry && centerLabel === spec.title && spec.title) ctx.titleHandled = true;
 
+    // A REGULAR flat-top hexagon (h = w·√3/2), drawn as our own polygon: the
+    // shared "hexagon" shape insets its top edge 0.22w, which reads squashed.
     const w = 172;
-    const h = 150;
-    const ringR = h * 1.06;
+    const h = Math.round((w * Math.sqrt(3)) / 2);
+    const g = 10; // one even gutter between every pair of touching cells
     const cell = (cx: number, cy: number, role: ReturnType<typeof ctx.role>, id?: string) =>
-      ctx.shape("hexagon", cx - w / 2, cy - h / 2, w, h, role, { id });
+      ctx.poly(
+        [
+          [cx - w / 2, cy],
+          [cx - w / 4, cy - h / 2],
+          [cx + w / 4, cy - h / 2],
+          [cx + w / 2, cy],
+          [cx + w / 4, cy + h / 2],
+          [cx - w / 4, cy + h / 2],
+        ],
+        role,
+        { id },
+      );
 
     // core
     const coreRole = ctx.role(0, { neutral: true });
     const drawCore = () => {
       cell(0, 0, coreRole, ctx.uid(centerEntry?.id ?? "core"));
-      if (centerEntry?.icon) ctx.icon(centerEntry.icon, 0, -22, 30, coreRole.textColor);
-      ctx.label(ctx.wrap(centerLabel ?? "Core", w - 60, 17, "heading", 3), 0, centerEntry?.icon ? 14 : 0, { size: 17, color: coreRole.textColor, weight: 700, font: "heading" });
+      if (centerEntry?.icon) ctx.icon(centerEntry.icon, 0, -26, 40, ctx.ink);
+      ctx.label(ctx.wrap(centerLabel ?? "Core", w - 54, 20, "heading", 3), 0, centerEntry?.icon ? 20 : 0, { size: 20, color: coreRole.textColor, weight: 700, font: "heading" });
     };
     if (centerEntry) ctx.item(centerEntry.id, drawCore);
     else drawCore();
 
-    // ring cells at 60° steps, starting top
+    // Ring cells sit in the core's true honeycomb neighbour slots (a gutter
+    // g apart), filled in a balanced order for each count so a short ring
+    // never leaves one cell floating or one side empty.
+    const sideX = 0.75 * w + (Math.sqrt(3) / 2) * g;
+    const upY = (h + g) / 2;
+    const SLOT: Record<string, [number, number]> = {
+      top: [0, -(h + g)],
+      ur: [sideX, -upY],
+      lr: [sideX, upY],
+      bottom: [0, h + g],
+      ll: [-sideX, upY],
+      ul: [-sideX, -upY],
+    };
+    const ORDER: Record<number, string[]> = {
+      1: ["top"],
+      2: ["ul", "ur"],
+      3: ["top", "lr", "ll"],
+      4: ["ul", "ur", "lr", "ll"],
+      5: ["top", "ur", "lr", "ll", "ul"],
+      6: ["top", "ur", "lr", "bottom", "ll", "ul"],
+    };
+    const slots = ORDER[Math.min(Math.max(items.length, 1), 6)];
     items.forEach((item, i) =>
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n, color: item.color });
-        const ang = -90 + (i * 360) / Math.max(n, 3);
-        const cx = Math.cos((ang * Math.PI) / 180) * ringR * 1.35;
-        const cy = Math.sin((ang * Math.PI) / 180) * ringR;
+        const slot = slots[i];
+        const [cx, cy] = SLOT[slot];
         cell(cx, cy, role, ctx.uid(item.id));
-        if (item.icon) ctx.icon(item.icon, cx, cy - 26, 26, role.textColor);
-        ctx.label(ctx.wrap(item.label, w - 56, 15, "heading", 3), cx, cy + (item.icon ? 12 : 0), { size: 15, color: role.textColor, weight: ctx.preset.fonts.headingWeight, font: "heading" });
-        if (item.detail) ctx.label(ctx.wrap(item.detail, w + 10, 13, "body", 2), cx, cy + h / 2 + 20, { size: 13, color: ctx.mutedInk, role: "detail" });
+        if (item.icon) ctx.icon(item.icon, cx, cy - 24, 40, role.color);
+        ctx.label(ctx.wrap(item.label, w - 50, 18, "heading", 3), cx, cy + (item.icon ? 20 : 0), { size: 18, color: role.textColor, weight: ctx.preset.fonts.headingWeight, font: "heading" });
+        // the comb is packed, so a detail goes OUTSIDE it, off the cell's
+        // outward side (never under the cell, where the next cell sits)
+        if (item.detail) {
+          const opts = { size: 15, color: ctx.mutedInk, role: "detail" };
+          if (slot === "top" || slot === "bottom") {
+            const t = ctx.wrap(item.detail, w + 20, 15, "body", 2);
+            const bh = t.split("\n").length * 15 * 1.25;
+            ctx.label(t, cx, slot === "top" ? cy - h / 2 - 8 - bh / 2 : cy + h / 2 + 8 + bh / 2, opts);
+          } else {
+            const right = cx > 0;
+            ctx.label(ctx.wrap(item.detail, 190, 15, "body", 3), cx + (right ? w / 2 + 14 : -w / 2 - 14), cy, { ...opts, align: right ? ("left" as const) : ("right" as const) });
+          }
+        }
       }),
     );
   },

@@ -7,11 +7,24 @@ import { registerViz } from "../registry.js";
 import { itemsOf, optNum, optStr, type VizItem, type VizSpec } from "../types.js";
 import type { VizContext } from "../context.js";
 import type { RoleStyle } from "../../style/presets.js";
-import { rad } from "./util.js";
+import { smoothPath, type Anchor } from "./util.js";
 
 /** Stroke color that survives "seam" presets (which outline in the bg color). */
 function seamSafe(ctx: VizContext, role: RoleStyle): string {
   return role.stroke === ctx.preset.background ? role.color : role.stroke;
+}
+
+const lineCount = (wrapped: string): number => wrapped.split("\n").length;
+
+/** Local-box geometry for one or more anchor runs emitted as a single path node. */
+function anchorBox(runs: Anchor[][]): { x: number; y: number; w: number; h: number; local: (a: Anchor[]) => Anchor[] } {
+  const all = runs.flat();
+  const x = Math.min(...all.map((a) => a[0]));
+  const y = Math.min(...all.map((a) => a[1]));
+  const w = Math.max(Math.max(...all.map((a) => a[0])) - x, 1);
+  const h = Math.max(Math.max(...all.map((a) => a[1])) - y, 1);
+  const local = (a: Anchor[]): Anchor[] => a.map(([ax, ay, c]) => (c ? ([ax - x, ay - y, c] as Anchor) : ([ax - x, ay - y] as Anchor)));
+  return { x, y, w, h, local };
 }
 
 // ---- flowchart -----------------------------------------------------------------
@@ -36,7 +49,11 @@ registerViz({
   summary: "Chain of rounded steps with straight arrows; `direction: right` for horizontal.",
   entryKinds: ["item", "step"],
   options: [
-    { name: "direction", type: "right|down", description: "right (or horizontal) lays the chain horizontally" },
+    {
+      name: "direction",
+      type: "right|down",
+      description: "right (or horizontal) lays the chain horizontally, down (or vertical) stacks it; unset picks horizontal for up to 5 steps with short details",
+    },
     { name: "orientation", type: "horizontal|vertical", description: "alias for direction" },
   ],
   sweetSpot: { min: 2, max: 7 },
@@ -44,7 +61,10 @@ registerViz({
     const items = itemsOf(spec, "item", "step");
     const n = Math.max(items.length, 1);
     const dir = optStr(spec.options, "direction") ?? optStr(spec.options, "orientation");
-    const horizontal = dir === "right" || dir === "horizontal";
+    // A vertical chain of 4 boxes is a narrow column in a ~2.4:1 frame (13% of
+    // its width, type shrunk to fit the height), so a short chain defaults to
+    // horizontal; long chains and long details still stack.
+    const horizontal = dir ? dir === "right" || dir === "horizontal" : items.length <= 5 && !items.some((it) => (it.detail?.length ?? 0) > 40);
     const stepH = 56;
     const gap = 64;
 
@@ -92,7 +112,7 @@ registerViz({
 registerViz({
   name: "sequence",
   category: "Process",
-  summary: "Boustrophedon grid of titled description panels joined by flow arrows.",
+  summary: "Boustrophedon grid of numbered, titled description panels joined by flow arrows.",
   entryKinds: ["item", "step"],
   options: [{ name: "columns", type: "number", description: "grid columns, clamped 2-4 (default 3)" }],
   sweetSpot: { min: 4, max: 9 },
@@ -100,11 +120,24 @@ registerViz({
     const items = itemsOf(spec, "item", "step");
     const n = Math.max(items.length, 1);
     const cols = Math.max(2, Math.min(4, optNum(spec.options, "columns") ?? 3));
-    const cellW = 280;
-    const cellH = 234;
-    const panelW = 240;
-    const panelH = 130;
-    const panelTop = 40;
+    const panelW = 290;
+    const gapX = 56; // room for the row arrows
+    const gapY = 52; // room for the turn arrow between rows
+    const headH = 46; // numbered header band inside the panel
+    const pad = 14;
+    const detailSize = 17;
+    const lineH = detailSize * 1.25;
+    const detailW = panelW - 36;
+    const badge = 28;
+    // One panel height for the whole grid, sized to the wordiest step — a
+    // fixed box left one short line floating in a mostly empty tint.
+    const bodyNeed = (item: VizItem): number => {
+      if (item.detail) return lineCount(ctx.wrap(item.detail, detailW, detailSize, undefined, 5)) * lineH + pad * 2;
+      return item.icon ? 60 : 0;
+    };
+    const panelH = headH + Math.max(34, ...items.map(bodyNeed));
+    const cellW = panelW + gapX;
+    const cellH = panelH + gapY;
     const pos = items.map((_, i) => {
       const row = Math.floor(i / cols);
       const rc = i % cols;
@@ -116,38 +149,51 @@ registerViz({
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n, color: item.color });
         const stroke = seamSafe(ctx, role);
-        // colored step title bound to the panel: a title bar sitting on the panel
-        ctx.label(ctx.wrap(item.label, panelW - 4, 20, "heading", 1), x + panelW / 2, y + panelTop - 16, {
-          size: 20,
-          color: role.color,
-          font: "heading",
-          weight: ctx.preset.fonts.headingWeight,
-        });
-        ctx.line(
-          [
-            [x + 14, y + panelTop - 1],
-            [x + panelW - 14, y + panelTop - 1],
-          ],
-          { color: role.color, width: 2.4 },
-        );
-        // hand-drawn description panel
+        // hand-drawn panel; the title lives INSIDE it as a header band, so no
+        // rule has to sit on (and double) the panel's own top edge
         ctx.shape(
           "rectangle",
           x,
-          y + panelTop,
+          y,
           panelW,
           panelH,
           { stroke, fill: role.softFill, fillStyle: "solid", strokeWidth: role.strokeWidth, roughness: role.roughness },
           { id: ctx.uid(item.id), style: { roundness: 10 } },
         );
-        const midY = y + panelTop + panelH / 2;
-        if (item.icon && item.detail) {
-          ctx.icon(item.icon, x + panelW / 2, y + panelTop + 28, 30, role.color);
-          ctx.label(ctx.wrap(item.detail, panelW - 30, 15, undefined, 4), x + panelW / 2, y + panelTop + 52, { size: 15, color: ctx.ink, vAnchor: "top" });
+        // step number badge — row 2 runs right-to-left, so the order is spelled out
+        const bx = x + pad + badge / 2;
+        const by = y + headH / 2 + 1;
+        ctx.shape("circle", bx - badge / 2, by - badge / 2, badge, badge, {
+          stroke: role.color,
+          fill: ctx.preset.background,
+          fillStyle: "solid",
+          strokeWidth: 1.8,
+          roughness: Math.min(0.8, ctx.preset.roughness),
+        });
+        ctx.label(String(i + 1), bx, by, { size: 15, color: role.color, weight: 700, font: "heading", role: "value" });
+        const iconInHead = !!(item.icon && item.detail);
+        const titleX = bx + badge / 2 + 10;
+        const titleW = x + panelW - pad - (iconInHead ? 34 : 0) - titleX;
+        ctx.label(ctx.wrap(item.label, titleW, 20, "heading", 1), titleX, by, {
+          size: 20,
+          color: role.color,
+          font: "heading",
+          weight: ctx.preset.fonts.headingWeight,
+          align: "left",
+        });
+        if (iconInHead) ctx.icon(item.icon, x + panelW - pad - 12, by, 24, role.color);
+        ctx.line(
+          [
+            [x + 12, y + headH],
+            [x + panelW - 12, y + headH],
+          ],
+          { color: role.color, width: 1.4 },
+        );
+        const midY = y + headH + (panelH - headH) / 2;
+        if (item.detail) {
+          ctx.label(ctx.wrap(item.detail, detailW, detailSize, undefined, 5), x + panelW / 2, midY, { size: detailSize, color: ctx.ink, role: "detail" });
         } else if (item.icon) {
           ctx.icon(item.icon, x + panelW / 2, midY, 40, role.color);
-        } else if (item.detail) {
-          ctx.label(ctx.wrap(item.detail, panelW - 30, 15, undefined, 5), x + panelW / 2, midY, { size: 15, color: ctx.ink });
         }
       });
       // flow arrow to the next step: right/right on even rows, down at row
@@ -156,14 +202,14 @@ registerViz({
         const a = pos[i];
         const b = pos[i + 1];
         if (a.row === b.row) {
-          const ay = a.y + panelTop + panelH / 2;
+          const ay = a.y + panelH / 2;
           const right = b.col > a.col;
-          const x1 = a.x + (right ? panelW + 8 : -8);
-          const x2 = b.x + (right ? -8 : panelW + 8);
+          const x1 = a.x + (right ? panelW + 10 : -10);
+          const x2 = b.x + (right ? -10 : panelW + 10);
           ctx.arrow(x1, ay, x2, ay, { color: ctx.preset.edge, width: 2 });
         } else {
           const axc = a.x + panelW / 2;
-          ctx.arrow(axc, a.y + panelTop + panelH + 8, axc, b.y - 6, { color: ctx.preset.edge, width: 2 });
+          ctx.arrow(axc, a.y + panelH + 10, axc, b.y - 10, { color: ctx.preset.edge, width: 2 });
         }
       }
     });
@@ -228,39 +274,53 @@ registerViz({
   name: "journey",
   aliases: ["roadmap"],
   category: "Process",
-  summary: "A winding two-walled ribbon road, one color segment per stage (reference design).",
+  summary: "A winding two-walled ribbon road with numbered stops, one color segment per stage (reference design).",
   entryKinds: ["item", "stage", "stop"],
   sweetSpot: { min: 3, max: 6 },
   generate(spec: VizSpec, ctx: VizContext) {
     const items = itemsOf(spec, "item", "stage", "stop");
     const n = Math.max(items.length, 1);
-    // serpentine centerline: vertical runs joined by U-turns, one run per stage
-    const runH = 200;
-    const pitch = 150;
-    const yTop = 60;
-    const yBot = yTop + runH;
-    const half = 17; // ribbon half-width
+    // Serpentine centreline: vertical runs joined by semi-elliptical U-turns,
+    // one run per stage. Each stage's label hangs in the pocket to the RIGHT of
+    // its own run, beside a numbered stop on the road, so the pitch is sized to
+    // hold a label; the flattened U-turns keep that wide pitch from making the
+    // card tall.
+    const runH = 220;
+    const half = 21; // ribbon half-width
+    const labelGap = 14;
+    const labelW = 150;
+    const pitch = half * 2 + labelGap * 2 + labelW;
+    const rx = pitch / 2;
+    const ry = 64;
+    const yTop = 0;
+    const yBot = runH;
+    const runX = (i: number): number => i * pitch;
     const center: Array<[number, number]> = [];
+    const bendMid: number[] = []; // centreline index of each U-turn's apex
+    const runMid = (yTop + yBot) / 2;
     for (let i = 0; i < n; i++) {
-      const x = 60 + i * pitch;
+      const x = runX(i);
       const down = i % 2 === 0;
-      // vertical run
-      for (let s = 0; s <= 20; s++) {
-        const y = down ? yTop + (runH * s) / 20 : yBot - (runH * s) / 20;
+      const steps = Math.ceil(runH / 8);
+      // every run starts on the U-turn's end point (the U-turn loop skips both ends)
+      for (let s = 0; s <= steps; s++) {
+        const y = down ? yTop + (runH * s) / steps : yBot - (runH * s) / steps;
         center.push([x, y]);
       }
-      // U-turn to the next run: semicircle bulging past the bottom (after a
-      // down run) or the top (after an up run), from x to x+pitch
+      // U-turn to the next run: half an ellipse bulging past the bottom (after
+      // a down run) or the top (after an up run)
       if (i < n - 1) {
-        const cxT = x + pitch / 2;
-        const r = pitch / 2;
-        for (let s = 1; s < 12; s++) {
-          const a = down ? 180 - (180 * s) / 12 : 180 + (180 * s) / 12;
-          center.push([cxT + Math.cos(rad(a)) * r, (down ? yBot : yTop) + Math.sin(rad(a)) * r]);
+        const cx = x + rx;
+        const cy = down ? yBot : yTop;
+        const S = 48;
+        for (let s = 1; s < S; s++) {
+          const t = Math.PI - (Math.PI * s) / S;
+          center.push([cx + Math.cos(t) * rx, cy + (down ? 1 : -1) * Math.sin(t) * ry]);
+          if (s === S / 2) bendMid[i] = center.length - 1;
         }
       }
     }
-    // offset walls via segment normals
+    // walls: the centreline offset along its normals
     const left: Array<[number, number]> = [];
     const right: Array<[number, number]> = [];
     for (let i = 0; i < center.length; i++) {
@@ -275,49 +335,92 @@ registerViz({
       left.push([x - dy * half, y + dx * half]);
       right.push([x + dy * half, y - dx * half]);
     }
-    // draw the walls per stage in the stage color
-    const chunk = Math.floor(center.length / n);
+    const lastIdx = center.length - 1;
+    // start cap: the road begins as a closed rounded mouth, not two bare ends
+    const cap: Anchor[] = [];
+    for (let a = 15; a < 180; a += 15) cap.push([Math.cos((-a * Math.PI) / 180) * half, yTop + Math.sin((-a * Math.PI) / 180) * half]);
+    // end arrowhead, continuous with the last stage's walls (no cross-bar)
+    const lastDown = (n - 1) % 2 === 0;
+    const endX = runX(n - 1);
+    const endY = lastDown ? yBot : yTop;
+    const dirY = lastDown ? 1 : -1;
+    const flare = half * 1.8;
+    // `left` sits at -x on a down run and +x on an up run
+    const lSide = lastDown ? -1 : 1;
+    const head: Anchor[] = [
+      [endX + lSide * flare, endY, "corner"],
+      [endX, endY + dirY * 34, "corner"],
+      [endX - lSide * flare, endY, "corner"],
+    ];
+
     items.forEach((item, i) =>
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n, color: item.color });
-        const from = i * chunk;
-        const to = i === n - 1 ? center.length : (i + 1) * chunk + 1;
-        const wallColor = role.stroke === ctx.preset.background ? role.color : role.stroke;
-        ctx.line(left.slice(from, to), { id: ctx.uid(item.id), color: wallColor, width: 2.6 });
-        ctx.line(right.slice(from, to), { color: wallColor, width: 2.6 });
-        // stage label above/below its run, clear of the U-turn bulges (r=pitch/2)
-        const runX = 60 + i * pitch;
-        const above = i % 2 === 0;
-        const labelY = above ? yTop - (n > 1 ? pitch / 2 : half) - 18 : yBot + (n > 1 ? pitch / 2 : half) + 18;
-        ctx.labelBlock(item.label, item.detail, runX, labelY, {
-          color: role.color,
-          align: "center",
-          maxW: 150,
-          vAnchor: above ? "bottom" : "top",
-        });
-        if (item.icon) ctx.icon(item.icon, runX, yTop + runH / 2 + (above ? 30 : -30), 30, role.color);
+        const wallColor = seamSafe(ctx, role);
+        const first = i === 0;
+        const last = i === n - 1;
+        // one run plus half of each adjoining U-turn: colour boundaries sit at
+        // the U-turn apexes, so every colour is centred on its own stop
+        const from = first ? 0 : bendMid[i - 1];
+        const to = last ? lastIdx : bendMid[i];
+        const L: Anchor[] = left.slice(from, to + 1).map(([x, y]) => [x, y]);
+        const R: Anchor[] = right.slice(from, to + 1).map(([x, y]) => [x, y]);
+        if (last) {
+          const [lx1, ly1] = L[L.length - 1];
+          const [rx1, ry1] = R[R.length - 1];
+          L[L.length - 1] = [lx1, ly1, "corner"];
+          R[R.length - 1] = [rx1, ry1, "corner"];
+        }
+        const Rrev = [...R].reverse();
+        // soft road surface under the walls (one closed region per stage)
+        const surface: Anchor[] = [...L, ...(last ? head : []), ...Rrev, ...(first ? cap : [])];
+        if (!last) {
+          surface[L.length - 1] = [surface[L.length - 1][0], surface[L.length - 1][1], "corner"];
+          surface[L.length] = [surface[L.length][0], surface[L.length][1], "corner"];
+        }
+        if (!first) {
+          surface[0] = [surface[0][0], surface[0][1], "corner"];
+          surface[surface.length - 1] = [surface[surface.length - 1][0], surface[surface.length - 1][1], "corner"];
+        }
+        const sb = anchorBox([surface]);
+        ctx.path(smoothPath(sb.local(surface), { closed: true }), sb.w, sb.h, sb.x, sb.y, sb.w, sb.h, {
+          stroke: "transparent",
+          fill: role.softFill,
+          fillStyle: "solid",
+          strokeWidth: 0,
+          roughness: ctx.preset.roughness,
+        }, { z: -1 });
+        // the two walls: one continuous stroke where the stage has a cap or a
+        // head, two open strokes for a middle stage
+        const wall = { stroke: wallColor, fill: null, fillStyle: "none" as const, strokeWidth: 2.6, roughness: ctx.preset.roughness };
+        let runs: Anchor[][];
+        let closed = false;
+        if (first && last) {
+          runs = [[...L, ...head, ...Rrev, ...cap]];
+          closed = true;
+        } else if (last) runs = [[...L, ...head, ...Rrev]];
+        else if (first) runs = [[...Rrev, ...cap, ...L]];
+        else runs = [L, R];
+        const wb = anchorBox(runs);
+        const d = runs.map((r) => smoothPath(wb.local(r), { closed })).join(" ");
+        ctx.path(d, wb.w, wb.h, wb.x, wb.y, wb.w, wb.h, wall, { id: ctx.uid(item.id) });
+
+        // numbered stop on the road, label hanging beside it in the pocket
+        const x = runX(i);
+        const my = runMid;
+        const badge = 30;
+        ctx.shape("circle", x - badge / 2, my - badge / 2, badge, badge, {
+          stroke: wallColor,
+          fill: ctx.preset.background,
+          fillStyle: "solid",
+          strokeWidth: 2.2,
+          roughness: Math.min(0.8, ctx.preset.roughness),
+        }, { z: 1 });
+        ctx.label(String(i + 1), x, my, { size: 16, color: role.color, weight: 700, font: "heading", role: "value", z: 2 });
+        const lx = x + half + labelGap;
+        const block = ctx.labelBlock(item.label, item.detail, lx, my, { color: role.color, align: "left", maxW: labelW, vAnchor: "middle" });
+        if (item.icon) ctx.icon(item.icon, lx + 14, block.y - 22, 28, role.color);
       }),
-    );
-    // arrowhead where the ribbon ends — terminal decoration for the whole
-    // ribbon (not one stage's element), stays unscoped
-    const lastDown = (n - 1) % 2 === 0;
-    const endX = 60 + (n - 1) * pitch;
-    const endY = lastDown ? yBot + 4 : yTop - 4;
-    const lastRole = ctx.role(n - 1, { n, color: items[n - 1]?.color });
-    const tipColor = lastRole.stroke === ctx.preset.background ? lastRole.color : lastRole.stroke;
-    ctx.poly(
-      lastDown
-        ? [
-            [endX - half * 1.7, endY],
-            [endX, endY + 30],
-            [endX + half * 1.7, endY],
-          ]
-        : [
-            [endX - half * 1.7, endY],
-            [endX, endY - 30],
-            [endX + half * 1.7, endY],
-          ],
-      { stroke: tipColor, fill: lastRole.fill, fillStyle: lastRole.fill ? "solid" : "none", strokeWidth: 2.6, roughness: ctx.preset.roughness },
     );
   },
 });
@@ -339,13 +442,42 @@ registerViz({
     const firstH = 64;
     const top = 64; // headroom for the icon above the highest step
     const y0 = top + firstH + (n - 1) * rise; // shared ground level
+    const heightOf = (i: number): number => firstH + i * rise;
+    // The staircase is ONE outline: separate rounded blocks butted together
+    // bit a V-notch out of the ground at every join, pinched each riser and
+    // doubled every shared wall in two colours. Steps are tinted fills under it.
+    const outlinePts: Array<[number, number]> = [[0, y0]];
+    items.forEach((_, i) => {
+      outlinePts.push([i * stepW, y0 - heightOf(i)], [(i + 1) * stepW, y0 - heightOf(i)]);
+    });
+    outlinePts.push([n * stepW, y0]);
+    const lineW = Math.min(2.4, ctx.preset.strokeWidth);
+    ctx.poly(outlinePts, { stroke: ctx.ink, fill: null, fillStyle: "none", strokeWidth: lineW, roughness: ctx.preset.roughness }, { z: 1 });
+    // each join drawn once: the lower step's side wall down to the ground
+    for (let i = 1; i < n; i++) {
+      ctx.line(
+        [
+          [i * stepW, y0 - heightOf(i - 1)],
+          [i * stepW, y0],
+        ],
+        { color: ctx.ink, width: Math.min(1.6, lineW), z: 1 },
+      );
+    }
     items.forEach((item, i) =>
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n, color: item.color });
         const x = i * stepW;
-        const h = firstH + i * rise;
-        // closed step block down to the shared baseline (reference design)
-        ctx.shape("rectangle", x, y0 - h, stepW, h, role, { id: ctx.uid(item.id) });
+        const h = heightOf(i);
+        // the step's tint, square-cornered so it sits flush in the outline
+        ctx.shape(
+          "rectangle",
+          x,
+          y0 - h,
+          stepW,
+          h,
+          { stroke: "transparent", fill: role.fill ?? role.softFill, fillStyle: role.fill ? role.fillStyle : "solid", strokeWidth: 0, roughness: ctx.preset.roughness },
+          { id: ctx.uid(item.id), z: -1, style: { roundness: 0 } },
+        );
         if (item.icon) ctx.icon(item.icon, x + stepW / 2, y0 - h - 34, 46, role.color);
         const inside = role.fill ? role.textColor : role.color;
         ctx.label(item.label, x + stepW / 2, y0 - h + 24, { size: 18, color: inside, font: "heading", weight: ctx.preset.fonts.headingWeight, maxW: stepW - 16 });

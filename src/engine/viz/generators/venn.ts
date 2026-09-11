@@ -55,12 +55,24 @@ registerViz({
       return { x, y, angle: a };
     });
 
-    // tinted overlapping circles
+    // tinted overlapping circles, in two passes: every translucent fill
+    // first, then every outline on top — one node per circle would let each
+    // later fill tint the earlier circles' rims, so an outline changed colour
+    // wherever another set crossed it. The fill is an exact circle (roughness
+    // 0) sitting under its own hand-drawn rim; both passes share the item scope
+    // so a host still draws a set as one unit.
     used.forEach((item, i) =>
       ctx.item(item.id, () => {
         const role = vennRole(ctx, ctx.role(i, { n, color: item.color }));
         const c = centers[i];
-        ctx.shape("circle", c.x - R, c.y - R, R * 2, R * 2, role, { id: ctx.uid(item.id) });
+        if (role.fill) ctx.shape("circle", c.x - R, c.y - R, R * 2, R * 2, { ...role, stroke: "none", strokeWidth: 0, roughness: 0 }, { id: ctx.uid(`${item.id}_fill`), z: 0 });
+      }),
+    );
+    used.forEach((item, i) =>
+      ctx.item(item.id, () => {
+        const role = vennRole(ctx, ctx.role(i, { n, color: item.color }));
+        const c = centers[i];
+        ctx.shape("circle", c.x - R, c.y - R, R * 2, R * 2, { ...role, fill: null, fillStyle: "none" }, { id: ctx.uid(item.id), z: 1 });
       }),
     );
 
@@ -79,14 +91,25 @@ registerViz({
       }),
     );
 
-    // overlap regions: icon inside, label pulled outward with a dotted leader.
+    // overlap regions: icon (or dot) inside, label pulled outward on a leader.
     // These span multiple sets, so they are deliberately NOT item-scoped.
     const idOf = (s: string) => used.findIndex((u) => u.id === s || u.label.toLowerCase() === s.toLowerCase());
     const figureR = d + R;
     overlaps.forEach((ov, k) => {
-      const named = [...ov.strings, ...(ov.to ? [ov.to] : []), ...(ov.opts.sets && Array.isArray(ov.opts.sets) ? (ov.opts.sets as string[]) : [])];
-      let members = named.map(idOf).filter((i) => i >= 0);
-      const isAll = ov.kind === "all" || members.length >= n || (!members.length && ov.kind !== "overlap" && ov.kind !== "intersection");
+      // `overlap all "…"` parses with id "all"; `overlap a+b "…"` / `a-b` names
+      // its members in the id itself
+      const idWord = ov.id.toLowerCase();
+      const labelSlug = ov.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24);
+      const explicitId = idWord !== labelSlug; // an id the author wrote, not one slugged from the label
+      const idList = explicitId && /[+&-]/.test(ov.id) ? ov.id.split(/[+&-]/).filter(Boolean) : [];
+      const named = [...ov.strings, ...(ov.to ? [ov.to] : []), ...(ov.opts.sets && Array.isArray(ov.opts.sets) ? (ov.opts.sets as string[]) : []), ...idList];
+      let members = [...new Set(named.map(idOf).filter((i) => i >= 0))];
+      const isAll =
+        ov.kind === "all" ||
+        idWord === "all" ||
+        (n === 2 && (ov.kind === "both" || idWord === "both")) ||
+        members.length >= n ||
+        (!members.length && ov.kind !== "overlap" && ov.kind !== "intersection");
       if (isAll) members = used.map((_, i) => i);
       else if (members.length < 2) members = [0, Math.min(1, n - 1)];
       const all = members.length >= n;
@@ -99,19 +122,22 @@ registerViz({
       const role = ctx.role(n + k, { n: n + overlaps.length });
       if (ov.icon) ctx.icon(ov.icon, rx, ry, 28, role.color);
       const block = radialLabel(ctx, cx, cy, figureR + 6, outAngle, ov.label, ov.detail, role.color, { maxW: 180 });
-      // dotted leader from the region to the label's nearest edge
+      // leader from the region to the label's nearest edge
       const bcx = block.x + block.w / 2;
       const bcy = block.y + block.h / 2;
       const ex = Math.abs(rx - bcx) > block.w / 2 + 4 ? (rx < bcx ? block.x - 8 : block.x + block.w + 8) : bcx;
       const ey = ex === bcx ? (ry < bcy ? block.y - 8 : block.y + block.h + 8) : bcy;
       const dl = Math.hypot(ex - rx, ey - ry) || 1;
-      const gap = ov.icon ? 24 : 14;
+      // a solid leader that lands ON the region: a dot marks the exact spot
+      // (the region's icon does that job when it has one)
+      const gap = ov.icon ? 24 : 0;
+      if (!ov.icon) ctx.shape("circle", rx - 5, ry - 5, 10, 10, { stroke: role.color, fill: role.color, fillStyle: "solid", strokeWidth: 1, roughness: 0 }, { z: 2 });
       ctx.line(
         [
           [rx + ((ex - rx) / dl) * gap, ry + ((ey - ry) / dl) * gap],
           [ex, ey],
         ],
-        { color: ctx.mutedInk, width: 1.2, dotted: true },
+        { color: role.color, width: 1.8, z: 2 },
       );
     });
   },

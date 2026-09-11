@@ -131,15 +131,21 @@ registerViz({
               ];
         ctx.poly(pts, role, { id: ctx.uid(item.id) });
         const midY = top + bandH / 2;
-        // level number inside (from level 2 down there is room)
-        if (i > 0) {
-          ctx.label(String(i + 1), cx - wT / 2 + 14, midY, { size: 30, color: role.textColor, weight: 700, align: "left", font: "heading" });
-        }
+        // Every level is numbered, 1 at the apex, and the number (with any
+        // icon beside it) sits on the pyramid's axis — the apex's is set low,
+        // where the triangle is ~2/3 of its base wide.
+        const numY = i === 0 ? top + bandH * 0.66 : midY;
+        const num = String(i + 1);
+        const nw = ctx.measure(num, 30, "heading");
+        const iw = item.icon ? 30 : 0;
+        const gap = item.icon ? 10 : 0;
+        const x0 = cx - (iw + gap + nw) / 2;
+        if (item.icon) ctx.icon(item.icon, x0 + iw / 2, numY, iw, role.textColor);
+        ctx.label(num, x0 + iw + gap + nw / 2, numY, { size: 30, color: role.textColor, weight: 700, font: "heading" });
         // label just clear of the band's widest (bottom) right edge, so long
         // descriptions never overlap the pyramid — labels stagger out with width
         const slopeX = cx + wB / 2 + 22;
         ctx.labelBlock(item.label, item.detail, slopeX, midY, { color: role.color, align: "left", maxW: 250 });
-        if (item.icon) ctx.icon(item.icon, cx + 14, i === 0 ? midY + 10 : midY, 30, role.textColor);
       }),
     );
   },

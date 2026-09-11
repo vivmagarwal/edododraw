@@ -151,8 +151,10 @@ registerViz({
     const pad = 15;
     const contentW = W - pad * 2;
 
-    // Uniform card height fitting the busiest card.
-    let cardH = 340;
+    // Uniform card height fitting the busiest card. The floor only guards a
+    // near-empty card: a fixed 340 left ~40% of every demo card blank, and the
+    // fit here is width-bound, so the extra height bought no type size.
+    let cardH = 200;
     for (const item of items) {
       let need = 96 + lineCount(ctx.wrap(item.label, contentW, 20, "heading", 3)) * 25 + 14;
       if (item.detail) need += lineCount(ctx.wrap(item.detail, contentW, 15)) * 19 + 14;
@@ -206,17 +208,28 @@ registerViz({
     // the design box, so the fit stays width-bound.
     const marginX = 104;
     const marginY = 30;
-    const plotW = 792;
-    const plotH = 380;
+    const plotW = 820;
+    const g = 12; // gutter between a panel and the axis it touches
+    const qw = plotW / 2 - g;
+    const maxW = qw - 48;
+    // each region's content block, measured up front so the panel height fits
+    // the busiest region (a fixed height overflowed with three bullets)
+    const blocks = items.map((item) => {
+      const bullets = item.children.slice(0, 3);
+      const detailText = !bullets.length && item.detail ? ctx.wrap(item.detail, maxW, 18) : undefined;
+      const nameText = ctx.wrap(item.label, maxW, 24, "heading", 2);
+      const nameH = lineCount(nameText) * 30;
+      const blockH = (item.icon ? 58 : 0) + nameH + (bullets.length ? 4 + bullets.length * 40 : detailText ? lineCount(detailText) * 23 + 8 : 0);
+      return { bullets, detailText, nameText, nameH, blockH };
+    });
+    const qh = Math.max(150, ...blocks.map((b) => b.blockH + 30));
+    const plotH = (qh + g) * 2;
     const x0 = marginX;
     const y0 = marginY;
     const x1 = x0 + plotW;
     const y1 = y0 + plotH;
     const cx = x0 + plotW / 2;
     const cy = y0 + plotH / 2;
-    const g = 12; // gutter between a panel and the axis it touches
-    const qw = plotW / 2 - g;
-    const qh = plotH / 2 - g;
     const edge = ctx.preset.edge;
     const capSize = 18;
 
@@ -282,12 +295,7 @@ registerViz({
         const [px, py] = corners[i];
         const qcx = px + qw / 2;
         const qcy = py + qh / 2;
-        const maxW = qw - 48;
-        const bullets = item.children.slice(0, 3);
-        const detailText = !bullets.length && item.detail ? ctx.wrap(item.detail, maxW, 18) : undefined;
-        const nameText = ctx.wrap(item.label, maxW, 24, "heading", 2);
-        const nameH = lineCount(nameText) * 30;
-        const blockH = (item.icon ? 58 : 0) + nameH + (bullets.length ? bullets.length * 40 : detailText ? lineCount(detailText) * 23 + 8 : 0);
+        const { bullets, detailText, nameText, nameH, blockH } = blocks[i];
         let y = qcy - blockH / 2;
         if (item.icon) {
           ctx.icon(item.icon, qcx, y + 23, 44, role.color);
@@ -465,48 +473,90 @@ registerViz({
 
     const lRole = ctx.role(0, { color: left?.color });
     const rRole = ctx.role(1, { color: right?.color });
-    const W = 920;
-    const headerH = 72;
-    const sideW = 380;
+    // A wide, short table: two contender columns of claim cards around a
+    // criterion gutter. (The old layout stacked 150-unit rows, which made the
+    // block squarer than the frame and shrank every glyph to ~20px.)
+    const W = 1020;
+    const gutterW = 240;
+    const sideW = (W - gutterW) / 2;
     const gutterCx = W / 2;
-    const pitch = 150;
-    const startY = 104;
-    const rowsH = Math.max(criteria.length, 1) * pitch;
+    const headSize = 30;
+    const headText = (label: string): string => ctx.wrap(label, sideW - 30, headSize, "heading", 2);
+    const lText = headText(left?.label ?? "A");
+    const rText = headText(right?.label ?? "B");
+    const headerH = Math.max(76, Math.max(lineCount(lText), lineCount(rText)) * headSize * 1.25 + 26);
+    const gapY = 14;
+    const cardPad = 16;
+    const claimSize = 24;
+    const nameSize = 22;
+    const iconSize = 30;
+    const claimMaxW = sideW - 56;
+
+    // per-side claims: `left:`/`right:` opts, or the first/second child
+    const rows = criteria.map((c) => {
+      const lChild = c.children[0];
+      const rChild = c.children[1];
+      const lClaim = optStr(c.opts, "left") ?? lChild?.label;
+      const rClaim = optStr(c.opts, "right") ?? rChild?.label;
+      const hasIcon = !!c.icon;
+      const nameText = ctx.wrap(c.label, gutterW - 32 - (hasIcon ? iconSize + 10 : 0), nameSize, "heading", 3);
+      const nameH = lineCount(nameText) * nameSize * 1.25;
+      const lh = lClaim ? ctx.measureLabelBlock(lClaim, lChild?.detail, { maxW: claimMaxW, size: claimSize }).h : 0;
+      const rh = rClaim ? ctx.measureLabelBlock(rClaim, rChild?.detail, { maxW: claimMaxW, size: claimSize }).h : 0;
+      const h = Math.max(80, lh + cardPad * 2, rh + cardPad * 2, nameH + 16);
+      return { c, lChild, rChild, lClaim, rClaim, hasIcon, nameText, h };
+    });
 
     // contender header bars
     inItem(ctx, left, () => {
       ctx.shape("rectangle", 0, 0, sideW, headerH, lRole, { id: ctx.uid(left?.id ?? "left"), style: { roundness: lRole.roundness ?? 8 } });
-      ctx.label(left?.label ?? "A", sideW / 2, headerH / 2, { size: 26, color: onPanel(lRole), font: "heading", weight: 700, maxW: sideW - 30 });
+      ctx.label(lText, sideW / 2, headerH / 2, { size: headSize, color: onPanel(lRole), font: "heading", weight: 700 });
     });
     inItem(ctx, right, () => {
       ctx.shape("rectangle", W - sideW, 0, sideW, headerH, rRole, { id: ctx.uid(right?.id ?? "right"), style: { roundness: rRole.roundness ?? 8 } });
-      ctx.label(right?.label ?? "B", W - sideW / 2, headerH / 2, { size: 26, color: onPanel(rRole), font: "heading", weight: 700, maxW: sideW - 30 });
+      ctx.label(rText, W - sideW / 2, headerH / 2, { size: headSize, color: onPanel(rRole), font: "heading", weight: 700 });
     });
 
-    // tall inner spine bars framing the criteria gutter (one per contender)
-    inItem(ctx, left, () => {
-      ctx.shape("rectangle", gutterCx - 130, startY, 54, rowsH, lRole, { style: { roundness: lRole.roundness ?? 8 } });
-    });
-    inItem(ctx, right, () => {
-      ctx.shape("rectangle", gutterCx + 76, startY, 54, rowsH, rRole, { style: { roundness: rRole.roundness ?? 8 } });
-    });
-
-    criteria.forEach((c, k) =>
-      ctx.item(c.id, () => {
-        const cy = startY + k * pitch + pitch / 2;
-        // center gutter: icon + criterion name
-        let nameY = cy;
-        if (c.icon && ctx.icon(c.icon, gutterCx, cy - 26, 42, ctx.ink)) nameY = cy + 12;
-        ctx.label(ctx.wrap(c.label, 130, 18, "heading", 2), gutterCx, nameY, { size: 18, color: ctx.ink, font: "heading", weight: ctx.preset.fonts.headingWeight });
-        // per-side claims: `left:`/`right:` opts, or the first/second child
-        const lChild = c.children[0];
-        const rChild = c.children[1];
-        const lClaim = optStr(c.opts, "left") ?? lChild?.label;
-        const rClaim = optStr(c.opts, "right") ?? rChild?.label;
-        if (lClaim) ctx.labelBlock(lClaim, lChild?.detail, gutterCx - 160, cy, { color: lRole.color, align: "right", maxW: 290, size: 18 });
-        if (rClaim) ctx.labelBlock(rClaim, rChild?.detail, gutterCx + 160, cy, { color: rRole.color, align: "left", maxW: 290, size: 18 });
-      }),
-    );
+    // one row per criterion: a tinted claim card under each contender, the
+    // icon + criterion name between them — all three centred on one line.
+    // The cards are fill-only so the outlined header bar stays the heading.
+    const card = (role: RoleStyle, x: number, y: number, h: number): void => {
+      ctx.shape(
+        "rectangle",
+        x,
+        y,
+        sideW,
+        h,
+        { stroke: "transparent", fill: role.softFill, fillStyle: "solid", strokeWidth: 0, roughness: ctx.preset.roughness },
+        { style: { roundness: role.roundness ?? 8 } },
+      );
+    };
+    let y = headerH + gapY;
+    for (const r of rows) {
+      const cy = y + r.h / 2;
+      const top = y;
+      ctx.item(r.c.id, () => {
+        const nameW = Math.max(...r.nameText.split("\n").map((l) => ctx.measure(l, nameSize, "heading")));
+        const drewIcon = r.hasIcon && ctx.icon(r.c.icon, gutterCx - (iconSize + 10 + nameW) / 2 + iconSize / 2, cy, iconSize, ctx.ink);
+        const nameX = drewIcon ? gutterCx - (iconSize + 10 + nameW) / 2 + iconSize + 10 : gutterCx;
+        ctx.label(r.nameText, nameX, cy, {
+          size: nameSize,
+          color: ctx.ink,
+          font: "heading",
+          weight: ctx.preset.fonts.headingWeight,
+          align: drewIcon ? "left" : "center",
+        });
+        if (r.lClaim) {
+          card(lRole, 0, top, r.h);
+          ctx.labelBlock(r.lClaim, r.lChild?.detail, sideW / 2, cy, { color: lRole.color, align: "center", maxW: claimMaxW, size: claimSize });
+        }
+        if (r.rClaim) {
+          card(rRole, W - sideW, top, r.h);
+          ctx.labelBlock(r.rClaim, r.rChild?.detail, W - sideW / 2, cy, { color: rRole.color, align: "center", maxW: claimMaxW, size: claimSize });
+        }
+      });
+      y += r.h + gapY;
+    }
   },
 });
 
@@ -552,21 +602,27 @@ registerViz({
       }
     });
 
-    // side tile + label block (problem left, outcome right)
+    // side tile + label block (problem left, outcome right); the tiles sit on
+    // the circle's own centre line so the flow reads as one straight row
+    const tileS = 84;
+    const tileTop = ccy - tileS / 2;
     const tile = (item: VizItem | undefined, role: RoleStyle, tx: number, fallbackIcon: string, hint: string): void => {
       if (!item) return;
       ctx.item(item.id, () => {
-        ctx.shape("rectangle", tx, ccy - 98, 84, 84, role, { id: ctx.uid(item.id ?? hint), style: { roundness: role.roundness ?? 10 } });
-        ctx.icon(item.icon ?? fallbackIcon, tx + 42, ccy - 56, 44, onPanel(role));
-        ctx.labelBlock(item.label, item.detail, tx + 42, ccy + 2, { color: role.color, align: "center", maxW: 220, vAnchor: "top" });
+        ctx.shape("rectangle", tx, tileTop, tileS, tileS, role, { id: ctx.uid(item.id ?? hint), style: { roundness: role.roundness ?? 10 } });
+        ctx.icon(item.icon ?? fallbackIcon, tx + tileS / 2, ccy, 44, onPanel(role));
+        ctx.labelBlock(item.label, item.detail, tx + tileS / 2, tileTop + tileS + 14, { color: role.color, align: "center", maxW: 220, vAnchor: "top" });
       });
     };
-    tile(problem, pRole, 60, "trend-down", "problem");
-    tile(outcome, oRole, 656, "trend-up", "outcome");
+    const pX = 60;
+    const oX = 656;
+    tile(problem, pRole, pX, "trend-down", "problem");
+    tile(outcome, oRole, oX, "trend-up", "outcome");
 
-    // flow arrows into and out of the solution
-    ctx.arrow(170, ccy - 56, cx - D / 2 - 12, ccy - 30, { color: ctx.preset.edge, width: 1.6 });
-    ctx.arrow(cx + D / 2 + 12, ccy - 30, 630, ccy - 56, { color: ctx.preset.edge, width: 1.6 });
+    // flow arrows into and out of the solution: horizontal, tile edge to circle
+    // edge, with the same air at both ends
+    if (problem) ctx.arrow(pX + tileS + 12, ccy, cx - D / 2 - 12, ccy, { color: ctx.preset.edge, width: 1.6 });
+    if (outcome) ctx.arrow(cx + D / 2 + 12, ccy, oX - 12, ccy, { color: ctx.preset.edge, width: 1.6 });
 
     // T-connector down to support captions
     if (supports.length) {
@@ -624,7 +680,9 @@ registerViz({
     const aRole = ctx.role(2, { color: after?.color });
 
     const x0 = 150;
-    const bandW = 640;
+    // wide span: the card is height-bound, so the width is free and buys
+    // room for bigger box type
+    const bandW = 800;
     const edge = ctx.preset.edge;
     const cx = x0 + bandW / 2;
 
@@ -656,19 +714,21 @@ registerViz({
       ],
       { color: edge, width: 2.4 },
     );
-    // towers (above deck + a short leg below with a footing)
+    // towers (above deck + a short leg below with a footing); the legs stop
+    // well clear of the description boxes, so nothing reads as standing on them
+    const footY = deckY + 34;
     for (const tx of [t1, t2]) {
       ctx.line(
         [
           [tx, topY - 6],
-          [tx, deckY + 62],
+          [tx, footY],
         ],
         { color: edge, width: 3 },
       );
       ctx.line(
         [
-          [tx - 12, deckY + 62],
-          [tx + 12, deckY + 62],
+          [tx - 12, footY],
+          [tx + 12, footY],
         ],
         { color: edge, width: 2 },
       );
@@ -696,30 +756,29 @@ registerViz({
       );
     }
 
-    // flanking state labels at deck level
-    if (before) ctx.item(before.id, () => ctx.labelBlock(before.label, undefined, x0 - 26, deckY - 10, { color: bRole.color, align: "right", maxW: 150 }));
-    if (after) ctx.item(after.id, () => ctx.labelBlock(after.label, undefined, x0 + bandW + 26, deckY - 10, { color: aRole.color, align: "left", maxW: 150 }));
-    const top = 30; // kept for the box block below
+    // The state names live in the description boxes below — printing them a
+    // second time at the bridge ends put every word on the card twice.
 
     // two description boxes below, arrow between
-    const boxW = 240;
-    const boxH = 86;
-    const boxY = top + 226;
+    const boxW = 262;
+    const boxH = 100;
+    const boxY = footY + 30;
     const box = (item: VizItem | undefined, role: RoleStyle, bx: number, hint: string): void => {
       if (!item) return;
       ctx.item(item.id, () => {
         ctx.shape("rectangle", bx, boxY, boxW, boxH, role, { id: ctx.uid(item.id ?? hint), style: { roundness: role.roundness ?? 8 } });
         const accent = onPanel(role);
         if (item.detail) {
-          ctx.label(item.label, bx + boxW / 2, boxY + 24, { size: 17, color: accent, weight: 700, font: "heading", maxW: boxW - 28, maxLines: 1 });
-          ctx.label(ctx.wrap(item.detail, boxW - 28, 13, undefined, 2), bx + boxW / 2, boxY + 54, { size: 13, color: inPanel(ctx, role) });
+          ctx.label(item.label, bx + boxW / 2, boxY + 28, { size: 20, color: accent, weight: 700, font: "heading", maxW: boxW - 28, maxLines: 1 });
+          ctx.label(ctx.wrap(item.detail, boxW - 28, 15, undefined, 2), bx + boxW / 2, boxY + 64, { size: 15, color: inPanel(ctx, role) });
         } else {
-          ctx.label(item.label, bx + boxW / 2, boxY + boxH / 2, { size: 17, color: accent, weight: 700, font: "heading", maxW: boxW - 28, maxLines: 2 });
+          ctx.label(item.label, bx + boxW / 2, boxY + boxH / 2, { size: 20, color: accent, weight: 700, font: "heading", maxW: boxW - 28, maxLines: 2 });
         }
       });
     };
     box(before, bRole, t1 - boxW / 2, "before");
     box(after, aRole, t2 - boxW / 2, "after");
-    ctx.arrow(cx - 22, boxY + boxH / 2, cx + 22, boxY + boxH / 2, { color: edge, width: 2 });
+    // arrow between the boxes with 12 units of air at both ends
+    ctx.arrow(t1 + boxW / 2 + 12, boxY + boxH / 2, t2 - boxW / 2 - 12, boxY + boxH / 2, { color: edge, width: 2 });
   },
 });

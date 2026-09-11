@@ -9,6 +9,7 @@ import { registerViz } from "../registry.js";
 import { itemsOf, optNum, optStr, type VizItem, type VizSpec } from "../types.js";
 import type { VizContext } from "../context.js";
 import { fmtNum } from "./util.js";
+import { contrastRatio, mix } from "../../style/color.js";
 
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
 
@@ -74,10 +75,13 @@ registerViz({
         const pct = clamp(raw <= 1 ? raw * 100 : raw, 0, 100);
         const barY = cardTop + cardH - 30;
         const barW = cardW - 32 - (ctx.showValue(kr) ? 46 : 0);
-        ctx.shape("round-rectangle", x + 16, barY, barW, 13, { stroke: ctx.mutedInk, fill: null, fillStyle: "none", strokeWidth: 1.2, roughness: ctx.preset.roughness, roundness: 6 });
+        // the progress is SOLID role colour, inset inside the track (a soft
+        // tint fill carried 72% with nothing but a 1px outline), and the
+        // track's outline goes on after it so only one outline shows
         if (pct > 3) {
-          ctx.shape("round-rectangle", x + 16, barY, Math.max(10, (barW * pct) / 100), 13, { stroke: role.color, fill: role.fill ?? role.color, fillStyle: "solid", strokeWidth: 1, roughness: ctx.preset.roughness, roundness: 6 });
+          ctx.shape("round-rectangle", x + 18, barY + 2, Math.max(9, ((barW - 4) * pct) / 100), 9, { stroke: role.color, fill: role.color, fillStyle: "solid", strokeWidth: 1, roughness: ctx.preset.roughness, roundness: 4 });
         }
+        ctx.shape("round-rectangle", x + 16, barY, barW, 13, { stroke: ctx.mutedInk, fill: null, fillStyle: "none", strokeWidth: 1.2, roughness: ctx.preset.roughness, roundness: 6 });
         if (ctx.showValue(kr)) ctx.label(`${Math.round(pct)}%`, x + cardW - 16, barY + 7, { size: 16, color: role.color, weight: 700, align: "right", font: "heading", role: "value" });
       }),
     );
@@ -270,6 +274,30 @@ registerViz({
     const gap = 7;
     const labelW = 20 + Math.max(60, ...rows.map((r) => ctx.measure(r.label, 16)));
     const accent = ctx.role(0, { n: 1 }).color;
+    // Each cell is PAINTED as a solid mix of paper → accent (no opacity, so
+    // what we test is what shows on any host), and its value is set in
+    // whichever of ink / paper reads better against THAT colour. Around the
+    // luminance where the two cross, neither clears 4.5:1 — those shades are
+    // skipped by moving to the nearest readable intensity (order is kept).
+    const bg = ctx.preset.background;
+    const paint = (t: number) => mix(bg, accent, 0.14 + 0.86 * t);
+    const best = (c: string) => {
+      const onInk = contrastRatio(c, ctx.ink);
+      const onBg = contrastRatio(c, bg);
+      return onInk >= onBg ? { text: ctx.ink, ratio: onInk } : { text: bg, ratio: onBg };
+    };
+    const heatShade = (t: number): { cell: string; text: string } => {
+      for (let d = 0; d <= 1; d += 0.01) {
+        for (const tt of [t - d, t + d]) {
+          if (tt < 0 || tt > 1) continue;
+          const cell = paint(tt);
+          const b = best(cell);
+          if (b.ratio >= 4.5) return { cell, text: b.text };
+        }
+      }
+      const cell = paint(t); // a palette with no readable shade: best effort
+      return { cell, text: best(cell).text };
+    };
 
     for (let c = 0; c < nCols; c++) {
       ctx.label(colNames[c] ?? String(c + 1), labelW + c * (cellW + gap) + cellW / 2, 0, { size: 15, color: ctx.mutedInk, weight: ctx.preset.fonts.headingWeight, font: "heading" });
@@ -285,10 +313,10 @@ registerViz({
             ctx.shape("round-rectangle", x, cy - cellH / 2, cellW, cellH, { stroke: ctx.mutedInk, fill: null, fillStyle: "none", strokeWidth: 1, roughness: ctx.preset.roughness, roundness: 8, strokeStyle: "dashed" });
             continue;
           }
-          const t = clamp(v / max, 0, 1);
-          ctx.shape("round-rectangle", x, cy - cellH / 2, cellW, cellH, { stroke: accent, fill: accent, fillStyle: "solid", strokeWidth: 1.2, roughness: ctx.preset.roughness, roundness: 8, opacity: Math.round(16 + t * 82) });
+          const { cell, text } = heatShade(clamp(v / max, 0, 1));
+          ctx.shape("round-rectangle", x, cy - cellH / 2, cellW, cellH, { stroke: accent, fill: cell, fillStyle: "solid", strokeWidth: 1.2, roughness: ctx.preset.roughness, roundness: 8 });
           if (ctx.showValue(row)) {
-            ctx.label(fmtNum(v), x + cellW / 2, cy, { size: 15, color: t > 0.55 ? ctx.preset.background : ctx.ink, weight: 700, font: "heading", role: "value", z: 3 });
+            ctx.label(fmtNum(v), x + cellW / 2, cy, { size: 15, color: text, weight: 700, font: "heading", role: "value", z: 3 });
           }
         }
       }),
@@ -384,10 +412,18 @@ registerViz({
     const midX = 280;
     const knotX = midX + bias * 88; // clamped so the pennant clears the nearest figure
 
-    // center reference + rope with a slight sag at the marker knot
-    ctx.line([[midX, ropeY - 40], [midX, ropeY + 52]], { color: ctx.mutedInk, width: 1.3, dash: true });
-    ctx.line([[92, ropeY - 2], [knotX, ropeY + 3]], { color: ctx.ink, width: 2.6 });
-    ctx.line([[knotX, ropeY + 3], [468, ropeY - 2]], { color: ctx.ink, width: 2.6 });
+    // The figures stand so their gripping hands (pose "pulling", tips at unit
+    // y ≈ 0.42–0.46) land ON the rope: feet at ropeY + 0.56·h.
+    const figH = 104;
+    const groundY = ropeY + Math.round(0.56 * figH);
+    const outerL = 128;
+    const outerR = 432;
+
+    // center reference + rope with a slight sag at the marker knot; the rope
+    // ends just behind each anchor figure instead of trailing into paper
+    ctx.line([[midX, ropeY - 40], [midX, groundY + 4]], { color: ctx.mutedInk, width: 1.3, dash: true });
+    ctx.line([[outerL - 14, ropeY - 2], [knotX, ropeY + 3]], { color: ctx.ink, width: 2.6 });
+    ctx.line([[knotX, ropeY + 3], [outerR + 14, ropeY - 2]], { color: ctx.ink, width: 2.6 });
     // marker pennant hanging from the knot
     ctx.line([[knotX, ropeY + 3], [knotX, ropeY + 36]], { color: ctx.ink, width: 1.8 });
     ctx.poly(
@@ -401,25 +437,33 @@ registerViz({
 
     // character-library figures hauling backward (pose "pulling" grips toward
     // the center; flip mirrors it for the right-hand team)
+    // a paper-filled tee, so the far arm and the rope pass BEHIND the chest
+    // instead of knotting across an open outline
     const figure = (x: number, away: -1 | 1, color: string) => {
-      ctx.character("pulling", x, ropeY + 46, 104, { color, flip: away === 1, emotion: "determined" });
-      ctx.line([[x - away * 22, ropeY + 48], [x + away * 26, ropeY + 48]], { color: ctx.mutedInk, width: 1.5 }); // ground
+      ctx.character("pulling", x, groundY, figH, { color, flip: away === 1, emotion: "determined", shirt: "tee" });
+      ctx.line([[x - away * 22, groundY + 2], [x + away * 26, groundY + 2]], { color: ctx.mutedInk, width: 1.5 }); // ground
     };
 
     sides.forEach((side, si) =>
       ctx.item(side.id, () => {
         const role = ctx.role(si, { n: 2, color: side.color });
         const away = (si === 0 ? -1 : 1) as -1 | 1;
-        figure(si === 0 ? 202 : 358, away, role.color);
-        figure(si === 0 ? 128 : 432, away, role.color);
-        // side label + its forces beneath the team
-        const lx = si === 0 ? 40 : 520;
-        const align = si === 0 ? "left" : "right";
-        ctx.label(side.label, lx, ropeY + 84, { size: 19, color: role.color, weight: 700, font: "heading", align });
-        side.children.forEach((f, fi) => {
-          ctx.label(ctx.wrap(f.label, 210, 14, "body", 2), lx, ropeY + 112 + fi * 26, { size: 14, color: ctx.mutedInk, align, role: "detail" });
+        const inner = si === 0 ? 202 : 358;
+        const outer = si === 0 ? outerL : outerR;
+        figure(inner, away, role.color);
+        figure(outer, away, role.color);
+        // side label + its forces centred UNDER the team that carries them
+        const lx = (inner + outer) / 2;
+        const top = groundY + 36;
+        ctx.label(side.label, lx, top, { size: 20, color: role.color, weight: 700, font: "heading" });
+        let fy = top + 18;
+        side.children.forEach((f) => {
+          const t = ctx.wrap(f.label, 200, 16, "body", 2);
+          const h = t.split("\n").length * 16 * 1.25;
+          ctx.label(t, lx, fy + h / 2, { size: 16, color: ctx.mutedInk, role: "detail" });
+          fy += h + 6;
         });
-        if (side.icon) ctx.icon(side.icon, si === 0 ? lx + 12 : lx - 12, ropeY - 78, 28, role.color);
+        if (side.icon) ctx.icon(side.icon, lx, ropeY - 78, 28, role.color);
       }),
     );
   },

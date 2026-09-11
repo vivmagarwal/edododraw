@@ -102,7 +102,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 
 | type | data | options |
 |---|---|---|
-| `flowchart` (`flow`, `process`) | `item` / `step` — label, icon, detail | `direction: right` for horizontal |
+| `flowchart` (`flow`, `process`) | `item` / `step` — label, icon, detail | `direction: right\|down`; unset = horizontal for ≤5 steps with short details, else vertical |
 | `sequence` | `item` / `step` — label + description panels in reading order | `columns: 2..4` |
 | `stairs` (`staircase`) | `item` / `step` — ascending blocks, icon above, label inside | — |
 | `journey` (`roadmap`) | `item` / `stage` — one ribbon-road segment per stage | — |
@@ -129,7 +129,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `radar` (`spider`) | `axis "Security"` + `series "Today" [3, 4, 2]` (or plain `item "X" 3`) | `max:` scale ceiling |
 | `heatmap` (`risk-matrix`) | `row "API" [1, 3, 5]` intensity cells | `cols: ["Q1", …]`, `max:`, `showValues:` |
 | `slope-chart` (`slopegraph`) | `item "Billing" 340 120` — before/after per line | `left:`, `right:` headers, `showValues:` |
-| `bullet-chart` (`kpi-vs-target`) | `kpi "Revenue" 74 90` — actual bar vs target tick | `max:`, `showValues:` |
+| `bullet-chart` (`kpi-vs-target`) | `kpi "Revenue" 74 90` — actual bar vs target tick; per-row `{ max: N }` | `max:` (else each row scales to max(actual, target) × 1.15), `showValues:` |
 
 ### Timelines
 
@@ -162,7 +162,7 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 |---|---|---|
 | `swot` | 4 `item "Strengths" { item "…" … }` panels with bullet children, tiled 2×2 | `layout: grid\|stack` (`stack` = one column, the pre-0.16.1 look) |
 | `pestel` | `item "Political" "summary" { item "…" }` cards (4–6) | — |
-| `porters` (`forces`) | `item "Rivalry" "description"` forces on a ring | — |
+| `porters` (`forces`) | `center "Rivalry"` (or `rivalry`) — the force the others act on, in the centre; `item` forces on a ring (a 5-force list promotes its first item) | — |
 | `pyramid` | `item` levels, top → bottom | — |
 | `bullseye` (`target`) | `item` rings, **outermost first** | — |
 | `funnel` | `item "Stage" [value]` — the value is printed large inside its band, the stage name on the side | `input:`, `output:` captions |
@@ -207,12 +207,12 @@ The full alias set lives in `src/engine/viz/aliases.ts` (and is exported as `VIZ
 | `vision` | `current "Today" "…"` + `vision "Goal" "…"` (stairs to an open door) | — |
 | `performance` (`kpis`) | `item "Uptime" 99 "desc" { icon }` donut gauges | `summary:` |
 | `bottleneck` | metaphor scene | `in:`, `out:`, `count:` |
-| `hole` (`pit`) | title is the message | `caption:` |
+| `hole` (`pit`) | title is the message | `caption:`, `pit:` (lettered inside the pit), `ladder:` (the way out, on a leader from the ladder) |
 | `trend` | `item` levels bottom → top on a rising staircase | — |
 | `race` | `item` contestants in rank order | `finish:` banner text |
 | `dialogue` (`conversation`) | `msg "…" { speaker: a\|b }` bubbles | `a:`, `b:` speaker names |
 | `prism` | `input "One thing" { icon }` + `item` outputs | — |
-| `pillar` (`pillars`) | `item "Trust" "description" { icon }` columns | — |
+| `pillar` (`pillars`) | `item "Trust" "description" { icon }` columns under an architrave | `mission:` — what the pillars hold up, lettered on the architrave |
 | `tug-of-war` (`force-field`) | two `side "Name" [weight] { item "force" … }` teams | `tilt: left\|right\|balanced` |
 | `lighthouse` (`beacon`) | `item "Risk" "detail"` rocks under the beam | `ship:` traveler label |
 | `magnet` (`attraction`) | `item "Fast CI" { icon }` chips being pulled in | `label:` magnet caption |

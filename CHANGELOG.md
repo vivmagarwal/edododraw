@@ -9,6 +9,48 @@ All notable changes to **edododraw**. Versions follow [semver](https://semver.or
 
 ---
 
+## 0.16.2
+
+**179 template fixes from the same frame-by-frame review.** 0.16.1 carried the engine half of the
+87-card review; this is the per-template half. Every fix answers a defect a reviewer found at
+1920x1080 and a second pass confirmed by cropping the frame and reading the generator. Tests, the
+collision audit (0 overlaps across 87 templates × 13 presets) and the docs audit are all clean.
+
+### ⚠️ VISUAL CHANGE — most templates redraw
+
+Highlights, by the defect they answer:
+
+- **Layouts that fought the frame.** Tall, narrow layouts were why type ended up small, because a
+  16:9 fit is height-bound. `swot` tiles 2×2, `quadrant` is a wide plot, `root-causes`, `converge`,
+  `lens` and the mindmaps are re-proportioned (root-causes' fit goes from 0.99x to 1.44x, converge's
+  from 1.40x to 1.89x), and `flowchart` goes horizontal by default for short chains.
+- **Lines that did not meet.** Mindmap connectors stopped 2 units short of every box; they now tuck
+  under the node fill, one true cubic each (no polyline knees), with spread exits instead of a dark
+  wedge where they all left one point. `decision` branches end in arrowheads, `lens`/`converge`/`prism`
+  beams actually converge on a focus, the fishbone's spine meets its tail, and `diverge` radiates from
+  a hub.
+- **Metaphors that did not read.** The fishbone tail read as a second arrowhead; `root-causes` read as a
+  mushroom cloud; `domino` tiles read as planks; `challenges` drew a bridge instead of hurdles; `porters`
+  had nothing in the centre. All redrawn.
+- **Hierarchy.** Mindmap roots were the faintest node on the card; roots, branches and children now
+  read as three levels. `mindmap-vertical` draws the cards its recipe always described.
+- **Data marks.** Bars, gauges and progress fills were pale tints that barely read as data; they carry
+  their hue now. `stacked-bar` stacks square segments instead of a pile of pills, `waterfall`'s
+  connector steps between bar ends instead of slicing through them, and `heatmap` values hold contrast on
+  every cell.
+
+### Added
+
+- `pillar`: `mission:` — what the pillars hold up, lettered on the new architrave.
+- `hole`: `pit:` and `ladder:` — the pit and the way out, labelled.
+- `porters`: `center` / `rivalry` entry kinds — the force the others act on, in the centre (a 5-force
+  list promotes its first item).
+- `bullet-chart`: a per-row `max:`; without one each row scales to max(actual, target) × 1.15.
+- `flowchart`: an unset `direction` is horizontal for up to 5 steps with short details, else vertical.
+- Demos: `challenges`, `hole` and `pillar` show their new content.
+
+---
+
 ## 0.16.1
 
 **A polish pass driven by looking at 87 rendered cards.** Every template was rendered at 1920x1080

@@ -652,7 +652,7 @@ viz challenges "Path to Launch" {
   item "Security review" "Close the audit findings"
   item "Scale testing" "Survive 10x load"
   item "Compliance" "SOC 2 evidence complete"
-  action: "Bridge the gap"
+  action: "Clear every hurdle"
 }`),
   d("bridge", "Problems and Solutions", "Bridge", "Planks carrying you across the gap.", `
 viz bridge "Migration Plan" {
@@ -693,6 +693,9 @@ viz bottleneck "Review Bottleneck" {
 }`),
   d("hole", "Visual Metaphors", "Hole", "The pit — and the ladder out of it.", `
 viz hole "Technical Debt Trap" {
+  pit: "Shortcuts"
+  ladder: "Refactor sprints"
+  caption: "Every shortcut digs it deeper"
 }`),
   d("trend", "Visual Metaphors", "Trend", "A staircase climbing up and to the right.", `
 viz trend "Maturity Curve" {
@@ -732,6 +735,7 @@ viz prism "One Strategy, Many Wins" {
 }`),
   d("pillar", "Visual Metaphors", "Pillar", "Classical columns holding up the mission.", `
 viz pillar "Company Pillars" {
+  mission: "A product people trust"
   item "Trust" "Security and reliability first" { icon: shield }
   item "Craft" "Quality in every detail" { icon: star }
   item "Pace" "Ship and learn weekly" { icon: rocket }

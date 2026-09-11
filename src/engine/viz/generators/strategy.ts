@@ -8,10 +8,50 @@ import type { NodeStyle } from "../../scene/types.js";
 import { registerViz } from "../registry.js";
 import { itemsOf, optNum, optStr, type VizItem, type VizSpec } from "../types.js";
 import type { VizContext } from "../context.js";
-import { fmtNum, polar, radialLabel } from "./util.js";
+import { withAlpha } from "../../style/color.js";
+import { fmtNum, polar, radialLabel, smoothPath, smoothShape, type Anchor } from "./util.js";
 
 function outline(ctx: VizContext, color: string, strokeWidth?: number): Partial<NodeStyle> {
   return { stroke: color, fill: null, fillStyle: "none", strokeWidth: strokeWidth ?? ctx.preset.strokeWidth, roughness: ctx.preset.roughness };
+}
+
+/**
+ * One closed outline for a ring segment that ends in a chevron POINT and
+ * starts in a matching notch, so consecutive segments nest like arrowheads
+ * instead of carrying a separate triangle stapled past their own end edge.
+ * Angles are degrees, clockwise from 12 o'clock like the rest of the file;
+ * the path is drawn in the wheel's (2R x 2R) box with true arcs.
+ */
+function chevronSegment(R: number, inner: number, start: number, end: number, tipDeg: number): string {
+  const ri = R * inner;
+  const rMid = (R + ri) / 2;
+  const f = ([x, y]: [number, number]): string => `${(x + R).toFixed(2)},${(y + R).toFixed(2)}`;
+  const large = end - start > 180 ? 1 : 0;
+  return [
+    `M${f(polar(0, 0, R, start))}`,
+    `A${R},${R} 0 ${large} 1 ${f(polar(0, 0, R, end))}`,
+    `L${f(polar(0, 0, rMid, end + tipDeg))}`,
+    `L${f(polar(0, 0, ri, end))}`,
+    `A${ri},${ri} 0 ${large} 0 ${f(polar(0, 0, ri, start))}`,
+    `L${f(polar(0, 0, rMid, start + tipDeg))}`,
+    "Z",
+  ].join(" ");
+}
+
+/**
+ * Radar ring values: a round step giving 2-5 rings that land exactly on the
+ * scale maximum (1..5 for a 5-point scale), else thirds of the maximum.
+ */
+function radarRings(max: number): number[] {
+  const mag = 10 ** Math.floor(Math.log10(max));
+  for (const m of [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10]) {
+    const step = m * mag;
+    const count = max / step;
+    if (count >= 2 && count <= 5 && Math.abs(count - Math.round(count)) < 1e-9) {
+      return Array.from({ length: Math.round(count) }, (_, k) => step * (k + 1));
+    }
+  }
+  return [max / 3, (2 * max) / 3, max];
 }
 
 // ---- flywheel -----------------------------------------------------------------
@@ -30,7 +70,8 @@ registerViz({
     const centerLabel = centerEntry?.label ?? optStr(spec.options, "center");
     const R = 158;
     const inner = 0.6;
-    const gapDeg = 18;
+    const gapDeg = 10;
+    const tipDeg = 9; // chevron depth; tip and the next notch sit gapDeg apart
     const seg = 360 / n;
     const rMid = (R * (1 + inner)) / 2;
 
@@ -39,21 +80,10 @@ registerViz({
         const role = ctx.role(i, { n, color: item.color });
         const start = -90 + i * seg + gapDeg / 2;
         const end = -90 + (i + 1) * seg - gapDeg / 2;
-        ctx.shape(
-          "sector",
-          -R,
-          -R,
-          R * 2,
-          R * 2,
-          role,
-          { id: ctx.uid(item.id), data: { start, end, inner } },
-        );
-        // arrowhead reaching into the gap — the wheel visibly spins clockwise
-        const tip = polar(0, 0, rMid, end + 11);
-        const baseO = polar(0, 0, R * 0.965, end + 0.5);
-        const baseI = polar(0, 0, R * (inner + 0.035), end + 0.5);
-        ctx.poly([baseO, tip, baseI], { stroke: role.stroke, fill: role.fill ?? role.color, fillStyle: "solid", strokeWidth: role.strokeWidth, roughness: ctx.preset.roughness });
-        const mid = (start + end) / 2;
+        // one segment = one outline, pointed at its end and notched at its
+        // start — the wheel visibly spins clockwise
+        ctx.path(chevronSegment(R, inner, start, end, tipDeg), R * 2, R * 2, -R, -R, R * 2, R * 2, role, { id: ctx.uid(item.id) });
+        const mid = (start + end + tipDeg) / 2;
         if (item.icon) {
           const [ix, iy] = polar(0, 0, rMid, mid);
           ctx.icon(item.icon, ix, iy, 30, role.textColor);
@@ -99,10 +129,16 @@ registerViz({
     const angle = (i: number) => -90 + (i * 360) / K;
     const ringPts = (f: number) => axes.map((_, i) => polar(0, 0, R * f, angle(i)));
 
-    // grid: spokes + two inner rings (dashed) + the outer ring (solid)
-    for (let i = 0; i < K; i++) ctx.line([[0, 0], polar(0, 0, R, angle(i))], { color: ctx.mutedInk, width: 1.1 });
-    for (const f of [1 / 3, 2 / 3]) ctx.poly(ringPts(f), { ...outline(ctx, ctx.mutedInk, 1.1), strokeStyle: "dashed" });
-    ctx.poly(ringPts(1), outline(ctx, ctx.mutedInk, 1.6));
+    // grid: spokes + dashed inner rings + the solid outer ring, drawn ABOVE
+    // the series fills (z 1) in a light ink so the scale survives an opaque
+    // fill; the series outlines and dots sit above the grid again (z 2).
+    const gridInk = withAlpha(ctx.mutedInk, 0.45);
+    const rings = radarRings(max);
+    for (let i = 0; i < K; i++) ctx.line([[0, 0], polar(0, 0, R, angle(i))], { color: gridInk, width: 1.1, z: 1 });
+    for (const v of rings.slice(0, -1)) ctx.poly(ringPts(v / max), { ...outline(ctx, gridInk, 1.1), strokeStyle: "dashed" }, { z: 1 });
+    ctx.poly(ringPts(1), outline(ctx, withAlpha(ctx.mutedInk, 0.7), 1.6), { z: 1 });
+    // the scale, up the left side of the top spoke (clear of the vertex dots)
+    for (const v of rings) ctx.label(fmtNum(v), -9, (-R * v) / max, { size: 13, color: ctx.mutedInk, align: "right", z: 3, role: "value" });
 
     // axis labels (each axis entry is addressable)
     axes.forEach((ax, i) =>
@@ -118,8 +154,9 @@ registerViz({
       ctx.item(s.id, () => {
         const role = ctx.role(si, { n: Math.max(series.length, 2), color: s.color });
         const pts = axes.map((_, i) => polar(0, 0, (R * Math.max(0, Math.min(max, s.values[i] ?? 0))) / max, angle(i)));
-        ctx.poly(pts, { stroke: role.color, fill: role.softFill, fillStyle: "solid", strokeWidth: 2.6, roughness: ctx.preset.roughness, opacity: 60 });
-        for (const [px, py] of pts) ctx.shape("circle", px - 5, py - 5, 10, 10, { stroke: role.color, fill: role.color, fillStyle: "solid", strokeWidth: 1, roughness: 0.6 });
+        ctx.poly(pts, { stroke: "transparent", fill: role.softFill, fillStyle: "solid", strokeWidth: 0, roughness: ctx.preset.roughness, opacity: 60 });
+        ctx.poly(pts, { stroke: role.color, fill: null, fillStyle: "none", strokeWidth: 2.6, roughness: ctx.preset.roughness }, { z: 2 });
+        for (const [px, py] of pts) ctx.shape("circle", px - 5, py - 5, 10, 10, { stroke: role.color, fill: role.color, fillStyle: "solid", strokeWidth: 1, roughness: 0.6 }, { z: 2 });
         if (s.label && series.length > 1) {
           ctx.shape("rectangle", legendX, legendY - 7, 15, 15, { stroke: role.color, fill: role.softFill, fillStyle: "solid", strokeWidth: 1.6, roughness: ctx.preset.roughness });
           ctx.label(s.label, legendX + 23, legendY + 1, { size: 15, color: ctx.ink, align: "left" });
@@ -146,7 +183,10 @@ registerViz({
     const colW = 158;
     const rowH = 44;
     const lanePad = 14;
-    const labelW = 24 + Math.max(90, ...lanes.map((l) => ctx.measure(l.label, 18, "heading")));
+    // the lane-name gutter: the icon inset (34) + the longest name + 20 of air
+    // before the first gridline (the old 24 of slack was spent by the icon)
+    const labelX = lanes.some((l) => l.icon) ? 34 : 4;
+    const labelW = labelX + Math.max(90, ...lanes.map((l) => ctx.measure(l.label, 18, "heading"))) + 20;
     const gridW = cols * colW;
     const headerH = 40;
 
@@ -175,7 +215,7 @@ registerViz({
         // lane separator + name
         ctx.line([[0, top], [labelW + gridW, top]], { color: ctx.mutedInk, width: 1.4 });
         if (lane.icon) ctx.icon(lane.icon, 15, top + h / 2, 24, role.color);
-        ctx.label(ctx.wrap(lane.label, labelW - 44, 18, "heading", 2), lane.icon ? 34 : 4, top + h / 2, { size: 18, color: role.color, weight: ctx.preset.fonts.headingWeight, font: "heading", align: "left" });
+        ctx.label(ctx.wrap(lane.label, labelW - labelX - 20, 18, "heading", 2), labelX, top + h / 2, { size: 18, color: role.color, weight: ctx.preset.fonts.headingWeight, font: "heading", align: "left" });
       });
       lane.children.forEach((task, ti) => {
         ctx.item(task.id, () => {
@@ -216,25 +256,59 @@ registerViz({
     const goalEntry = spec.items.find((i) => i.kind === "goal");
     const goalLabel = goalEntry?.label ?? optStr(spec.options, "goal");
 
-    // switchback trail, sampled smooth through fixed waypoints (start bottom-left)
+    // A landscape trail — gentle switchbacks climbing left to right — so the
+    // card fills the ~2.4:1 frame instead of running as a portrait diagonal.
     const way: Array<[number, number]> = [
-      [10, 400],
-      [210, 372],
-      [330, 316],
-      [176, 256],
-      [66, 206],
-      [210, 146],
-      [352, 96],
-      [452, 38],
+      [0, 352],
+      [150, 332],
+      [284, 296],
+      [404, 312],
+      [482, 246],
+      [594, 204],
+      [714, 190],
+      [774, 120],
     ];
     const pts = catmull(way, 14);
-    ctx.line(pts, { color: ctx.ink, width: 2.6, dash: true });
-    // ground hatch at the trailhead
-    ctx.line([[-16, 406], [58, 406]], { color: ctx.ink, width: 2.2 });
+    const [sx, sy] = pts[pts.length - 1];
+    const [hx, hy] = pts[0];
+
+    // the summit the flag stands on: a pale fill-only silhouette behind the
+    // trail, its ridge above the whole climb
+    smoothShape(
+      ctx,
+      [
+        [hx - 40, 384, "corner"],
+        [250, 280],
+        [520, 196],
+        [sx - 30, sy + 14],
+        [sx, sy - 6, "corner"],
+        [sx + 50, sy + 40],
+        [sx + 150, 384, "corner"],
+      ],
+      { stroke: "transparent", fill: withAlpha(ctx.mutedInk, 0.08), fillStyle: "solid", strokeWidth: 0, roughness: ctx.preset.roughness },
+      { z: -2 },
+    );
+
+    // the trail: ONE smooth dashed path, so the dash pattern runs continuously
+    // (a sampled polyline restarted it on every chord)
+    const tx0 = Math.min(...way.map((w) => w[0]));
+    const ty0 = Math.min(...way.map((w) => w[1]));
+    const tw = Math.max(...way.map((w) => w[0])) - tx0;
+    const th = Math.max(...way.map((w) => w[1])) - ty0;
+    ctx.path(smoothPath(way.map(([x, y]): Anchor => [x - tx0, y - ty0]), { closed: false }), tw, th, tx0, ty0, tw, th, {
+      stroke: ctx.ink,
+      fill: null,
+      fillStyle: "none",
+      strokeWidth: 2.6,
+      strokeStyle: "dashed",
+      roughness: ctx.preset.roughness,
+    });
+    // trailhead marker ON the trail's first point
+    ctx.shape("circle", hx - 10, hy - 10, 20, 20, { stroke: ctx.ink, fill: ctx.preset.background, fillStyle: "solid", strokeWidth: 2.2, roughness: Math.min(0.3, ctx.preset.roughness) }, { z: 1 });
 
     // summit flag (the goal)
-    const [sx, sy] = pts[pts.length - 1];
     const gRole = ctx.role(n, { n: n + 1, color: goalEntry?.color });
+    const goalM = goalLabel ? ctx.measureLabelBlock(goalLabel, goalEntry?.detail, { maxW: 180 }) : { w: 0, h: 0 };
     const drawFlag = () => {
       ctx.line([[sx, sy], [sx, sy - 58]], { color: gRole.color, width: 2.6 });
       ctx.poly(
@@ -250,7 +324,7 @@ registerViz({
     if (goalEntry) ctx.item(goalEntry.id, drawFlag);
     else drawFlag();
 
-    // milestones spaced by arc length; labels sit on the bend's outer side
+    // milestones spaced by arc length
     const cum = [0];
     for (let i = 1; i < pts.length; i++) cum[i] = cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
     const total = cum[cum.length - 1];
@@ -260,40 +334,66 @@ registerViz({
       if (i < 0) i = pts.length - 1;
       return { p: pts[i], i };
     };
-    // labels alternate sides of the trail; a global bbox relaxation then moves
-    // any colliding label further up-trail, so unusual counts and long text
-    // can't overlap — across sides too (switchbacks bring both sides together)
+    // Each label hangs above or below its dot on the CONVEX side of the local
+    // bend (outside a hump, under a valley), then is pushed further out while
+    // it touches the trail, the flag or an earlier label — the old alternating
+    // sides let the trail strike through the words.
+    type Box = { x0: number; y0: number; x1: number; y1: number };
+    const hit = (A: Box, B: Box, m: number): boolean => A.x0 < B.x1 + m && B.x0 < A.x1 + m && A.y0 < B.y1 + m && B.y0 < A.y1 + m;
+    const obstacles: Box[] = [{ x0: sx - 6, y0: sy - 62, x1: sx + 52, y1: sy + 4 }];
+    if (goalLabel) obstacles.push({ x0: sx + 60, y0: sy - 64, x1: sx + 60 + goalM.w, y1: sy - 64 + goalM.h });
+    obstacles.push({ x0: hx - 12, y0: hy - 12, x1: hx + 12, y1: hy + 12 });
     const marks = items.map((item, i) => {
-      const { p } = at((i + 1) / (n + 0.6));
+      const { p, i: k } = at((i + 1) / (n + 0.6));
+      const a = pts[Math.max(0, k - 5)];
+      const b = pts[Math.min(pts.length - 1, k + 5)];
+      const cross = (p[0] - a[0]) * (b[1] - p[1]) - (p[1] - a[1]) * (b[0] - p[0]);
       const m = ctx.measureLabelBlock(item.label, item.detail, { maxW: 170 });
-      const side = i % 2 === 0 ? 1 : -1;
-      const lx = p[0] + side * 26;
-      return { item, i, p, side, lx, w: m.w, h: m.h, labelY: p[1] + (item.icon ? 8 : 0) };
+      const base = 16 + (item.icon ? 34 : 0);
+      return { item, i, p, side: cross > 0 ? -1 : 1, base, off: base, w: m.w, h: m.h };
     });
-    const boxOf = (m: (typeof marks)[number]) => ({
-      x0: m.side > 0 ? m.lx : m.lx - m.w,
-      x1: m.side > 0 ? m.lx + m.w : m.lx,
-      y0: m.labelY - m.h / 2,
-      y1: m.labelY + m.h / 2,
-    });
-    for (let pass = 0; pass < 4; pass++) {
-      for (let a = 0; a < marks.length; a++) {
-        for (let b = a + 1; b < marks.length; b++) {
-          const A = boxOf(marks[a]);
-          const B = boxOf(marks[b]);
-          if (A.x0 < B.x1 - 8 && B.x0 < A.x1 - 8 && A.y0 < B.y1 - 6 && B.y0 < A.y1 - 6) {
-            marks[b].labelY = A.y0 - marks[b].h / 2 - 12; // later milestone moves up-trail
-          }
+    type Mark = (typeof marks)[number];
+    const boxOf = (m: Mark): Box => {
+      const y0 = m.side < 0 ? m.p[1] - m.off - m.h : m.p[1] + m.off;
+      return { x0: m.p[0] - m.w / 2, x1: m.p[0] + m.w / 2, y0, y1: y0 + m.h };
+    };
+    const cost = (m: Mark, placed: Mark[]): number => {
+      const B = boxOf(m);
+      let c = 0;
+      for (const [x, y] of pts) if (x > B.x0 - 10 && x < B.x1 + 10 && y > B.y0 - 10 && y < B.y1 + 10) c++;
+      for (const o of obstacles) if (hit(B, o, 6)) c += 50;
+      for (const q of placed) if (hit(B, boxOf(q), 8)) c += 50;
+      return c;
+    };
+    marks.forEach((m, mi) => {
+      const placed = marks.slice(0, mi);
+      let best = { side: m.side, off: m.base, c: Infinity };
+      for (const side of [m.side, -m.side]) {
+        m.side = side;
+        for (let step = 0; step < 8 && best.c > 0; step++) {
+          m.off = m.base + step * 12;
+          const c = cost(m, placed);
+          if (c < best.c) best = { side, off: m.off, c };
         }
+        if (best.c === 0) break;
       }
-    }
-    marks.forEach(({ item, i, p, side, lx, labelY }) =>
-      ctx.item(item.id, () => {
+      m.side = best.side;
+      m.off = best.off;
+    });
+    marks.forEach((m) =>
+      ctx.item(m.item.id, () => {
+        const { item, i, p, side } = m;
         const role = ctx.role(i, { n: n + 1, color: item.color });
-        ctx.shape("circle", p[0] - 8, p[1] - 8, 16, 16, { stroke: role.stroke, fill: role.fill ?? role.color, fillStyle: "solid", strokeWidth: role.strokeWidth, roughness: 0.8 }, { id: ctx.uid(item.id) });
-        if (item.icon) ctx.icon(item.icon, p[0], p[1] - 30, 26, role.color);
-        if (Math.abs(labelY - p[1]) > 24) ctx.line([[p[0] + side * 12, p[1]], [lx + side * 6, labelY]], { color: ctx.preset.edge, width: 1.2, dotted: true });
-        ctx.labelBlock(item.label, item.detail, lx, labelY, { color: role.color, align: side > 0 ? "left" : "right", maxW: 170 });
+        const B = boxOf(m);
+        const near = side < 0 ? B.y1 : B.y0; // label edge facing the dot
+        ctx.shape("circle", p[0] - 8, p[1] - 8, 16, 16, { stroke: role.stroke, fill: role.fill ?? role.color, fillStyle: "solid", strokeWidth: role.strokeWidth, roughness: 0.8 }, { id: ctx.uid(item.id), z: 1 });
+        let reach = near - side * 4;
+        if (item.icon) {
+          ctx.icon(item.icon, p[0], near - side * 17, 26, role.color);
+          reach = near - side * 34;
+        }
+        if (Math.abs(reach - p[1]) > 16) ctx.line([[p[0], p[1] + side * 11], [p[0], reach]], { color: ctx.preset.edge, width: 1.2, dotted: true });
+        ctx.labelBlock(item.label, item.detail, p[0], near, { color: role.color, align: "center", maxW: 170, vAnchor: side < 0 ? "bottom" : "top" });
       }),
     );
   },
@@ -335,8 +435,12 @@ registerViz({
     const n = Math.max(items.length, 1);
     const W = 168;
     const H = 104;
-    const overlap = 26;
-    const pitch = W - overlap;
+    // Each chevron's notch nests into the previous point with a real gap: the
+    // old 26-unit overlap missed the 26.88-unit notch by a hair, which drew
+    // two outlines side by side at every join.
+    const notch = 0.16;
+    const gap = 10;
+    const pitch = W - W * notch + gap;
     const bandW = (n - 1) * pitch + W;
 
     // support activities: full-width thin bars stacked above the chevron band
@@ -352,7 +456,7 @@ registerViz({
       ctx.item(item.id, () => {
         const role = ctx.role(i, { n, color: item.color });
         const x = i * pitch;
-        ctx.shape("chevron", x, 0, W, H, role, { id: ctx.uid(item.id), data: { dir: "right", notch: 0.16 } });
+        ctx.shape("chevron", x, 0, W, H, role, { id: ctx.uid(item.id), data: { dir: "right", notch } });
         const cx = x + W / 2 + (i === 0 ? -4 : 6);
         if (item.icon) {
           ctx.icon(item.icon, cx, H / 2 - 18, 26, role.textColor);
@@ -398,12 +502,16 @@ registerViz({
         const role = ctx.role(i, { n, color: tier.color });
         const hot = tier.opts.highlight === true || tier.opts.recommended === true;
         const x = i * (W + gap);
-        const y = hot ? -lift : 0;
-        const h = H + (hot ? lift * 2 : 0);
+        // The lift raises the highlighted CARD only: its content stays on the
+        // shared rows (name, price, divider, features line up across tiers)
+        // and the extra height goes where the lift came from, not to its foot.
+        const cardY = hot ? -lift : 0;
+        const y = 0;
+        const h = H + (hot ? lift : 0);
         ctx.shape(
           "round-rectangle",
           x,
-          y,
+          cardY,
           W,
           h,
           hot
@@ -414,8 +522,8 @@ registerViz({
         if (hot) {
           // "most popular" ribbon pill over the top edge
           const bw = 118;
-          ctx.shape("pill", x + W / 2 - bw / 2, y - 15, bw, 30, { stroke: role.color, fill: role.fill ?? role.color, fillStyle: "solid", strokeWidth: role.strokeWidth, roughness: ctx.preset.roughness });
-          ctx.label(String(tier.opts.badge ?? "Popular"), x + W / 2, y, { size: 14, color: role.textColor, weight: 700 });
+          ctx.shape("pill", x + W / 2 - bw / 2, cardY - 15, bw, 30, { stroke: role.color, fill: role.fill ?? role.color, fillStyle: "solid", strokeWidth: role.strokeWidth, roughness: ctx.preset.roughness });
+          ctx.label(String(tier.opts.badge ?? "Popular"), x + W / 2, cardY, { size: 14, color: role.textColor, weight: 700 });
         }
         const cx = x + W / 2;
         ctx.label(tier.label, cx, y + 40, { size: 20, color: hot ? role.color : ctx.ink, weight: 700, font: "heading" });
